@@ -1,25 +1,12 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState} from 'react'
 
 export default function Home() {
   const [todos, setTodos] = useState([])
   const [inputValue, setInputValue] = useState('')
   const [editingId, setEditingId] = useState(null)
-
-  // Load todos from localStorage on mount
-  useEffect(() => {
-    const savedTodos = localStorage.getItem('todos')
-    if (savedTodos) {
-      setTodos(JSON.parse(savedTodos))
-    }
-  }, [])
-
-  // Save todos to localStorage whenever todos change
-  useEffect(() => {
-    localStorage.setItem('todos', JSON.stringify(todos))
-  }, [todos])
-
+  
   const addOrUpdateTodo = () => {
     if (inputValue.trim() === '') return
 
