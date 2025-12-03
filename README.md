@@ -1,2 +1,3 @@
-# Todo_app
-todo_app(Nextjs deployed with vercel)
+# Todo App
+
+A simple Todo application built with Next.js and deployed on Vercel.
