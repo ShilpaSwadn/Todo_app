@@ -100,7 +100,6 @@ npm install
 # Navigate to frontend directory (from project root)
 cd frontend
 
-# Create .env.local file
 ```
 
 Create the `.env.local` file:
