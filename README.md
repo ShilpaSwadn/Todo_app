@@ -100,6 +100,15 @@ npm install
 # Navigate to frontend directory (from project root)
 cd frontend
 
+# Create .env.local file
+```
+
+Create the `.env.local` file:
+```env
+NEXT_PUBLIC_API_URL=http://localhost:5000/api
+```
+
+```bash
 # Install dependencies
 npm install
 ```
