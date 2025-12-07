@@ -51,20 +51,25 @@ if (process.env.DATABASE_URL) {
   }
 }
 
+// Global pool instance (reused across serverless invocations)
 const pool = new Pool(poolConfig)
 
-// Log connection method (for debugging)
-if (process.env.DATABASE_URL) {
-  console.log('📦 Database: Using Supabase connection (DATABASE_URL)')
-  console.log('🔒 SSL Configuration: rejectUnauthorized = false (self-signed certs allowed)')
-} else {
-  console.log('📦 Database: Using localhost connection')
+// Log connection method (for debugging) - only in non-serverless environments
+if (!process.env.VERCEL) {
+  if (process.env.DATABASE_URL) {
+    console.log('📦 Database: Using Supabase connection (DATABASE_URL)')
+    console.log('🔒 SSL Configuration: rejectUnauthorized = false (self-signed certs allowed)')
+  } else {
+    console.log('📦 Database: Using localhost connection')
+  }
 }
 
-// Handle pool errors
+// Handle pool errors (don't exit in serverless)
 pool.on('error', (err) => {
   console.error('Unexpected error on idle client', err)
-  process.exit(-1)
+  if (!process.env.VERCEL) {
+    process.exit(-1)
+  }
 })
 
 // Helper function to execute queries
