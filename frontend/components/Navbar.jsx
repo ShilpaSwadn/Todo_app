@@ -35,7 +35,7 @@ export default function Navbar({ user, onLogout }) {
           {/* Logo/Brand */}
           <div className="flex items-center">
             <h1 className="text-2xl font-bold bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-500 bg-clip-text text-transparent">
-              Todo App
+              Profile
             </h1>
           </div>
 
