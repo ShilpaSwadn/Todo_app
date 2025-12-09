@@ -1,5 +1,6 @@
 // API Client for making HTTP requests to the backend
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api'
+// Using relative paths for Next.js API routes
+const API_BASE_URL = '/api'
 
 // Get authentication token from localStorage
 const getToken = () => {
@@ -82,4 +83,3 @@ export const api = {
 }
 
 export default api
-

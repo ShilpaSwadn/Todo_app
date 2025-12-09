@@ -1,8 +1,8 @@
 import './globals.css'
 
 export const metadata = {
-  title: 'Todo App',
-  description: 'A simple todo app built with Next.js',
+  title: 'Profile App',
+  description: 'User profile management application',
 }
 
 export default function RootLayout({ children }) {

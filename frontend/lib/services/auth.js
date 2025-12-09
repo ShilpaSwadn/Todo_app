@@ -1,6 +1,6 @@
 // Authentication service for API calls
-import api from '../lib/api'
-import { saveAuthData } from '../lib/auth'
+import api from '../api/client'
+import { saveAuthData } from '../auth/client'
 
 // Register a new user
 export const register = async (userData) => {
@@ -51,3 +51,17 @@ export const getCurrentUser = async () => {
   }
 }
 
+// Update user profile
+export const updateProfile = async (userData) => {
+  try {
+    const response = await api.put('/auth/profile', userData)
+    
+    if (response.success && response.data) {
+      return response.data.user
+    }
+    
+    throw new Error(response.message || 'Failed to update profile')
+  } catch (error) {
+    throw error
+  }
+}

@@ -6,8 +6,8 @@ import Link from 'next/link'
 import { FiCheck, FiLock, FiZap, FiUser, FiMail, FiPhone, FiShield } from 'react-icons/fi'
 import { HiX } from 'react-icons/hi'
 import { ImSpinner2 } from 'react-icons/im'
-import { register } from '../../services/authService'
-import { validateRegisterForm } from '../../lib/validation'
+import { register } from '../../lib/services/auth'
+import { validateRegisterForm } from '../../lib/utils/validation'
 
 export default function Register() {
   const router = useRouter()

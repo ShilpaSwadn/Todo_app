@@ -37,4 +37,3 @@ export const clearAuthData = () => {
     localStorage.removeItem('currentUser')
   }
 }
-
