@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
-import authService from '../../../../lib/server/services/authService.js'
-import { ensureDbInitialized } from '../../../../lib/server/middleware/dbInit.js'
+import authService from '@lib/server/services/authService.js'
+import { ensureDbInitialized } from '@lib/server/middleware/dbInit.js'
 
 export async function POST(request) {
   try {

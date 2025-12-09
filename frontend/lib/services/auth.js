@@ -65,3 +65,35 @@ export const updateProfile = async (userData) => {
     throw error
   }
 }
+
+// Send OTP to email
+export const sendOTP = async (email) => {
+  try {
+    const response = await api.post('/auth/otp/send', { email })
+    
+    if (response.success) {
+      return response
+    }
+    
+    throw new Error(response.message || 'Failed to send OTP')
+  } catch (error) {
+    throw error
+  }
+}
+
+// Verify OTP and login
+export const verifyOTP = async (email, otp) => {
+  try {
+    const response = await api.post('/auth/otp/verify', { email, otp })
+    
+    if (response.success && response.data) {
+      // Save user and token
+      saveAuthData(response.data.user, response.data.token)
+      return response.data
+    }
+    
+    throw new Error(response.message || 'Failed to verify OTP')
+  } catch (error) {
+    throw error
+  }
+}

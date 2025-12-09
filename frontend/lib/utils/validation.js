@@ -18,11 +18,12 @@ export const validateLastName = (name) => {
   return nameRegex.test(name.trim())
 }
 
-// Validate mobile number
+// Validate mobile number - exactly 10 digits
 export const validateMobileNumber = (mobileNumber) => {
   if (!mobileNumber || mobileNumber.trim() === '') return true // Optional field
-  const mobileRegex = /^[+]?[(]?[0-9]{1,4}[)]?[-\s.]?[(]?[0-9]{1,4}[)]?[-\s.]?[0-9]{1,9}$/
-  return mobileRegex.test(mobileNumber.trim())
+  // Remove all non-digit characters and check if exactly 10 digits
+  const digitsOnly = mobileNumber.replace(/\D/g, '')
+  return digitsOnly.length === 10
 }
 
 // Validate password - must be at least 6 characters
@@ -62,7 +63,7 @@ export const validateRegisterForm = (formData) => {
   // Mobile Number (optional)
   if (formData.mobileNumber && formData.mobileNumber.trim() !== '') {
     if (!validateMobileNumber(formData.mobileNumber)) {
-      errors.mobileNumber = 'Please provide a valid mobile number'
+      errors.mobileNumber = 'Mobile number must be exactly 10 digits'
     }
   }
 

@@ -2,10 +2,10 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { getCurrentUser, clearAuthData, isAuthenticated, saveAuthData } from '../../../lib/auth/client'
-import { getCurrentUser as getCurrentUserAPI, updateProfile } from '../../../lib/services/auth'
-import { validatePassword } from '../../../lib/utils/validation'
-import { FiUser, FiMail, FiPhone, FiSave, FiLock, FiEye, FiEyeOff } from 'react-icons/fi'
+import { getCurrentUser, clearAuthData, isAuthenticated, saveAuthData } from '@lib/auth/client'
+import { getCurrentUser as getCurrentUserAPI, updateProfile } from '@lib/services/auth'
+import { validatePassword, validateMobileNumber } from '@lib/utils/validation'
+import { FiSave,FiEye, FiEyeOff, FiArrowLeft } from 'react-icons/fi'
 import Link from 'next/link'
 
 export default function EditProfile() {
@@ -25,7 +25,6 @@ export default function EditProfile() {
     password: ''
   })
 
-  // Check authentication and load user data
   useEffect(() => {
     const checkAuth = async () => {
       if (!isAuthenticated()) {
@@ -56,10 +55,23 @@ export default function EditProfile() {
   }, [router])
 
   const handleChange = (e) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value
-    })
+    const { name, value } = e.target
+    
+    // Format mobile number - only allow digits
+    if (name === 'mobileNumber') {
+      const digitsOnly = value.replace(/\D/g, '')
+      // Limit to 10 digits
+      const limitedDigits = digitsOnly.slice(0, 10)
+      setFormData({
+        ...formData,
+        [name]: limitedDigits
+      })
+    } else {
+      setFormData({
+        ...formData,
+        [name]: value
+      })
+    }
     setError('')
   }
 
@@ -69,9 +81,16 @@ export default function EditProfile() {
     setSaving(true)
 
     try {
-      // Validate password if provided
+      // Validate mobile number if provided
+      if (formData.mobileNumber && formData.mobileNumber.trim() !== '') {
+        if (!validateMobileNumber(formData.mobileNumber)) {
+          setError('Mobile number must be exactly 10 digits')
+          setSaving(false)
+          return
+        }
+      }
+
       if (formData.password && formData.password.trim() !== '') {
-        // Check if old password is provided when updating password
         if (!formData.oldPassword || formData.oldPassword.trim() === '') {
           setError('Old password is required to update password')
           setSaving(false)
@@ -86,22 +105,30 @@ export default function EditProfile() {
         }
       }
 
-      // Only include password fields if new password is provided
       const updateData = { ...formData }
-      if (!updateData.password || updateData.password.trim() === '') {
+      const passwordChanged = updateData.password && updateData.password.trim() !== ''
+      const emailChanged = user.email.toLowerCase() !== formData.email.trim().toLowerCase()
+      
+      if (!passwordChanged) {
         delete updateData.password
         delete updateData.oldPassword
       }
 
       const updatedUser = await updateProfile(updateData)
       
-      // Update localStorage with new user data
+      // If password or email was changed, logout user
+      if (passwordChanged || emailChanged) {
+        clearAuthData()
+        router.push('/login')
+        return
+      }
+      
+      // Otherwise, update token and redirect to dashboard
       const token = localStorage.getItem('token')
       if (token) {
         saveAuthData(updatedUser, token)
       }
       
-      // Redirect to dashboard
       router.push('/dashboard')
     } catch (err) {
       setError(err.message || 'Failed to update profile')
@@ -109,210 +136,218 @@ export default function EditProfile() {
     }
   }
 
-  const getInitials = () => {
-    if (!user) return 'U'
-    return `${user.firstName?.[0] || ''}${user.lastName?.[0] || ''}`.toUpperCase() || 'U'
-  }
-
   if (loading || !user) {
     return (
       <main className="h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600 dark:text-gray-400">Loading...</p>
+          <div className="animate-spin rounded-full h-10 w-10 border-2 border-indigo-600 border-t-transparent mx-auto"></div>
+          <p className="mt-4 text-sm text-gray-600 dark:text-gray-400">Loading profile...</p>
         </div>
       </main>
     )
   }
 
   return (
-    <main className="h-screen bg-gradient-to-br from-gray-50 via-gray-100 to-gray-200 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 flex items-center justify-center p-3 sm:p-4 lg:p-6 overflow-hidden">
-      <div className="w-full max-w-6xl h-full max-h-[95vh] bg-white dark:bg-gray-800 rounded-2xl shadow-2xl overflow-hidden flex flex-col">
-        {/* Profile Header with Gradient */}
-        <div className="relative bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-500 h-28 sm:h-32 flex-shrink-0">
-          <div className="absolute inset-0 bg-black/10"></div>
-
-          {/* Avatar and Title Section */}
-          <div className="absolute bottom-0 left-0 right-0 px-3 sm:px-4 lg:px-6 pb-2 sm:pb-3">
-            <div className="flex items-center gap-3 sm:gap-4">
-              {/* Avatar */}
-              <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 flex items-center justify-center text-white text-2xl sm:text-3xl font-bold shadow-2xl border-3 border-white dark:border-gray-800 flex-shrink-0">
-                {getInitials()}
-              </div>
-              
-              {/* Edit Profile Title */}
-              <div className="flex items-center gap-2 sm:gap-2.5">
-                <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold text-white drop-shadow-lg">
+    <main className="h-screen bg-gray-50 dark:bg-gray-900 overflow-hidden flex flex-col">
+      <div className="flex-1 overflow-y-auto">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+          {/* Header Section */}
+          <div className="mb-5">
+            <div className="flex items-center gap-3">
+              <Link
+                href="/dashboard"
+                className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
+              >
+                <FiArrowLeft className="w-5 h-5 text-gray-600 dark:text-gray-400" />
+              </Link>
+              <div>
+                <h1 className="text-xl font-bold text-gray-900 dark:text-white">
                   Edit Profile
                 </h1>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                  Update your account information
+                </p>
               </div>
             </div>
           </div>
-        </div>
 
-        {/* Form Section */}
-        <div className="flex-1 p-3 sm:p-4 lg:p-5 flex flex-col min-h-0">
-          {error && (
-            <div className="mb-2 sm:mb-3 p-2.5 sm:p-3 bg-red-50 dark:bg-red-900/20 border-l-4 border-red-500 text-red-700 dark:text-red-400 rounded-r-lg flex-shrink-0">
-              <p className="text-xs sm:text-sm font-medium">{error}</p>
-            </div>
-          )}
-
-          <form onSubmit={handleSubmit} className="flex-1 flex flex-col min-h-0">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-2 sm:gap-3 flex-1 min-h-0">
-              {/* First Name */}
-              <div className="p-2.5 sm:p-3 rounded-xl bg-gradient-to-br from-indigo-50 to-indigo-100 dark:from-indigo-900/20 dark:to-indigo-800/20 border border-indigo-200 dark:border-indigo-700/50">
-                <label htmlFor="firstName" className="block text-xs font-medium text-indigo-600 dark:text-indigo-400 mb-1 flex items-center gap-1.5">
-                  <FiUser className="w-3.5 h-3.5" />
-                  First Name
-                </label>
-                <input
-                  type="text"
-                  id="firstName"
-                  name="firstName"
-                  value={formData.firstName}
-                  onChange={handleChange}
-                  required
-                  className="w-full px-3 py-2 border-2 border-indigo-200 dark:border-indigo-700 rounded-lg focus:outline-none focus:border-indigo-500 dark:bg-gray-700 dark:text-white transition-colors text-sm sm:text-base font-semibold"
-                  placeholder="Enter first name"
-                />
-              </div>
-
-              {/* Last Name */}
-              <div className="p-2.5 sm:p-3 rounded-xl bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-800/20 border border-blue-200 dark:border-blue-700/50">
-                <label htmlFor="lastName" className="block text-xs font-medium text-blue-600 dark:text-blue-400 mb-1 flex items-center gap-1.5">
-                  <FiUser className="w-3.5 h-3.5" />
-                  Last Name
-                </label>
-                <input
-                  type="text"
-                  id="lastName"
-                  name="lastName"
-                  value={formData.lastName}
-                  onChange={handleChange}
-                  className="w-full px-3 py-2 border-2 border-blue-200 dark:border-blue-700 rounded-lg focus:outline-none focus:border-blue-500 dark:bg-gray-700 dark:text-white transition-colors text-sm sm:text-base font-semibold"
-                  placeholder="Enter last name"
-                />
-              </div>
-
-              {/* Email */}
-              <div className="p-2.5 sm:p-3 rounded-xl bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-900/20 dark:to-purple-800/20 border border-purple-200 dark:border-purple-700/50">
-                <label htmlFor="email" className="block text-xs font-medium text-purple-600 dark:text-purple-400 mb-1 flex items-center gap-1.5">
-                  <FiMail className="w-3.5 h-3.5" />
-                  Email Address
-                </label>
-                <input
-                  type="email"
-                  id="email"
-                  name="email"
-                  value={formData.email}
-                  onChange={handleChange}
-                  required
-                  className="w-full px-3 py-2 border-2 border-purple-200 dark:border-purple-700 rounded-lg focus:outline-none focus:border-purple-500 dark:bg-gray-700 dark:text-white transition-colors text-sm sm:text-base font-semibold"
-                  placeholder="Enter email address"
-                />
-              </div>
-
-              {/* Mobile Number */}
-              <div className="p-2.5 sm:p-3 rounded-xl bg-gradient-to-br from-pink-50 to-pink-100 dark:from-pink-900/20 dark:to-pink-800/20 border border-pink-200 dark:border-pink-700/50">
-                <label htmlFor="mobileNumber" className="block text-xs font-medium text-pink-600 dark:text-pink-400 mb-1 flex items-center gap-1.5">
-                  <FiPhone className="w-3.5 h-3.5" />
-                  Mobile Number
-                </label>
-                <input
-                  type="tel"
-                  id="mobileNumber"
-                  name="mobileNumber"
-                  value={formData.mobileNumber}
-                  onChange={handleChange}
-                  className="w-full px-3 py-2 border-2 border-pink-200 dark:border-pink-700 rounded-lg focus:outline-none focus:border-pink-500 dark:bg-gray-700 dark:text-white transition-colors text-sm sm:text-base font-semibold"
-                  placeholder="Enter mobile number"
-                />
-              </div>
-
-              {/* Old Password */}
-              <div className="p-2.5 sm:p-3 rounded-xl bg-gradient-to-br from-orange-50 to-orange-100 dark:from-orange-900/20 dark:to-orange-800/20 border border-orange-200 dark:border-orange-700/50">
-                <label htmlFor="oldPassword" className="block text-xs font-medium text-orange-600 dark:text-orange-400 mb-1 flex items-center gap-1.5">
-                  <FiLock className="w-3.5 h-3.5" />
-                  Current Password
-                </label>
-                <div className="relative">
-                  <input
-                    type={showOldPassword ? 'text' : 'password'}
-                    id="oldPassword"
-                    name="oldPassword"
-                    value={formData.oldPassword}
-                    onChange={handleChange}
-                    className="w-full px-3 py-2 pr-10 border-2 border-orange-200 dark:border-orange-700 rounded-lg focus:outline-none focus:border-orange-500 dark:bg-gray-700 dark:text-white transition-colors text-sm sm:text-base font-semibold"
-                    placeholder="Enter current password"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowOldPassword(!showOldPassword)}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 text-orange-600 dark:text-orange-400 hover:text-orange-700 dark:hover:text-orange-300"
-                  >
-                    {showOldPassword ? <FiEyeOff className="w-4 h-4" /> : <FiEye className="w-4 h-4" />}
-                  </button>
+          {/* Form Card */}
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
+            <form onSubmit={handleSubmit} className="p-5 sm:p-6">
+              {error && (
+                <div className="mb-5 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
+                  <p className="text-sm text-red-700 dark:text-red-400">{error}</p>
                 </div>
-                <p className="text-[10px] sm:text-xs text-orange-500 dark:text-orange-400 mt-0.5">Required only if changing password</p>
-              </div>
+              )}
 
-              {/* New Password */}
-              <div className="p-2.5 sm:p-3 rounded-xl bg-gradient-to-br from-red-50 to-red-100 dark:from-red-900/20 dark:to-red-800/20 border border-red-200 dark:border-red-700/50">
-                <label htmlFor="password" className="block text-xs font-medium text-red-600 dark:text-red-400 mb-1 flex items-center gap-1.5">
-                  <FiLock className="w-3.5 h-3.5" />
-                  New Password
-                </label>
-                <div className="relative">
-                  <input
-                    type={showPassword ? 'text' : 'password'}
-                    id="password"
-                    name="password"
-                    value={formData.password}
-                    onChange={handleChange}
-                    className="w-full px-3 py-2 pr-10 border-2 border-red-200 dark:border-red-700 rounded-lg focus:outline-none focus:border-red-500 dark:bg-gray-700 dark:text-white transition-colors text-sm sm:text-base font-semibold"
-                    placeholder="Enter new password"
-                    minLength={6}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300"
-                  >
-                    {showPassword ? <FiEyeOff className="w-4 h-4" /> : <FiEye className="w-4 h-4" />}
-                  </button>
+              {/* Profile Information Section */}
+              <div className="mb-6">
+                <h2 className="text-base font-semibold text-gray-900 dark:text-white mb-4">Profile Information</h2>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* First Name */}
+                  <div>
+                    <label htmlFor="firstName" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                      First Name <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      id="firstName"
+                      name="firstName"
+                      value={formData.firstName}
+                      onChange={handleChange}
+                      required
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent dark:bg-gray-700 dark:text-white transition-colors text-sm"
+                      placeholder="Enter first name"
+                    />
+                  </div>
+
+                  {/* Last Name */}
+                  <div>
+                    <label htmlFor="lastName" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                      Last Name
+                    </label>
+                    <input
+                      type="text"
+                      id="lastName"
+                      name="lastName"
+                      value={formData.lastName}
+                      onChange={handleChange}
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent dark:bg-gray-700 dark:text-white transition-colors text-sm"
+                      placeholder="Enter last name"
+                    />
+                  </div>
+
+                  {/* Email */}
+                  <div>
+                    <label htmlFor="email" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                      Email Address <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="email"
+                      id="email"
+                      name="email"
+                      value={formData.email}
+                      onChange={handleChange}
+                      required
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent dark:bg-gray-700 dark:text-white transition-colors text-sm"
+                      placeholder="Enter email address"
+                    />
+                  </div>
+
+                  {/* Mobile Number */}
+                  <div>
+                    <label htmlFor="mobileNumber" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                      Mobile Number
+                    </label>
+                    <input
+                      type="tel"
+                      id="mobileNumber"
+                      name="mobileNumber"
+                      value={formData.mobileNumber}
+                      onChange={handleChange}
+                      maxLength={10}
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent dark:bg-gray-700 dark:text-white transition-colors text-sm"
+                      placeholder="Enter 10 digit mobile number"
+                    />
+                    {formData.mobileNumber.length > 0 && (
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                        {formData.mobileNumber.length}/10 digits
+                      </p>
+                    )}
+                  </div>
                 </div>
-                <p className="text-[10px] sm:text-xs text-red-500 dark:text-red-400 mt-0.5">Leave blank to keep current password</p>
               </div>
-            </div>
 
-            {/* Submit Button */}
-            <div className="flex justify-end gap-2 sm:gap-3 pt-2 sm:pt-3 flex-shrink-0 border-t border-gray-200 dark:border-gray-700">
-              <Link
-                href="/dashboard"
-                className="px-4 py-2 sm:px-5 sm:py-2.5 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 rounded-lg transition-all duration-200 font-medium text-sm sm:text-base"
-              >
-                Cancel
-              </Link>
-              <button
-                type="submit"
-                disabled={saving}
-                className="flex items-center gap-1.5 sm:gap-2 px-4 py-2 sm:px-5 sm:py-2.5 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 disabled:from-gray-400 disabled:to-gray-500 text-white rounded-lg transition-all duration-200 font-medium text-sm sm:text-base shadow-md hover:shadow-lg disabled:cursor-not-allowed"
-              >
-                {saving ? (
-                  <>
-                    <div className="animate-spin rounded-full h-3.5 w-3.5 sm:h-4 sm:w-4 border-b-2 border-white"></div>
-                    <span>Saving...</span>
-                  </>
-                ) : (
-                  <>
-                    <FiSave className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                    <span>Save Changes</span>
-                  </>
-                )}
-              </button>
-            </div>
-          </form>
+              {/* Password Section */}
+              <div className="pt-5 border-t border-gray-200 dark:border-gray-700">
+                <h2 className="text-base font-semibold text-gray-900 dark:text-white mb-4">Change Password</h2>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Current Password */}
+                  <div>
+                    <label htmlFor="oldPassword" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                      Current Password
+                    </label>
+                    <div className="relative">
+                      <input
+                        type={showOldPassword ? 'text' : 'password'}
+                        id="oldPassword"
+                        name="oldPassword"
+                        value={formData.oldPassword}
+                        onChange={handleChange}
+                        className="w-full px-3 py-2 pr-10 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent dark:bg-gray-700 dark:text-white transition-colors text-sm"
+                        placeholder="Enter current password"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowOldPassword(!showOldPassword)}
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+                      >
+                        {showOldPassword ? <FiEyeOff className="w-4 h-4" /> : <FiEye className="w-4 h-4" />}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* New Password */}
+                  <div>
+                    <label htmlFor="password" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                      New Password
+                    </label>
+                    <div className="relative">
+                      <input
+                        type={showPassword ? 'text' : 'password'}
+                        id="password"
+                        name="password"
+                        value={formData.password}
+                        onChange={handleChange}
+                        minLength={6}
+                        className="w-full px-3 py-2 pr-10 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent dark:bg-gray-700 dark:text-white transition-colors text-sm"
+                        placeholder="Min 6 characters"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+                      >
+                        {showPassword ? <FiEyeOff className="w-4 h-4" /> : <FiEye className="w-4 h-4" />}
+                      </button>
+                    </div>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                      Leave blank to keep current password
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex flex-col sm:flex-row justify-end gap-3 mt-6 pt-5 border-t border-gray-200 dark:border-gray-700">
+                <Link
+                  href="/dashboard"
+                  className="px-4 py-2 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 border border-gray-300 dark:border-gray-600 rounded-lg transition-colors font-medium text-center text-sm"
+                >
+                  Cancel
+                </Link>
+                <button
+                  type="submit"
+                  disabled={saving}
+                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white rounded-lg transition-colors font-medium flex items-center justify-center gap-2 text-sm shadow-sm"
+                >
+                  {saving ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
+                      <span>Saving...</span>
+                    </>
+                  ) : (
+                    <>
+                      <FiSave className="w-4 h-4" />
+                      <span>Save Changes</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       </div>
     </main>

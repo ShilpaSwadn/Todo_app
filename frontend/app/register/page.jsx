@@ -6,8 +6,8 @@ import Link from 'next/link'
 import { FiCheck, FiLock, FiZap, FiUser, FiMail, FiPhone, FiShield } from 'react-icons/fi'
 import { HiX } from 'react-icons/hi'
 import { ImSpinner2 } from 'react-icons/im'
-import { register } from '../../lib/services/auth'
-import { validateRegisterForm } from '../../lib/utils/validation'
+import { register } from '@lib/services/auth'
+import { validateRegisterForm, validateMobileNumber } from '@lib/utils/validation'
 
 export default function Register() {
   const router = useRouter()
@@ -23,10 +23,22 @@ export default function Register() {
   const [loading, setLoading] = useState(false)
 
   const handleChange = (e) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value
-    })
+    const { name, value } = e.target
+    
+    // Format mobile number - only allow digits, max 10
+    if (name === 'mobileNumber') {
+      const digitsOnly = value.replace(/\D/g, '')
+      const limitedDigits = digitsOnly.slice(0, 10)
+      setFormData({
+        ...formData,
+        [name]: limitedDigits
+      })
+    } else {
+      setFormData({
+        ...formData,
+        [name]: value
+      })
+    }
     setError('')
   }
 
@@ -45,6 +57,15 @@ export default function Register() {
         setError(firstError)
         setLoading(false)
         return
+      }
+
+      // Validate mobile number if provided
+      if (formData.mobileNumber && formData.mobileNumber.trim() !== '') {
+        if (!validateMobileNumber(formData.mobileNumber)) {
+          setError('Mobile number must be exactly 10 digits')
+          setLoading(false)
+          return
+        }
       }
 
       // Call API to register user
@@ -101,36 +122,36 @@ export default function Register() {
       </div>
 
       {/* Right Side - Form Section */}
-      <div className="w-full lg:w-1/2 overflow-y-auto">
-        <div className="w-full max-w-lg mx-auto py-8 px-4 sm:px-6 lg:px-12">
-          <div className="mb-8">
-            <h2 className="text-4xl font-bold text-gray-900 dark:text-white mb-2">
+      <div className="w-full lg:w-1/2 overflow-hidden flex items-center">
+        <div className="w-full max-w-lg mx-auto py-[30px] px-4 sm:px-6 lg:px-[50px]">
+          <div className="mb-4">
+            <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-1">
               Create Account
             </h2>
-            <p className="text-gray-600 dark:text-gray-400">
+            <p className="text-sm text-gray-600 dark:text-gray-400">
               Fill in your details to get started
             </p>
           </div>
 
           {error && (
-            <div className="mb-6 p-4 bg-red-50 dark:bg-red-900/20 border-l-4 border-red-500 text-red-700 dark:text-red-400 rounded-r-lg">
+            <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/20 border-l-4 border-red-500 text-red-700 dark:text-red-400 rounded-r-lg">
               <div className="flex items-center">
-                <HiX className="w-5 h-5 mr-2" />
-                <span className="text-sm font-medium">{error}</span>
+                <HiX className="w-4 h-4 mr-2" />
+                <span className="text-xs font-medium">{error}</span>
               </div>
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-5">
+          <form onSubmit={handleSubmit} className="space-y-3">
             {/* Name Fields - Side by Side */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <label htmlFor="firstName" className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                <label htmlFor="firstName" className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">
                   First Name
                 </label>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <FiUser className="h-5 w-5 text-gray-400" />
+                    <FiUser className="h-4 w-4 text-gray-400" />
                   </div>
                   <input
                     type="text"
@@ -138,19 +159,19 @@ export default function Register() {
                     name="firstName"
                     value={formData.firstName}
                     onChange={handleChange}
-                    className="w-full pl-10 pr-4 py-3 border-2 border-gray-200 dark:border-gray-700 rounded-xl focus:outline-none focus:border-indigo-500 dark:bg-gray-800 dark:text-white transition-colors"
+                    className="w-full pl-9 pr-3 py-2 border-2 border-gray-200 dark:border-gray-700 rounded-lg focus:outline-none focus:border-indigo-500 dark:bg-gray-800 dark:text-white transition-colors text-sm"
                     placeholder="John"
                   />
                 </div>
               </div>
 
               <div>
-                <label htmlFor="lastName" className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                <label htmlFor="lastName" className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">
                   Last Name <span className="text-gray-500 font-normal">(Optional)</span>
                 </label>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <FiUser className="h-5 w-5 text-gray-400" />
+                    <FiUser className="h-4 w-4 text-gray-400" />
                   </div>
                   <input
                     type="text"
@@ -158,7 +179,7 @@ export default function Register() {
                     name="lastName"
                     value={formData.lastName}
                     onChange={handleChange}
-                    className="w-full pl-10 pr-4 py-3 border-2 border-gray-200 dark:border-gray-700 rounded-xl focus:outline-none focus:border-indigo-500 dark:bg-gray-800 dark:text-white transition-colors"
+                    className="w-full pl-9 pr-3 py-2 border-2 border-gray-200 dark:border-gray-700 rounded-lg focus:outline-none focus:border-indigo-500 dark:bg-gray-800 dark:text-white transition-colors text-sm"
                     placeholder="Doe"
                   />
                 </div>
@@ -167,12 +188,12 @@ export default function Register() {
 
             {/* Email */}
             <div>
-              <label htmlFor="email" className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+              <label htmlFor="email" className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">
                 Email Address
               </label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <FiMail className="h-5 w-5 text-gray-400" />
+                  <FiMail className="h-4 w-4 text-gray-400" />
                 </div>
                 <input
                   type="email"
@@ -180,7 +201,7 @@ export default function Register() {
                   name="email"
                   value={formData.email}
                   onChange={handleChange}
-                  className="w-full pl-10 pr-4 py-3 border-2 border-gray-200 dark:border-gray-700 rounded-xl focus:outline-none focus:border-indigo-500 dark:bg-gray-800 dark:text-white transition-colors"
+                  className="w-full pl-9 pr-3 py-2 border-2 border-gray-200 dark:border-gray-700 rounded-lg focus:outline-none focus:border-indigo-500 dark:bg-gray-800 dark:text-white transition-colors text-sm"
                   placeholder="john.doe@example.com"
                 />
               </div>
@@ -188,12 +209,12 @@ export default function Register() {
 
             {/* Mobile Number */}
             <div>
-              <label htmlFor="mobileNumber" className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+              <label htmlFor="mobileNumber" className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">
                 Mobile Number
               </label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <FiPhone className="h-5 w-5 text-gray-400" />
+                  <FiPhone className="h-4 w-4 text-gray-400" />
                 </div>
                 <input
                   type="tel"
@@ -201,21 +222,25 @@ export default function Register() {
                   name="mobileNumber"
                   value={formData.mobileNumber}
                   onChange={handleChange}
-                  className="w-full pl-10 pr-4 py-3 border-2 border-gray-200 dark:border-gray-700 rounded-xl focus:outline-none focus:border-indigo-500 dark:bg-gray-800 dark:text-white transition-colors"
-                  placeholder="+1 234 567 8900"
+                  maxLength={10}
+                  className="w-full pl-9 pr-3 py-2 border-2 border-gray-200 dark:border-gray-700 rounded-lg focus:outline-none focus:border-indigo-500 dark:bg-gray-800 dark:text-white transition-colors text-sm"
+                  placeholder="Enter 10 digit mobile number"
                 />
               </div>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                {formData.mobileNumber.length > 0 && `${formData.mobileNumber.length}/10 digits`}
+              </p>
             </div>
 
             {/* Password Fields - Side by Side */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <label htmlFor="password" className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                <label htmlFor="password" className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">
                   Password
                 </label>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <FiLock className="h-5 w-5 text-gray-400" />
+                    <FiLock className="h-4 w-4 text-gray-400" />
                   </div>
                   <input
                     type="password"
@@ -223,19 +248,19 @@ export default function Register() {
                     name="password"
                     value={formData.password}
                     onChange={handleChange}
-                    className="w-full pl-10 pr-4 py-3 border-2 border-gray-200 dark:border-gray-700 rounded-xl focus:outline-none focus:border-indigo-500 dark:bg-gray-800 dark:text-white transition-colors"
-                    placeholder="Enter password (min 6 characters)"
+                    className="w-full pl-9 pr-3 py-2 border-2 border-gray-200 dark:border-gray-700 rounded-lg focus:outline-none focus:border-indigo-500 dark:bg-gray-800 dark:text-white transition-colors text-sm"
+                    placeholder="Min 6 characters"
                   />
                 </div>
               </div>
 
               <div>
-                <label htmlFor="confirmPassword" className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                <label htmlFor="confirmPassword" className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">
                   Confirm Password
                 </label>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <FiShield className="h-5 w-5 text-gray-400" />
+                    <FiShield className="h-4 w-4 text-gray-400" />
                   </div>
                   <input
                     type="password"
@@ -243,7 +268,7 @@ export default function Register() {
                     name="confirmPassword"
                     value={formData.confirmPassword}
                     onChange={handleChange}
-                    className="w-full pl-10 pr-4 py-3 border-2 border-gray-200 dark:border-gray-700 rounded-xl focus:outline-none focus:border-indigo-500 dark:bg-gray-800 dark:text-white transition-colors"
+                    className="w-full pl-9 pr-3 py-2 border-2 border-gray-200 dark:border-gray-700 rounded-lg focus:outline-none focus:border-indigo-500 dark:bg-gray-800 dark:text-white transition-colors text-sm"
                     placeholder="Confirm password"
                   />
                 </div>
@@ -254,11 +279,11 @@ export default function Register() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full mt-6 px-6 py-4 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 disabled:from-gray-400 disabled:to-gray-500 text-white font-bold rounded-xl transition-all duration-200 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 disabled:transform-none"
+              className="w-full mt-4 px-4 py-2.5 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 disabled:from-gray-400 disabled:to-gray-500 text-white font-semibold rounded-lg transition-all duration-200 shadow-md hover:shadow-lg disabled:transform-none text-sm"
             >
               {loading ? (
                 <span className="flex items-center justify-center">
-                  <ImSpinner2 className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" />
+                  <ImSpinner2 className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" />
                   Creating Account...
                 </span>
               ) : (
@@ -267,8 +292,8 @@ export default function Register() {
             </button>
           </form>
 
-          <div className="mt-8 text-center">
-            <p className="text-sm text-gray-600 dark:text-gray-400">
+          <div className="mt-4 text-center">
+            <p className="text-xs text-gray-600 dark:text-gray-400">
               Already have an account?{' '}
               <Link href="/login" className="font-semibold text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 transition-colors">
                 Sign in here

@@ -20,6 +20,25 @@ const initDatabase = async () => {
     await query(`
       CREATE INDEX IF NOT EXISTS idx_users_email ON users(email)
     `)
+
+    // Create OTP table for email OTP login
+    await query(`
+      CREATE TABLE IF NOT EXISTS otps (
+        id SERIAL PRIMARY KEY,
+        email VARCHAR(255) NOT NULL,
+        otp VARCHAR(6) NOT NULL,
+        expires_at TIMESTAMP NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `)
+
+    // Create index on email and expires_at for faster lookups
+    await query(`
+      CREATE INDEX IF NOT EXISTS idx_otps_email ON otps(email)
+    `)
+    await query(`
+      CREATE INDEX IF NOT EXISTS idx_otps_expires ON otps(expires_at)
+    `)
   } catch (error) {
     console.error('Error initializing database:', error)
     throw error

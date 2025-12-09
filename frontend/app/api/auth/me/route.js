@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
-import authService from '../../../../lib/server/services/authService.js'
-import { ensureDbInitialized } from '../../../../lib/server/middleware/dbInit.js'
-import { getUserIdFromToken } from '../../../../lib/server/middleware/authMiddleware.js'
+import authService from '@lib/server/services/authService.js'
+import { ensureDbInitialized } from '@lib/server/middleware/dbInit.js'
+import { getUserIdFromToken } from '@lib/server/middleware/authMiddleware.js'
 
 export async function GET(request) {
   try {

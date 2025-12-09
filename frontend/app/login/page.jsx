@@ -3,59 +3,119 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { FiCheckCircle, FiClock, FiZap, FiMail, FiLock } from 'react-icons/fi'
+import { FiCheckCircle, FiClock, FiZap, FiMail, FiKey, FiArrowLeft } from 'react-icons/fi'
 import { HiX } from 'react-icons/hi'
 import { ImSpinner2 } from 'react-icons/im'
-import { login } from '../../lib/services/auth'
-import { validateLoginForm } from '../../lib/utils/validation'
+import { sendOTP, verifyOTP } from '@lib/services/auth'
+import { validateEmail } from '@lib/utils/validation'
 
 export default function Login() {
   const router = useRouter()
-  const [formData, setFormData] = useState({
-    email: '',
-    password: ''
-  })
+  const [email, setEmail] = useState('')
+  const [otp, setOtp] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [sendingOTP, setSendingOTP] = useState(false)
+  const [showOTP, setShowOTP] = useState(false)
+  const [countdown, setCountdown] = useState(0)
 
-  const handleChange = (e) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value
-    })
+  const handleEmailChange = (e) => {
+    setEmail(e.target.value)
     setError('')
   }
 
-  const handleSubmit = async (e) => {
+  const handleOTPChange = (e) => {
+    const digitsOnly = e.target.value.replace(/\D/g, '').slice(0, 6)
+    setOtp(digitsOnly)
+    setError('')
+  }
+
+  const handleLogin = async (e) => {
+    e.preventDefault()
+    setError('')
+
+    if (!email || !email.trim()) {
+      setError('Email is required')
+      return
+    }
+
+    if (!validateEmail(email)) {
+      setError('Please provide a valid email address')
+      return
+    }
+
+    setSendingOTP(true)
+
+    try {
+      await sendOTP(email.trim().toLowerCase())
+      setShowOTP(true)
+      setCountdown(60)
+      
+      const timer = setInterval(() => {
+        setCountdown((prev) => {
+          if (prev <= 1) {
+            clearInterval(timer)
+            return 0
+          }
+          return prev - 1
+        })
+      }, 1000)
+    } catch (err) {
+      setError(err.message || 'Failed to send OTP. Please try again.')
+    } finally {
+      setSendingOTP(false)
+    }
+  }
+
+  const handleVerifyOTP = async (e) => {
     e.preventDefault()
     setError('')
     setLoading(true)
 
     try {
-      // Validate form
-      const validation = validateLoginForm(formData)
-      
-      if (!validation.isValid) {
-        // Show first error message
-        const firstError = Object.values(validation.errors)[0]
-        setError(firstError)
+      if (!otp || otp.length !== 6) {
+        setError('Please enter a valid 6-digit OTP')
         setLoading(false)
         return
       }
 
-      // Call API to login user
-      await login({
-        email: formData.email.trim().toLowerCase(),
-        password: formData.password
-      })
-
-      // Redirect to dashboard on success
-      setLoading(false)
+      await verifyOTP(email.trim().toLowerCase(), otp)
       router.push('/dashboard')
     } catch (err) {
-      setError(err.message || 'Login failed. Please try again.')
+      setError(err.message || 'Failed to verify OTP. Please try again.')
       setLoading(false)
     }
+  }
+
+  const handleResendOTP = async () => {
+    setError('')
+    setSendingOTP(true)
+
+    try {
+      await sendOTP(email.trim().toLowerCase())
+      setCountdown(60)
+      
+      const timer = setInterval(() => {
+        setCountdown((prev) => {
+          if (prev <= 1) {
+            clearInterval(timer)
+            return 0
+          }
+          return prev - 1
+        })
+      }, 1000)
+    } catch (err) {
+      setError(err.message || 'Failed to resend OTP. Please try again.')
+    } finally {
+      setSendingOTP(false)
+    }
+  }
+
+  const goBackToEmail = () => {
+    setShowOTP(false)
+    setOtp('')
+    setError('')
+    setCountdown(0)
   }
 
   return (
@@ -66,7 +126,7 @@ export default function Login() {
           <div className="mb-8">
             <h1 className="text-5xl font-bold mb-4">Welcome Back!</h1>
             <p className="text-xl text-indigo-100">
-              Sign in to continue managing your tasks and stay organized. Your productivity journey continues here.
+              Sign in to continue managing your profile. Your productivity journey continues here.
             </p>
           </div>
           <div className="space-y-4">
@@ -74,113 +134,177 @@ export default function Login() {
               <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center">
                 <FiCheckCircle className="w-6 h-6" />
               </div>
-              <span className="text-lg">Track your progress</span>
+              <span className="text-lg">Secure Authentication</span>
             </div>
             <div className="flex items-center space-x-3">
               <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center">
                 <FiClock className="w-6 h-6" />
               </div>
-              <span className="text-lg">Stay organized</span>
+              <span className="text-lg">Easy Profile Management</span>
             </div>
             <div className="flex items-center space-x-3">
               <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center">
                 <FiZap className="w-6 h-6" />
               </div>
-              <span className="text-lg">Boost productivity</span>
+              <span className="text-lg">Fast & Reliable</span>
             </div>
           </div>
         </div>
       </div>
 
       {/* Right Side - Form Section */}
-      <div className="w-full lg:w-1/2 overflow-y-auto">
-        <div className="w-full max-w-lg mx-auto py-8 px-4 sm:px-6 lg:px-12">
-          <div className="mb-8">
-            <h2 className="text-4xl font-bold text-gray-900 dark:text-white mb-2">
-              Sign In
-            </h2>
-            <p className="text-gray-600 dark:text-gray-400">
-              Enter your credentials to access your account
-            </p>
-          </div>
-
-          {error && (
-            <div className="mb-6 p-4 bg-red-50 dark:bg-red-900/20 border-l-4 border-red-500 text-red-700 dark:text-red-400 rounded-r-lg">
-              <div className="flex items-center">
-                <HiX className="w-5 h-5 mr-2" />
-                <span className="text-sm font-medium">{error}</span>
+      <div className="w-full lg:w-1/2 overflow-hidden flex items-center">
+        <div className="w-full max-w-lg mx-auto py-[30px] px-4 sm:px-6 lg:px-[50px]">
+          {!showOTP ? (
+            /* Email Form */
+            <>
+              <div className="mb-6">
+                <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
+                  Sign In
+                </h2>
+                <p className="text-sm text-gray-600 dark:text-gray-400">
+                  Enter your email to receive a login code
+                </p>
               </div>
-            </div>
-          )}
 
-          <form onSubmit={handleSubmit} className="space-y-5">
-            {/* Email */}
-            <div>
-              <label htmlFor="email" className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
-                Email Address
-              </label>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <FiMail className="h-5 w-5 text-gray-400" />
+              {error && (
+                <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
+                  <p className="text-xs text-red-700 dark:text-red-400">{error}</p>
                 </div>
-                <input
-                  type="email"
-                  id="email"
-                  name="email"
-                  value={formData.email}
-                  onChange={handleChange}
-                  className="w-full pl-10 pr-4 py-3 border-2 border-gray-200 dark:border-gray-700 rounded-xl focus:outline-none focus:border-indigo-500 dark:bg-gray-800 dark:text-white transition-colors"
-                  placeholder="john.doe@example.com"
-                />
-              </div>
-            </div>
-
-            {/* Password */}
-            <div>
-              <label htmlFor="password" className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
-                Password
-              </label>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <FiLock className="h-5 w-5 text-gray-400" />
-                </div>
-                <input
-                  type="password"
-                  id="password"
-                  name="password"
-                  value={formData.password}
-                  onChange={handleChange}
-                  className="w-full pl-10 pr-4 py-3 border-2 border-gray-200 dark:border-gray-700 rounded-xl focus:outline-none focus:border-indigo-500 dark:bg-gray-800 dark:text-white transition-colors"
-                  placeholder="Enter your password"
-                />
-              </div>
-            </div>
-
-            {/* Submit Button */}
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full mt-6 px-6 py-4 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 disabled:from-gray-400 disabled:to-gray-500 text-white font-bold rounded-xl transition-all duration-200 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 disabled:transform-none"
-            >
-              {loading ? (
-                <span className="flex items-center justify-center">
-                  <ImSpinner2 className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" />
-                  Signing in...
-                </span>
-              ) : (
-                'Sign In'
               )}
-            </button>
-          </form>
 
-          <div className="mt-8 text-center">
-            <p className="text-sm text-gray-600 dark:text-gray-400">
-              Don't have an account?{' '}
-              <Link href="/register" className="font-semibold text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 transition-colors">
-                Create one here
-              </Link>
-            </p>
-          </div>
+              <form onSubmit={handleLogin} className="space-y-5">
+                <div>
+                  <label htmlFor="email" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Email Address
+                  </label>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                      <FiMail className="h-5 w-5 text-gray-400" />
+                    </div>
+                    <input
+                      type="email"
+                      id="email"
+                      name="email"
+                      value={email}
+                      onChange={handleEmailChange}
+                      required
+                      className="w-full pl-10 pr-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent dark:bg-gray-800 dark:text-white transition-colors"
+                      placeholder="Enter your email"
+                    />
+                  </div>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={sendingOTP || !email}
+                  className="w-full px-4 py-3 bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white font-semibold rounded-lg transition-colors shadow-sm hover:shadow-md"
+                >
+                  {sendingOTP ? (
+                    <span className="flex items-center justify-center">
+                      <ImSpinner2 className="animate-spin -ml-1 mr-2 h-5 w-5 text-white" />
+                      Sending OTP...
+                    </span>
+                  ) : (
+                    'Send OTP'
+                  )}
+                </button>
+              </form>
+
+              <div className="mt-6 text-center">
+                <p className="text-sm text-gray-600 dark:text-gray-400">
+                  Don't have an account?{' '}
+                  <Link href="/register" className="font-semibold text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 transition-colors">
+                    Create one here
+                  </Link>
+                </p>
+              </div>
+            </>
+          ) : (
+            /* OTP Form */
+            <>
+              <div className="mb-6">
+                <button
+                  onClick={goBackToEmail}
+                  className="mb-4 flex items-center text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 transition-colors"
+                >
+                  <FiArrowLeft className="w-4 h-4 mr-2" />
+                  Back to email
+                </button>
+                <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
+                  Enter OTP
+                </h2>
+                <p className="text-sm text-gray-600 dark:text-gray-400">
+                  We've sent a 6-digit code to <span className="font-semibold">{email}</span>
+                </p>
+              </div>
+
+              {error && (
+                <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
+                  <p className="text-xs text-red-700 dark:text-red-400">{error}</p>
+                </div>
+              )}
+
+              <form onSubmit={handleVerifyOTP} className="space-y-5">
+                <div>
+                  <label htmlFor="otp" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    OTP Code
+                  </label>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                      <FiKey className="h-5 w-5 text-gray-400" />
+                    </div>
+                    <input
+                      type="text"
+                      id="otp"
+                      name="otp"
+                      value={otp}
+                      onChange={handleOTPChange}
+                      required
+                      maxLength={6}
+                      autoFocus
+                      className="w-full pl-10 pr-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent dark:bg-gray-800 dark:text-white transition-colors text-center text-2xl tracking-[0.5em] font-mono"
+                      placeholder="000000"
+                    />
+                  </div>
+                  <div className="flex items-center justify-between mt-3">
+                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                      6-digit code
+                    </p>
+                    {countdown > 0 ? (
+                      <span className="text-xs text-gray-500 dark:text-gray-400">
+                        Resend in {countdown}s
+                      </span>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={handleResendOTP}
+                        disabled={sendingOTP}
+                        className="text-xs text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 font-medium disabled:text-gray-400 disabled:cursor-not-allowed"
+                      >
+                        {sendingOTP ? 'Sending...' : 'Resend OTP'}
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={loading || !otp || otp.length !== 6}
+                  className="w-full px-4 py-3 bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white font-semibold rounded-lg transition-colors shadow-sm hover:shadow-md"
+                >
+                  {loading ? (
+                    <span className="flex items-center justify-center">
+                      <ImSpinner2 className="animate-spin -ml-1 mr-2 h-5 w-5 text-white" />
+                      Verifying...
+                    </span>
+                  ) : (
+                    'Verify OTP'
+                  )}
+                </button>
+              </form>
+            </>
+          )}
         </div>
       </div>
     </main>
