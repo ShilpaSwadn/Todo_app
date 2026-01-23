@@ -32,7 +32,6 @@ export default function Login() {
     setError('')
   }
 
-
   const handleVerifyOTP = async (e) => {
     e.preventDefault()
     setError('')
