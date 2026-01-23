@@ -18,14 +18,14 @@ export async function GET(request) {
 
     // Get total count of test users
     const countResult = await query(
-      "SELECT COUNT(*) FROM users WHERE email LIKE 'user%@test.com'"
+      "SELECT COUNT(*) FROM public.users WHERE email LIKE 'user%@test.com'"
     )
     const totalCount = parseInt(countResult.rows[0].count)
 
     // Fetch users matching the test pattern, newest first
     const result = await query(
       `SELECT email, first_name 
-       FROM users 
+       FROM public.users 
        WHERE email LIKE 'user%@test.com' 
        ORDER BY first_name DESC 
        LIMIT $1`,
