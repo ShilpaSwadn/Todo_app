@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
-import { ensureDbInitialized } from '@lib/server/middleware/dbInit.js'
-import { query } from '@lib/server/config/database.js'
+import { ensureDbInitialized } from '@/lib/server/middleware/dbInit.js'
+import { query } from '@/lib/server/config/database.js'
 
 /**
  * API Route to fetch test users

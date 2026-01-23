@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server'
-import { query } from '@/lib/server/config/database'
-import { ensureDbInitialized } from '@lib/server/middleware/dbInit.js'
-import OTP from '@lib/server/models/OTP.js'
-import User from '@lib/server/models/User.js'
+import { query } from '@/lib/server/config/database.js'
+import { ensureDbInitialized } from '@/lib/server/middleware/dbInit.js'
+import OTP from '@/lib/server/models/OTP.js'
+import User from '@/lib/server/models/User.js'
 import jwt from 'jsonwebtoken'
 
 // Generate JWT token

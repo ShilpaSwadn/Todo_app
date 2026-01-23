@@ -1,9 +1,9 @@
 import { NextResponse } from 'next/server'
-import { query } from '@/lib/server/config/database'
-import { ensureDbInitialized } from '@lib/server/middleware/dbInit.js'
-import OTP from '@lib/server/models/OTP.js'
-import User from '@lib/server/models/User.js'
-import { sendOTPEmail } from '@lib/server/services/emailService.js'
+import { query } from '@/lib/server/config/database.js'
+import { ensureDbInitialized } from '@/lib/server/middleware/dbInit.js'
+import OTP from '@/lib/server/models/OTP.js'
+import User from '@/lib/server/models/User.js'
+import { sendOTPEmail } from '@/lib/server/services/emailService.js'
 
 // Email validation helper
 const validateEmail = (email) => {
@@ -12,6 +12,7 @@ const validateEmail = (email) => {
 }
 
 export async function POST(request) {
+  console.log('OTP Send: Received request');
   try {
     // Initialize database
     await ensureDbInitialized()

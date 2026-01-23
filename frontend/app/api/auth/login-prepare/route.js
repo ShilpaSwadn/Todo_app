@@ -1,7 +1,7 @@
-import { query } from '@/lib/server/config/database';
+import { query } from '@/lib/server/config/database.js';
 import { NextResponse } from 'next/server';
-import { ensureDbInitialized } from '@lib/server/middleware/dbInit.js';
-import { sendOTPEmail } from '@lib/server/services/emailService.js';
+import { ensureDbInitialized } from '@/lib/server/middleware/dbInit.js';
+import { sendOTPEmail } from '@/lib/server/services/emailService.js';
 
 export async function POST(request) {
     try {

@@ -2,9 +2,9 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { getCurrentUser, clearAuthData, isAuthenticated, saveAuthData } from '@lib/auth/client'
-import { getCurrentUser as getCurrentUserAPI, updateProfile } from '@lib/services/auth'
-import { validatePassword, validateMobileNumber } from '@lib/utils/validation'
+import { getCurrentUser, clearAuthData, isAuthenticated, saveAuthData } from '@/lib/auth/client'
+import { getCurrentUser as getCurrentUserAPI, updateProfile } from '@/lib/services/auth'
+import { validatePassword, validateMobileNumber } from '@/lib/utils/validation'
 import { FiSave,FiEye, FiEyeOff, FiArrowLeft } from 'react-icons/fi'
 import Link from 'next/link'
 

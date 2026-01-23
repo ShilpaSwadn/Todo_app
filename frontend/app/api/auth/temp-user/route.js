@@ -1,6 +1,6 @@
 import { query } from '@/lib/server/config/database';
 import { NextResponse } from 'next/server';
-import { ensureDbInitialized } from '@lib/server/middleware/dbInit.js';
+import { ensureDbInitialized } from '@/lib/server/middleware/dbInit.js';
 
 export async function POST(request) {
     try {

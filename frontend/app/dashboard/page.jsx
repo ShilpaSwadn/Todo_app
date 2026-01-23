@@ -2,8 +2,8 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { getCurrentUser, clearAuthData, isAuthenticated } from '@lib/auth/client'
-import { getCurrentUser as getCurrentUserAPI } from '@lib/services/auth'
+import { getCurrentUser, clearAuthData, isAuthenticated } from '@/lib/auth/client'
+import { getCurrentUser as getCurrentUserAPI } from '@/lib/services/auth'
 import { FiUser, FiMail, FiPhone, FiCalendar, FiLogOut, FiEdit2, FiLock} from 'react-icons/fi'
 import Link from 'next/link'
 

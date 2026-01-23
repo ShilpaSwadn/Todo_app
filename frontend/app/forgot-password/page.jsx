@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { FiMail, FiArrowLeft, FiCheckCircle } from 'react-icons/fi'
 import { HiX } from 'react-icons/hi'
 import { ImSpinner2 } from 'react-icons/im'
-import { resetPassword } from '@lib/services/auth'
+import { resetPassword } from '@/lib/services/auth'
 
 export default function ForgotPassword() {
     const [email, setEmail] = useState('')

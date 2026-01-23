@@ -6,8 +6,8 @@ import Link from 'next/link'
 import { FiClock, FiMail, FiKey, FiArrowLeft, FiEye, FiEyeOff, FiLock } from 'react-icons/fi'
 import { HiX } from 'react-icons/hi'
 import { ImSpinner2 } from 'react-icons/im'
-import { sendOTP, verifyOTP, loginWithPassword } from '@lib/services/auth'
-import { validateEmail } from '@lib/utils/validation'
+import { sendOTP, verifyOTP, loginWithPassword } from '@/lib/services/auth'
+import { validateEmail } from '@/lib/utils/validation'
 
 export default function Login() {
   const router = useRouter()
