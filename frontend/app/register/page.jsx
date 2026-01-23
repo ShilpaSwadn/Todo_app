@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { FiCheck, FiLock, FiZap, FiUser, FiMail, FiPhone, FiShield } from 'react-icons/fi'
+import { FiLock, FiUser, FiMail, FiPhone } from 'react-icons/fi'
 import { HiX } from 'react-icons/hi'
 import { ImSpinner2 } from 'react-icons/im'
 import { register } from '@lib/services/auth'
@@ -20,11 +20,12 @@ export default function Register() {
     confirmPassword: ''
   })
   const [error, setError] = useState('')
+  const [successMsg, setSuccessMsg] = useState('')
   const [loading, setLoading] = useState(false)
 
   const handleChange = (e) => {
     const { name, value } = e.target
-    
+
     // Format mobile number - only allow digits, max 10
     if (name === 'mobileNumber') {
       const digitsOnly = value.replace(/\D/g, '')
@@ -45,12 +46,13 @@ export default function Register() {
   const handleSubmit = async (e) => {
     e.preventDefault()
     setError('')
+    setSuccessMsg('')
     setLoading(true)
 
     try {
       // Validate form
       const validation = validateRegisterForm(formData)
-      
+
       if (!validation.isValid) {
         // Show first error message
         const firstError = Object.values(validation.errors)[0]
@@ -69,7 +71,7 @@ export default function Register() {
       }
 
       // Call API to register user
-      await register({
+      const response = await register({
         firstName: formData.firstName.trim(),
         lastName: formData.lastName ? formData.lastName.trim() : '',
         email: formData.email.trim().toLowerCase(),
@@ -78,52 +80,40 @@ export default function Register() {
         confirmPassword: formData.confirmPassword
       })
 
-      // Redirect to dashboard on success
+      setSuccessMsg(response.message || 'Registration successful! Please check your email for the activation link.')
       setLoading(false)
-      router.push('/dashboard')
     } catch (err) {
       setError(err.message || 'Registration failed. Please try again.')
       setLoading(false)
     }
   }
 
-  return (
-    <main className="h-screen bg-gray-50 dark:bg-gray-900 flex overflow-hidden">
-      {/* Left Side - Branding Section */}
-      <div className="hidden lg:flex lg:w-1/2 bg-gradient-to-br from-indigo-600 via-purple-600 to-pink-500 flex-col items-center justify-center p-12 text-white">
-        <div className="max-w-md">
-          <div className="mb-8">
-            <h1 className="text-5xl font-bold mb-4">Welcome!</h1>
-            <p className="text-xl text-indigo-100">
-              Join us and start organizing your tasks today. Create your account and get started with our amazing todo app.
-            </p>
+  if (successMsg) {
+    return (
+      <main className="h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center p-4">
+        <div className="max-w-md w-full bg-white dark:bg-gray-800 rounded-2xl shadow-xl p-8 text-center border border-gray-100 dark:border-gray-700">
+          <div className="w-16 h-16 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center mx-auto mb-6">
+            <FiMail className="w-8 h-8 text-green-600 dark:text-green-400" />
           </div>
-          <div className="space-y-4">
-            <div className="flex items-center space-x-3">
-              <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center">
-                <FiCheck className="w-6 h-6" />
-              </div>
-              <span className="text-lg">Easy task management</span>
-            </div>
-            <div className="flex items-center space-x-3">
-              <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center">
-                <FiLock className="w-6 h-6" />
-              </div>
-              <span className="text-lg">Secure and private</span>
-            </div>
-            <div className="flex items-center space-x-3">
-              <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center">
-                <FiZap className="w-6 h-6" />
-              </div>
-              <span className="text-lg">Fast and reliable</span>
-            </div>
-          </div>
+          <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">Check Your Email</h2>
+          <p className="text-gray-600 dark:text-gray-400 mb-8">
+            {successMsg}
+          </p>
+          <Link
+            href="/login"
+            className="inline-block w-full px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-lg transition-colors shadow-md"
+          >
+            Go to Login
+          </Link>
         </div>
-      </div>
+      </main>
+    )
+  }
 
-      {/* Right Side - Form Section */}
-      <div className="w-full lg:w-1/2 overflow-hidden flex items-center">
-        <div className="w-full max-w-lg mx-auto py-[30px] px-4 sm:px-6 lg:px-[50px]">
+  return (
+    <main className="min-h-screen bg-gray-50 dark:bg-gray-950 flex items-center justify-center p-4">
+      <div className="w-full max-w-lg bg-white dark:bg-gray-900 rounded-2xl shadow-xl border border-gray-100 dark:border-gray-800 overflow-hidden transform transition-all">
+        <div className="p-8 lg:p-10">
           <div className="mb-4">
             <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-1">
               Create Account
@@ -260,7 +250,7 @@ export default function Register() {
                 </label>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <FiShield className="h-4 w-4 text-gray-400" />
+                    <FiLock className="h-4 w-4 text-gray-400" />
                   </div>
                   <input
                     type="password"

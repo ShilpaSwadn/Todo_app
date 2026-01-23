@@ -6,11 +6,13 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "generate-users": "node --experimental-modules --loader ./scripts/loader.mjs scripts/generatePerformanceUsers.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
     "dotenv": "^16.3.1",
+    "firebase": "^12.7.0",
     "jsonwebtoken": "^9.0.2",
     "next": "^14.0.0",
     "nodemailer": "^6.9.7",

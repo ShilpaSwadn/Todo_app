@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { query } from '@/lib/server/config/database'
 import { ensureDbInitialized } from '@lib/server/middleware/dbInit.js'
 import OTP from '@lib/server/models/OTP.js'
 import User from '@lib/server/models/User.js'
@@ -13,7 +14,7 @@ export async function POST(request) {
   try {
     // Initialize database
     await ensureDbInitialized()
-    
+
     // Parse request body
     const body = await request.json()
     const { email, otp } = body
@@ -44,6 +45,7 @@ export async function POST(request) {
 
     // Get user by email
     const user = await User.findByEmail(email)
+
     if (!user) {
       return NextResponse.json({
         success: false,

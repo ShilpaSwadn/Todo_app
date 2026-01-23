@@ -9,9 +9,20 @@ let poolConfig
 if (process.env.DATABASE_URL) {
   // Parse and clean the connection string to remove conflicting SSL parameters
   let connectionString = process.env.DATABASE_URL
-  
+
+  // Validate DATABASE_URL is not empty
+  if (!connectionString || connectionString.trim() === '') {
+    throw new Error('DATABASE_URL is set but empty. Please provide a valid database connection string.')
+  }
+
   try {
     const dbUrl = new URL(connectionString)
+
+    // Validate password exists in URL
+    if (!dbUrl.password && dbUrl.username) {
+      console.warn('Warning: DATABASE_URL does not contain a password. This may cause connection issues.')
+    }
+
     // Remove all SSL-related query parameters that might override our config
     const sslParams = ['sslmode', 'ssl', 'sslcert', 'sslkey', 'sslrootcert', 'sslcrl']
     sslParams.forEach(param => dbUrl.searchParams.delete(param))
@@ -24,7 +35,7 @@ if (process.env.DATABASE_URL) {
       .replace(/\?&/g, '?')
       .replace(/[&?]$/, '')
   }
-  
+
   // Use DATABASE_URL connection string (Supabase)
   poolConfig = {
     connectionString: connectionString,
@@ -44,12 +55,17 @@ if (process.env.DATABASE_URL) {
   }
 } else {
   // Use individual parameters (localhost fallback)
+  // Ensure password is always a string (empty string if not provided)
+  const dbPassword = process.env.DB_PASSWORD !== undefined
+    ? String(process.env.DB_PASSWORD)
+    : ''
+
   poolConfig = {
     host: process.env.DB_HOST || 'localhost',
     port: parseInt(process.env.DB_PORT || '5432', 10),
     database: process.env.DB_NAME || 'todo_app',
     user: process.env.DB_USER || 'postgres',
-    password: process.env.DB_PASSWORD ? String(process.env.DB_PASSWORD) : undefined,
+    password: dbPassword, // Always a string, even if empty
     max: 5,
     min: 1,
     idleTimeoutMillis: 20000,
@@ -92,11 +108,11 @@ if (process.env.NODE_ENV === 'development' && !process.env.VERCEL) {
   pool.on('connect', (client) => {
     console.log('New database client connected')
   })
-  
+
   pool.on('acquire', (client) => {
     console.log('Client acquired from pool')
   })
-  
+
   pool.on('remove', (client) => {
     console.log('Client removed from pool')
   })
@@ -105,21 +121,21 @@ if (process.env.NODE_ENV === 'development' && !process.env.VERCEL) {
 // Helper function to execute queries with optimized retry logic
 const query = async (text, params, retries = 2) => {
   let lastError
-  
+
   for (let attempt = 1; attempt <= retries; attempt++) {
     try {
       const res = await pool.query(text, params)
       return res
     } catch (error) {
       lastError = error
-      const isConnectionError = 
+      const isConnectionError =
         error.message.includes('Connection terminated') ||
         error.message.includes('connection timeout') ||
         error.message.includes('Connection terminated unexpectedly') ||
         error.code === 'ETIMEDOUT' ||
         error.code === 'ECONNRESET' ||
         error.code === 'ENOTFOUND'
-      
+
       // Only retry on connection errors, with faster retry
       if (isConnectionError && attempt < retries) {
         const delay = Math.min(500 * attempt, 2000) // Faster retry: 500ms, 1000ms max
@@ -127,17 +143,17 @@ const query = async (text, params, retries = 2) => {
         await new Promise(resolve => setTimeout(resolve, delay))
         continue
       }
-      
+
       // If not a connection error or last attempt, throw immediately
-      console.error('Query error', { 
-        text: text.substring(0, 100), 
+      console.error('Query error', {
+        text: text.substring(0, 100),
         error: error.message,
         code: error.code
       })
       throw error
     }
   }
-  
+
   throw lastError
 }
 

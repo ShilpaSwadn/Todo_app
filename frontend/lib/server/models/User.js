@@ -4,22 +4,22 @@ import bcrypt from 'bcryptjs'
 class User {
   static async create(userData) {
     const { firstName, lastName, email, mobileNumber, password } = userData
-    
+
     // Hash password
     const hashedPassword = await bcrypt.hash(password, 10)
-    
+
     // Handle optional last name
     const lastNameValue = lastName && lastName.trim() !== '' ? lastName.trim() : null
-    
+
     const sqlQuery = `
-      INSERT INTO users (first_name, last_name, email, mobile_number, password)
+      INSERT INTO public.users (first_name, last_name, email, mobile_number, password)
       VALUES ($1, $2, $3, $4, $5)
       RETURNING id, first_name, last_name, email, mobile_number, created_at
     `
-    
+
     const values = [firstName, lastNameValue, email.toLowerCase(), mobileNumber, hashedPassword]
     const result = await query(sqlQuery, values)
-    
+
     return {
       id: result.rows[0].id,
       firstName: result.rows[0].first_name,
@@ -31,13 +31,38 @@ class User {
   }
 
   static async findByEmail(email) {
-    const sqlQuery = 'SELECT * FROM users WHERE email = $1'
+    const sqlQuery = 'SELECT * FROM public.users WHERE email = $1'
     const result = await query(sqlQuery, [email.toLowerCase()])
-    
+
+    if (result.rows.length === 0) {
+      console.log('User.findByEmail: No user found for:', email);
+      return null
+    }
+
+    const user = result.rows[0]
+    console.log('User.findByEmail: Found user for:', email);
+    return {
+      id: user.id,
+      firstName: user.first_name,
+      lastName: user.last_name,
+      email: user.email,
+      mobileNumber: user.mobile_number,
+      password: user.password,
+      isVerified: user.is_verified,
+      createdAt: user.created_at
+    }
+
+  }
+
+  static async findByUserId(userId) {
+    // Find user by first_name (which stores the userId like user0001)
+    const sqlQuery = 'SELECT * FROM public.users WHERE first_name = $1'
+    const result = await query(sqlQuery, [userId])
+
     if (result.rows.length === 0) {
       return null
     }
-    
+
     const user = result.rows[0]
     return {
       id: user.id,
@@ -51,13 +76,13 @@ class User {
   }
 
   static async findById(id) {
-    const sqlQuery = 'SELECT id, first_name, last_name, email, mobile_number, created_at FROM users WHERE id = $1'
+    const sqlQuery = 'SELECT id, first_name, last_name, email, mobile_number, created_at FROM public.users WHERE id = $1'
     const result = await query(sqlQuery, [id])
-    
+
     if (result.rows.length === 0) {
       return null
     }
-    
+
     const user = result.rows[0]
     return {
       id: user.id,
@@ -70,13 +95,13 @@ class User {
   }
 
   static async findByIdWithPassword(id) {
-    const sqlQuery = 'SELECT * FROM users WHERE id = $1'
+    const sqlQuery = 'SELECT * FROM public.users WHERE id = $1'
     const result = await query(sqlQuery, [id])
-    
+
     if (result.rows.length === 0) {
       return null
     }
-    
+
     const user = result.rows[0]
     return {
       id: user.id,
@@ -95,7 +120,7 @@ class User {
 
   static async update(id, userData) {
     const { firstName, lastName, email, mobileNumber, password, oldPassword } = userData
-    
+
     // Check if email is being changed and if it's already taken
     if (email) {
       const existingUser = await User.findByEmail(email)
@@ -159,14 +184,14 @@ class User {
     values.push(id)
 
     const sqlQuery = `
-      UPDATE users 
+      UPDATE public.users 
       SET ${updates.join(', ')}
       WHERE id = $${paramCount}
       RETURNING id, first_name, last_name, email, mobile_number, created_at, updated_at
     `
 
     const result = await query(sqlQuery, values)
-    
+
     if (result.rows.length === 0) {
       throw new Error('User not found')
     }

@@ -33,8 +33,7 @@ This is a complete user profile management application that allows users to:
 ## Project Structure
 
 ```
-Todo_app/
-├── frontend/                    # Next.js unified application
+frontend/                        # Next.js unified application
 │   ├── app/                     # Next.js App Router
 │   │   ├── api/                 # API Routes (Backend)
 │   │   │   └── auth/
@@ -99,7 +98,6 @@ Before you begin, ensure you have the following installed:
 
 ```bash
 git clone <repository-url>
-cd Todo_app
 ```
 
 #### 2. Navigate to Frontend Directory
@@ -138,7 +136,7 @@ EMAIL_PASS=your_app_password
 ```env
 DB_HOST=localhost
 DB_PORT=5432
-DB_NAME=todo_app
+DB_NAME=profile_app
 DB_USER=postgres
 DB_PASSWORD=your_password
 JWT_SECRET=your_jwt_secret_key_here_change_in_production

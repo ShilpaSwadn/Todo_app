@@ -13,17 +13,29 @@ export async function POST(request) {
     // Call service to login user
     const result = await authService.login(body)
 
-    // Return success response
-    return NextResponse.json({
+    // Create response with success message
+    const response = NextResponse.json({
       success: true,
       message: 'Login successful',
-      data: result
+      data: {
+        user: result.user
+      }
     })
+
+    // Set JWT token in HTTP-only cookie
+    response.cookies.set('token', result.token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 60 * 60 * 24 * 7 // 7 days
+    })
+
+    return response
   } catch (error) {
     console.error('Login error:', error)
     
     // Handle authentication errors
-    if (error.message === 'Invalid email or password') {
+    if (error.message === 'Invalid user ID or password' || error.message === 'Invalid email or password') {
       return NextResponse.json({
         success: false,
         message: error.message

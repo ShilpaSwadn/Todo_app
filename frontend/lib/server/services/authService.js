@@ -42,36 +42,9 @@ class AuthService {
     }
   }
 
-  // Login user
+  // Login user - password login disabled
   async login(credentials) {
-    const { email, password } = credentials
-
-    // Find user by email
-    const user = await User.findByEmail(email)
-    if (!user) {
-      throw new Error('Invalid email or password')
-    }
-
-    // Verify password
-    const isPasswordValid = await User.comparePassword(password, user.password)
-    if (!isPasswordValid) {
-      throw new Error('Invalid email or password')
-    }
-
-    // Generate token
-    const token = generateToken(user.id)
-
-    // Return user data (without password)
-    return {
-      user: {
-        id: user.id,
-        firstName: user.firstName,
-        lastName: user.lastName,
-        email: user.email,
-        mobileNumber: user.mobileNumber
-      },
-      token
-    }
+    throw new Error('Password login is disabled. Please use OTP login.')
   }
 
   // Get user by ID

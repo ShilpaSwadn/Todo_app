@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { query } from '@/lib/server/config/database'
 import { ensureDbInitialized } from '@lib/server/middleware/dbInit.js'
 import OTP from '@lib/server/models/OTP.js'
 import User from '@lib/server/models/User.js'
@@ -14,7 +15,7 @@ export async function POST(request) {
   try {
     // Initialize database
     await ensureDbInitialized()
-    
+
     // Parse request body
     const body = await request.json()
     const { email } = body
@@ -35,17 +36,44 @@ export async function POST(request) {
     }
 
     // Check if user exists
+    console.log('OTP Send: Looking up user by email:', email);
     const user = await User.findByEmail(email)
+
+    // Check if user is in main table but not verified
+    if (user && !user.isVerified) {
+      console.log('OTP Send: User found in main table but isVerified is false. Blocking.');
+      return NextResponse.json({
+        success: false,
+        message: 'Email not verified. Please verify your email first.'
+      }, { status: 403 })
+    }
+
     if (!user) {
+      console.log('OTP Send: User not found in main table, checking temp_users...');
+      const fetchTempSql = 'SELECT EXISTS(SELECT 1 FROM public.temp_users WHERE email = $1)'
+      const tempParams = [email.toLowerCase()];
+      const tempResult = await query(fetchTempSql, tempParams)
+
+      if (tempResult.rows[0].exists) {
+        console.log('OTP Send: User found in temp_users. Blocking login.');
+        return NextResponse.json({
+          success: false,
+          message: 'Email not verified. Please verify your email first.'
+        }, { status: 403 })
+      }
+
+      console.log('OTP Send: User not found anywhere.');
       return NextResponse.json({
         success: false,
         message: 'No account found with this email address'
       }, { status: 404 })
     }
 
+    console.log('OTP Send: User found in main table. Proceeding with OTP generation.');
+
     // Generate and store OTP
     const otpData = await OTP.create(email)
-    
+
     // Send OTP email
     try {
       await sendOTPEmail(email, otpData.otp)
