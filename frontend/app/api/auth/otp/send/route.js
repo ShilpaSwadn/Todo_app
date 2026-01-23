@@ -79,17 +79,7 @@ export async function POST(request) {
     try {
       await sendOTPEmail(email, otpData.otp)
     } catch (emailError) {
-      // If email fails, still return success but log the error
-      // In production, you might want to handle this differently
       console.error('Failed to send email:', emailError)
-      // For development, you can return the OTP in response
-      if (process.env.NODE_ENV === 'development') {
-        return NextResponse.json({
-          success: true,
-          message: 'OTP generated (email sending failed in dev mode)',
-          otp: otpData.otp // Only in development
-        })
-      }
       throw emailError
     }
 

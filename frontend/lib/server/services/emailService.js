@@ -1,72 +1,71 @@
-import nodemailer from 'nodemailer'
+// Email service using Resend API (HTTP Fetch alternative to Nodemailer)
+// This is more reliable for Vercel/Serverless environments
 
-// Create transporter for sending emails
-const createTransporter = () => {
-  // For development, you can use Gmail or other SMTP services
-  // For production, use proper SMTP configuration
-  if (process.env.SMTP_HOST && process.env.SMTP_PORT) {
-    return nodemailer.createTransport({
-      host: process.env.SMTP_HOST,
-      port: parseInt(process.env.SMTP_PORT || '587', 10),
-      secure: process.env.SMTP_SECURE === 'true',
-      auth: {
-        user: process.env.SMTP_USER,
-        pass: process.env.SMTP_PASS
-      }
-    })
-  }
-
-  // Default: Use Gmail (requires app password)
-  // For production, configure proper SMTP settings
-  return nodemailer.createTransport({
-    service: 'gmail',
-    auth: {
-      user: process.env.SMTP_USER || process.env.EMAIL_USER,
-      pass: process.env.SMTP_PASS || process.env.EMAIL_PASS
-    }
-  })
-}
-
-// Send OTP email
 export const sendOTPEmail = async (email, otp) => {
   try {
-    const transporter = createTransporter()
-    
-    const mailOptions = {
-      from: process.env.EMAIL_FROM || process.env.SMTP_USER || 'noreply@profileapp.com',
-      to: email,
-      subject: 'Your Login OTP - Profile App',
-      html: `
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-          <h2 style="color: #4F46E5;">Profile App - Login OTP</h2>
-          <p>Hello,</p>
-          <p>You requested a one-time password (OTP) to login to your account.</p>
-          <div style="background-color: #F3F4F6; padding: 20px; border-radius: 8px; text-align: center; margin: 20px 0;">
-            <h1 style="color: #4F46E5; font-size: 32px; letter-spacing: 8px; margin: 0;">${otp}</h1>
-          </div>
-          <p>This OTP will expire in 10 minutes.</p>
-          <p>If you didn't request this OTP, please ignore this email.</p>
-          <p style="color: #6B7280; font-size: 12px; margin-top: 30px;">
-            This is an automated message, please do not reply.
-          </p>
-        </div>
-      `,
-      text: `
-        Profile App - Login OTP
-        
-        Your OTP is: ${otp}
-        
-        This OTP will expire in 10 minutes.
-        
-        If you didn't request this OTP, please ignore this email.
-      `
+    const API_KEY = process.env.RESEND_API_KEY;
+    let FROM_EMAIL = process.env.EMAIL_FROM || 'onboarding@resend.dev';
+
+    // Resend requires a verified domain. Gmail/Yahoo/etc won't work.
+    // Use onboarding@resend.dev as a fallback for testing.
+    const unverifiedDomains = ['gmail.com', 'yahoo.com', 'outlook.com', 'hotmail.com'];
+    const isPublicDomain = unverifiedDomains.some(domain => FROM_EMAIL.toLowerCase().includes(domain));
+
+    if (isPublicDomain || !FROM_EMAIL.includes('@')) {
+      console.log(`Resend: '${FROM_EMAIL}' is a public domain. Falling back to 'onboarding@resend.dev' for compatibility.`);
+      FROM_EMAIL = 'onboarding@resend.dev';
     }
 
-    const info = await transporter.sendMail(mailOptions)
-    console.log('OTP email sent:', info.messageId)
-    return { success: true, messageId: info.messageId }
+    if (!API_KEY && process.env.NODE_ENV === 'production') {
+      throw new Error('RESEND_API_KEY is missing in environment variables');
+    }
+
+    // In development, if no API key is provided, we'll just log to console
+    if (!API_KEY) {
+      console.log('--- DEVELOPMENT MODE: OTP EMAIL ---');
+      console.log(`To: ${email}`);
+      console.log(`OTP: ${otp}`);
+      console.log('------------------------------------');
+      return { success: true, message: 'OTP logged to console (Dev Mode)' };
+    }
+
+    const response = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${API_KEY}`,
+      },
+      body: JSON.stringify({
+        from: FROM_EMAIL,
+        to: email,
+        subject: `${otp} is your Profile App login code`,
+        html: `
+          <div style="font-family: sans-serif; max-width: 400px; margin: 0 auto; padding: 20px; border: 1px solid #eee; border-radius: 10px;">
+            <h2 style="color: #4F46E5; text-align: center;">Login Verification</h2>
+            <p>Use the following code to sign in to your account. This code will expire in 10 minutes.</p>
+            <div style="background: #F3F4F6; padding: 20px; text-align: center; border-radius: 8px; margin: 20px 0;">
+              <span style="font-size: 32px; font-weight: bold; letter-spacing: 5px; color: #111827;">${otp}</span>
+            </div>
+            <p style="font-size: 12px; color: #6B7280; text-align: center;">
+              If you didn't request this code, you can safely ignore this email.
+            </p>
+          </div>
+        `,
+      }),
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      console.error('Resend API Error:', data);
+      throw new Error(data.message || 'Failed to send email via Resend');
+    }
+
+    console.log('OTP email sent via Resend:', data.id);
+    return { success: true, id: data.id };
   } catch (error) {
-    console.error('Error sending OTP email:', error)
-    throw new Error('Failed to send OTP email. Please try again.')
+    console.error('Error sending OTP email:', error);
+    // Don't crash the whole process in dev, just throw for the API to catch
+    throw new Error('Failed to send OTP email. Please try again.');
   }
-}
+};

@@ -79,13 +79,10 @@ export async function POST(request) {
             await sendOTPEmail(targetEmail, otp);
         } catch (emailError) {
             console.error('Email delivery failure:', emailError);
-            if (process.env.NODE_ENV !== 'production') {
-                return NextResponse.json({
-                    success: true,
-                    message: 'OTP generated (email failed sync in dev)',
-                    otp: otp
-                });
-            }
+            return NextResponse.json({
+                success: false,
+                message: 'Failed to send OTP email: ' + emailError.message
+            }, { status: 500 });
         }
 
         return NextResponse.json({
