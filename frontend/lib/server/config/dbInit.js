@@ -4,7 +4,7 @@ const initDatabase = async () => {
   try {
     // Combine all initialization queries into a single call to reduce roundtrips
     await query(`
-      -- Users Table
+      -- 1. Users Table
       CREATE TABLE IF NOT EXISTS public.users (
         id SERIAL PRIMARY KEY,
         uid TEXT UNIQUE,
@@ -18,10 +18,7 @@ const initDatabase = async () => {
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
       
-      CREATE INDEX IF NOT EXISTS idx_users_email ON public.users(email);
-      CREATE INDEX IF NOT EXISTS idx_users_uid ON public.users(uid);
-
-      -- Temp Users Table
+      -- 2. Temp Users Table
       CREATE TABLE IF NOT EXISTS public.temp_users (
         uid TEXT PRIMARY KEY,
         email TEXT UNIQUE NOT NULL,
@@ -32,7 +29,7 @@ const initDatabase = async () => {
         created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
       );
 
-      -- OTP Table
+      -- 3. OTP Table
       CREATE TABLE IF NOT EXISTS public.otps (
         id SERIAL PRIMARY KEY,
         email VARCHAR(255) NOT NULL,
@@ -41,13 +38,33 @@ const initDatabase = async () => {
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
 
+      -- 4. Robust Migrations for existing tables
+      -- Ensure 'uid' column exists in users (for older versions)
+      ALTER TABLE public.users ADD COLUMN IF NOT EXISTS uid TEXT;
+      
+      -- Add Unique constraint to uid if missing
+      DO $$ 
+      BEGIN 
+        IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'users_uid_key') THEN
+          ALTER TABLE public.users ADD CONSTRAINT users_uid_key UNIQUE (uid);
+        END IF;
+      END $$;
+
+      -- Ensure 'uid' column exists in temp_users (for older versions)
+      ALTER TABLE public.temp_users ADD COLUMN IF NOT EXISTS uid TEXT;
+      
+      -- Fix password constraint if it was NOT NULL before
+      ALTER TABLE public.users ALTER COLUMN password DROP NOT NULL;
+      
+      -- Add is_verified if missing
+      ALTER TABLE public.users ADD COLUMN IF NOT EXISTS is_verified BOOLEAN DEFAULT FALSE;
+
+      -- 5. Critical Indexes
+      CREATE INDEX IF NOT EXISTS idx_users_email ON public.users(email);
+      CREATE INDEX IF NOT EXISTS idx_users_uid ON public.users(uid);
       CREATE INDEX IF NOT EXISTS idx_otps_email ON public.otps(email);
       CREATE INDEX IF NOT EXISTS idx_otps_expires ON public.otps(expires_at);
-
-      -- Migrations (Safe ADD COLUMN)
-      ALTER TABLE public.users ADD COLUMN IF NOT EXISTS uid TEXT UNIQUE;
-      ALTER TABLE public.users ADD COLUMN IF NOT EXISTS is_verified BOOLEAN DEFAULT FALSE;
-      ALTER TABLE public.users ALTER COLUMN password DROP NOT NULL;
+      CREATE INDEX IF NOT EXISTS idx_temp_users_email ON public.temp_users(email);
     `)
   } catch (error) {
     console.error('Error initializing database:', error)
