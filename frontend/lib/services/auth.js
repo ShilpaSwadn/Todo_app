@@ -23,39 +23,73 @@ export const register = async (userData) => {
   try {
     console.log("Starting Firebase registration for:", email);
 
-    // 1. Create user in Firebase Auth
-    const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-    const user = userCredential.user;
-    console.log("User created in Auth successfully:", user.uid);
-
-    // 2. Send verification email
-    console.log("Sending verification email...");
+    let user;
     try {
-      // Point activation link to our custom verify page
+      // 1. Try to create user in Firebase Auth
+      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+      user = userCredential.user;
+      console.log("User created in Auth successfully:", user.uid);
+    } catch (createError) {
+      if (createError.code === 'auth/email-already-in-use') {
+        console.log("User already exists in Firebase, checking verification status...");
+        // If user exists, we'll try to sign them in to get the user object
+        // and check if they need a re-verification email.
+        try {
+          const userCredential = await signInWithEmailAndPassword(auth, email, password);
+          user = userCredential.user;
+        } catch (loginError) {
+          throw new Error("This email is already registered in our Firebase project. " +
+            "If this is you, please try to login or reset your password.");
+        }
+      } else {
+        throw createError;
+      }
+    }
+
+    // 2. If user is already verified, we should just tell them to login
+    if (user.emailVerified) {
+      // Try to store in Postgres just in case they aren't there yet
+      try {
+        await api.post('/auth/temp-user', {
+          uid: user.uid,
+          email,
+          firstName,
+          lastName,
+          mobileNumber
+        });
+      } catch (e) { }
+      throw new Error("Your email is already verified. Please go to the login page.");
+    }
+
+    // 3. Send verification email
+    console.log("Sending verification email to:", email);
+    try {
       const actionCodeSettings = {
         url: `${window.location.origin}/verify`,
         handleCodeInApp: true,
       };
       await sendEmailVerification(user, actionCodeSettings);
-      console.log("Verification email sent successfully with custom link.");
+      console.log("Verification email sent successfully.");
     } catch (emailError) {
       console.error("Error sending verification email:", emailError);
+      throw new Error("We couldn't send the activation link. " +
+        (emailError.code === 'auth/unauthorized-continue-uri'
+          ? "Domain not authorized in Firebase Console."
+          : emailError.message));
     }
 
-    // 3. Store in Postgres temp_users via API
-    console.log("Storing user data in Postgres temp_users...");
+    // 4. Store in Postgres temp_users via API
+    console.log("Ensuring user data is in Postgres temp_users...");
     try {
-      const response = await api.post('/auth/temp-user', {
+      await api.post('/auth/temp-user', {
         uid: user.uid,
         email,
         firstName,
         lastName,
         mobileNumber
       });
-
-      console.log("User stored in Postgres temp_users successfully.");
     } catch (apiError) {
-      console.error("Failed to connect to Postgres API:", apiError);
+      console.error("Postgres Sync Error (Non-critical):", apiError);
     }
 
     return {
