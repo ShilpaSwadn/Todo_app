@@ -1,12 +1,12 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { FiClock, FiMail, FiKey, FiArrowLeft, FiEye, FiEyeOff, FiLock } from 'react-icons/fi'
+import { FiMail, FiKey, FiArrowLeft, FiEye, FiEyeOff, FiLock } from 'react-icons/fi'
 import { HiX } from 'react-icons/hi'
 import { ImSpinner2 } from 'react-icons/im'
-import { sendOTP, verifyOTP, loginWithPassword } from '@/lib/services/auth'
+import { sendOTP, verifyOTP, loginWithPasswordDirect } from '@/lib/services/auth'
 import { validateEmail } from '@/lib/utils/validation'
 
 export default function Login() {
@@ -20,6 +20,17 @@ export default function Login() {
   const [sendingOTP, setSendingOTP] = useState(false)
   const [showOTP, setShowOTP] = useState(false)
   const [countdown, setCountdown] = useState(0)
+  const [loginMode, setLoginMode] = useState('password') // 'password' or 'otp'
+
+  useEffect(() => {
+    let timer;
+    if (countdown > 0) {
+      timer = setInterval(() => {
+        setCountdown((prev) => prev - 1);
+      }, 1000);
+    }
+    return () => clearInterval(timer);
+  }, [countdown]);
 
   const handleEmailChange = (e) => {
     setEmail(e.target.value)
@@ -64,31 +75,35 @@ export default function Login() {
         return
       }
 
-      // 1. Verify credentials & trigger OTP (combined in loginWithPassword)
-      await loginWithPassword(email.trim().toLowerCase(), password, false)
-
-      setShowOTP(true)
-
-      // Start countdown for resend
-      setCountdown(60)
-      const timer = setInterval(() => {
-        setCountdown((prev) => {
-          if (prev <= 1) {
-            clearInterval(timer)
-            return 0
-          }
-          return prev - 1
-        })
-      }, 1000)
-
+      // Direct login with password and verification check
+      await loginWithPasswordDirect(email.trim().toLowerCase(), password)
+      router.push('/dashboard')
     } catch (err) {
       setError(err.message || 'Failed to sign in. Please try again.')
-    } finally {
       setLoading(false)
-      setSendingOTP(false)
     }
   }
 
+  const handleSendOTP = async (e) => {
+    e.preventDefault()
+    if (!email || !validateEmail(email)) {
+      setError('Please enter a valid email address')
+      return
+    }
+
+    setError('')
+    setSendingOTP(true)
+
+    try {
+      await sendOTP(email.trim().toLowerCase())
+      setShowOTP(true)
+      setCountdown(60)
+    } catch (err) {
+      setError(err.message || 'Failed to send OTP. Please try again.')
+    } finally {
+      setSendingOTP(false)
+    }
+  }
 
   const handleResendOTP = async () => {
     setError('')
@@ -97,16 +112,6 @@ export default function Login() {
     try {
       await sendOTP(email.trim().toLowerCase())
       setCountdown(60)
-
-      const timer = setInterval(() => {
-        setCountdown((prev) => {
-          if (prev <= 1) {
-            clearInterval(timer)
-            return 0
-          }
-          return prev - 1
-        })
-      }, 1000)
     } catch (err) {
       setError(err.message || 'Failed to resend OTP. Please try again.')
     } finally {
@@ -133,8 +138,30 @@ export default function Login() {
                   Sign In
                 </h2>
                 <p className="text-gray-500 dark:text-gray-400">
-                  Enter your details to receive a secure login code.
+                  Choose your preferred login method
                 </p>
+              </div>
+
+              {/* Tab Switcher */}
+              <div className="flex p-1 bg-gray-100 dark:bg-gray-800 rounded-xl mb-8">
+                <button
+                  onClick={() => { setLoginMode('password'); setError(''); }}
+                  className={`flex-1 py-2.5 text-sm font-bold rounded-lg transition-all ${loginMode === 'password'
+                    ? 'bg-white dark:bg-gray-700 text-indigo-600 dark:text-white shadow-sm'
+                    : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
+                    }`}
+                >
+                  Email + Password
+                </button>
+                <button
+                  onClick={() => { setLoginMode('otp'); setError(''); }}
+                  className={`flex-1 py-2.5 text-sm font-bold rounded-lg transition-all ${loginMode === 'otp'
+                    ? 'bg-white dark:bg-gray-700 text-indigo-600 dark:text-white shadow-sm'
+                    : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
+                    }`}
+                >
+                  Email Only
+                </button>
               </div>
 
               {error && (
@@ -147,80 +174,119 @@ export default function Login() {
               )}
 
               <div className="space-y-4">
-
-                <form onSubmit={handlePasswordLogin} className="space-y-5">
-                  <div>
-                    <label htmlFor="email" className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
-                      Email Address
-                    </label>
-                    <div className="relative group">
-                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                        <FiMail className="h-5 w-5 text-gray-400 group-focus-within:text-indigo-500 transition-colors" />
+                {loginMode === 'password' ? (
+                  <form onSubmit={handlePasswordLogin} className="space-y-5">
+                    <div>
+                      <label htmlFor="email" className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                        Email Address
+                      </label>
+                      <div className="relative group">
+                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                          <FiMail className="h-5 w-5 text-gray-400 group-focus-within:text-indigo-500 transition-colors" />
+                        </div>
+                        <input
+                          type="email"
+                          id="email"
+                          name="email"
+                          value={email}
+                          onChange={handleEmailChange}
+                          required
+                          className="w-full pl-10 pr-4 py-3 bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 dark:text-white transition-all"
+                          placeholder="name@company.com"
+                        />
                       </div>
-                      <input
-                        type="email"
-                        id="email"
-                        name="email"
-                        value={email}
-                        onChange={handleEmailChange}
-                        required
-                        className="w-full pl-10 pr-4 py-3 bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 dark:text-white transition-all"
-                        placeholder="name@company.com"
-                      />
                     </div>
-                  </div>
 
-                  <div>
-                    <label htmlFor="password" className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
-                      Password
-                    </label>
-                    <div className="relative group">
-                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                        <FiLock className="h-5 w-5 text-gray-400 group-focus-within:text-indigo-500 transition-colors" />
+                    <div>
+                      <label htmlFor="password" className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                        Password
+                      </label>
+                      <div className="relative group">
+                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                          <FiLock className="h-5 w-5 text-gray-400 group-focus-within:text-indigo-500 transition-colors" />
+                        </div>
+                        <input
+                          type={showPassword ? 'text' : 'password'}
+                          id="password"
+                          name="password"
+                          value={password}
+                          onChange={(e) => setPassword(e.target.value)}
+                          required
+                          className="w-full pl-10 pr-10 py-3 bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 dark:text-white transition-all"
+                          placeholder="••••••••"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowPassword(!showPassword)}
+                          className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-indigo-500 transition-colors"
+                        >
+                          {showPassword ? <FiEyeOff className="h-5 w-5" /> : <FiEye className="h-5 w-5" />}
+                        </button>
                       </div>
-                      <input
-                        type={showPassword ? 'text' : 'password'}
-                        id="password"
-                        name="password"
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                        required
-                        className="w-full pl-10 pr-10 py-3 bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 dark:text-white transition-all"
-                        placeholder="••••••••"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowPassword(!showPassword)}
-                        className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-indigo-500 transition-colors"
-                      >
-                        {showPassword ? <FiEyeOff className="h-5 w-5" /> : <FiEye className="h-5 w-5" />}
-                      </button>
+                      <div className="flex justify-end mt-2">
+                        <Link
+                          href="/forgot-password"
+                          className="text-xs font-semibold text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 transition-colors"
+                        >
+                          Forgot password?
+                        </Link>
+                      </div>
                     </div>
-                    <div className="flex justify-end mt-2">
-                      <Link
-                        href="/forgot-password"
-                        className="text-xs font-semibold text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 transition-colors"
-                      >
-                        Forgot password?
-                      </Link>
-                    </div>
-                  </div>
 
-                  <button
-                    type="submit"
-                    disabled={loading || !email || !password}
-                    className="w-full px-4 py-3 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400 disabled:cursor-not-allowed text-white font-bold rounded-xl transition-all shadow-lg shadow-indigo-200 dark:shadow-none active:scale-[0.98]"
-                  >
-                    {loading || sendingOTP ? (
-                      <span className="flex items-center justify-center">
-                        <ImSpinner2 className="animate-spin -ml-1 mr-2 h-5 w-5 text-white" />
-                        Sending Code...
-                      </span>
-                    ) : (
-                      'Get OTP'
-                    )}
-                  </button>
-                </form>
+                    <button
+                      type="submit"
+                      disabled={loading || !email || !password}
+                      className="w-full px-4 py-3 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400 disabled:cursor-not-allowed text-white font-bold rounded-xl transition-all shadow-lg shadow-indigo-200 dark:shadow-none active:scale-[0.98]"
+                    >
+                      {loading ? (
+                        <span className="flex items-center justify-center">
+                          <ImSpinner2 className="animate-spin -ml-1 mr-2 h-5 w-5 text-white" />
+                          Signing In...
+                        </span>
+                      ) : (
+                        'Sign In'
+                      )}
+                    </button>
+                  </form>
+                ) : (
+                  <form onSubmit={handleSendOTP} className="space-y-5">
+                    <div>
+                      <label htmlFor="email-otp" className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                        Email Address
+                      </label>
+                      <div className="relative group">
+                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                          <FiMail className="h-5 w-5 text-gray-400 group-focus-within:text-indigo-500 transition-colors" />
+                        </div>
+                        <input
+                          type="email"
+                          id="email-otp"
+                          name="email"
+                          value={email}
+                          onChange={handleEmailChange}
+                          required
+                          className="w-full pl-10 pr-4 py-3 bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 dark:text-white transition-all"
+                          placeholder="name@company.com"
+                        />
+                      </div>
+                    </div>
+
+                    <button
+                      type="submit"
+                      disabled={sendingOTP || !email}
+                      className="w-full px-4 py-3 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400 disabled:cursor-not-allowed text-white font-bold rounded-xl transition-all shadow-lg shadow-indigo-200 dark:shadow-none active:scale-[0.98]"
+                    >
+                      {sendingOTP ? (
+                        <span className="flex items-center justify-center">
+                          <ImSpinner2 className="animate-spin -ml-1 mr-2 h-5 w-5 text-white" />
+                          Sending Code...
+                        </span>
+                      ) : (
+                        'Get Login Code'
+                      )}
+                    </button>
+                  </form>
+                )}
 
                 <div className="pt-6 border-t border-gray-100 dark:border-gray-800 text-center">
                   <p className="text-sm text-gray-600 dark:text-gray-400">

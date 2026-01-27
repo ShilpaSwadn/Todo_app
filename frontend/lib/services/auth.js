@@ -7,7 +7,7 @@ import {
 } from "firebase/auth";
 import { auth } from "../firebase";
 import api from '../api/client'
-import { saveAuthData } from '../auth/client'
+import { saveAuthData, clearAuthData } from '../auth/client'
 
 const ensureFirebase = () => {
   if (!auth) {
@@ -141,7 +141,41 @@ const handleAuthSync = async (user) => {
   }
 };
 
-// Login user with password (Firebase based)
+// Login user with password (Firebase based) - Direct login without OTP
+export const loginWithPasswordDirect = async (email, password) => {
+  ensureFirebase();
+  try {
+    const userCredential = await signInWithEmailAndPassword(auth, email, password);
+    const user = userCredential.user;
+
+    // Pull latest verification status from Firebase
+    await user.reload();
+
+    if (!user.emailVerified) {
+      await signOut(auth);
+      throw new Error("Email not verified. Please verify your email first.");
+    }
+
+    // Sync user and get token
+    const { userData, finalToken } = await handleAuthSync(user);
+
+    // Save auth data
+    saveAuthData(userData, finalToken);
+
+    return userData;
+  } catch (error) {
+    if (
+      error.code === 'auth/user-not-found' ||
+      error.code === 'auth/wrong-password' ||
+      error.code === 'auth/invalid-credential'
+    ) {
+      throw new Error("Invalid email or password.");
+    }
+    throw error;
+  }
+};
+
+// Login user with password (Firebase based) - Legacy/OTP version
 export const loginWithPassword = async (email, password, autoSave = true) => {
   ensureFirebase();
   try {
@@ -224,6 +258,20 @@ export const login = async (credentials) => {
     throw new Error(response.message || 'Login failed')
   } catch (error) {
     throw error
+  }
+}
+
+// Global logout (Clears Firebase session and LocalStorage)
+export const logout = async () => {
+  try {
+    ensureFirebase();
+    // 1. Sign out from Firebase
+    await signOut(auth);
+  } catch (error) {
+    console.warn("Firebase signout error:", error);
+  } finally {
+    // 2. Clear local storage regardless of Firebase success
+    clearAuthData();
   }
 }
 
