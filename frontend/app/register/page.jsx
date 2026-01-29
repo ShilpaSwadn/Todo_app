@@ -6,7 +6,8 @@ import Link from 'next/link'
 import { FiLock, FiUser, FiMail, FiPhone } from 'react-icons/fi'
 import { HiX } from 'react-icons/hi'
 import { ImSpinner2 } from 'react-icons/im'
-import { register } from '@/lib/services/auth'
+import { FcGoogle } from 'react-icons/fc'
+import { register, loginWithGoogle } from '@/lib/services/auth'
 import { validateRegisterForm, validateMobileNumber } from '@/lib/utils/validation'
 
 export default function Register() {
@@ -43,6 +44,25 @@ export default function Register() {
     setError('')
   }
 
+  const handleGoogleLogin = async () => {
+    setError('')
+    setLoading(true)
+    try {
+      const result = await loginWithGoogle()
+      if (result.success) {
+        if (result.verified) {
+          router.push('/dashboard')
+        } else {
+          setSuccessMsg(result.message)
+        }
+      }
+    } catch (err) {
+      setError(err.message || 'Google login failed. Please try again.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
   const handleSubmit = async (e) => {
     e.preventDefault()
     setError('')
@@ -59,15 +79,6 @@ export default function Register() {
         setError(firstError)
         setLoading(false)
         return
-      }
-
-      // Validate mobile number if provided
-      if (formData.mobileNumber && formData.mobileNumber.trim() !== '') {
-        if (!validateMobileNumber(formData.mobileNumber)) {
-          setError('Mobile number must be exactly 10 digits')
-          setLoading(false)
-          return
-        }
       }
 
       // Call API to register user
@@ -137,7 +148,7 @@ export default function Register() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label htmlFor="firstName" className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">
-                  First Name
+                  First Name <span className="text-red-500">*</span>
                 </label>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -179,7 +190,7 @@ export default function Register() {
             {/* Email */}
             <div>
               <label htmlFor="email" className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">
-                Email Address
+                Email Address <span className="text-red-500">*</span>
               </label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -200,7 +211,7 @@ export default function Register() {
             {/* Mobile Number */}
             <div>
               <label htmlFor="mobileNumber" className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">
-                Mobile Number
+                Mobile Number <span className="text-red-500">*</span>
               </label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -226,7 +237,7 @@ export default function Register() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label htmlFor="password" className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">
-                  Password
+                  Password <span className="text-red-500">*</span>
                 </label>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -246,7 +257,7 @@ export default function Register() {
 
               <div>
                 <label htmlFor="confirmPassword" className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">
-                  Confirm Password
+                  Confirm Password <span className="text-red-500">*</span>
                 </label>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -281,6 +292,26 @@ export default function Register() {
               )}
             </button>
           </form>
+
+          <div className="mt-6">
+            <div className="relative">
+              <div className="absolute inset-0 flex items-center">
+                <div className="w-full border-t border-gray-200 dark:border-gray-700"></div>
+              </div>
+              <div className="relative flex justify-center text-xs uppercase">
+                <span className="bg-white dark:bg-gray-900 px-2 text-gray-500 dark:text-gray-400">Or continue with</span>
+              </div>
+            </div>
+
+            <button
+              onClick={handleGoogleLogin}
+              disabled={loading}
+              className="mt-4 w-full flex items-center justify-center gap-3 px-4 py-2.5 border-2 border-gray-100 dark:border-gray-700 hover:border-indigo-500 dark:hover:border-indigo-500 rounded-lg transition-all duration-200 font-semibold text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800/50 text-sm"
+            >
+              <FcGoogle className="w-5 h-5" />
+              Sign up with Google
+            </button>
+          </div>
 
           <div className="mt-4 text-center">
             <p className="text-xs text-gray-600 dark:text-gray-400">

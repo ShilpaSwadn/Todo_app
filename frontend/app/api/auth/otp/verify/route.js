@@ -17,13 +17,13 @@ export async function POST(request) {
 
     // Parse request body
     const body = await request.json()
-    const { email, otp } = body
+    const { email: identifier, otp } = body
 
     // Validate input
-    if (!email || !email.trim()) {
+    if (!identifier || !identifier.trim()) {
       return NextResponse.json({
         success: false,
-        message: 'Email is required'
+        message: 'Email or Mobile Number is required'
       }, { status: 400 })
     }
 
@@ -34,23 +34,23 @@ export async function POST(request) {
       }, { status: 400 })
     }
 
-    // Verify OTP
-    const otpData = await OTP.verify(email, otp)
-    if (!otpData) {
-      return NextResponse.json({
-        success: false,
-        message: 'Invalid or expired OTP'
-      }, { status: 400 })
-    }
-
-    // Get user by email
-    const user = await User.findByEmail(email)
+    // 1. Find user by identifier
+    const user = await User.findByIdentifier(identifier)
 
     if (!user) {
       return NextResponse.json({
         success: false,
         message: 'User not found'
       }, { status: 404 })
+    }
+
+    // 2. Verify OTP (always against email)
+    const otpData = await OTP.verify(user.email, otp)
+    if (!otpData) {
+      return NextResponse.json({
+        success: false,
+        message: 'Invalid or expired OTP'
+      }, { status: 400 })
     }
 
     // Delete used OTP

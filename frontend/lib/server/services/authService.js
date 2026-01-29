@@ -7,18 +7,24 @@ const generateToken = (userId) => {
 }
 
 class AuthService {
-  // Register a new user
+  // Register a new user (stores in temp_users)
   async register(userData) {
     const { firstName, lastName, email, mobileNumber, password } = userData
 
-    // Check if user already exists
-    const existingUser = await User.findByEmail(email)
-    if (existingUser) {
+    // 1. Check if email already exists
+    const existingEmail = await User.findByEmail(email)
+    if (existingEmail) {
       throw new Error('Email already registered. Please login instead.')
     }
 
-    // Create new user
-    const user = await User.create({
+    // 2. Check if mobile number already exists
+    const existingMobile = await User.findByMobile(mobileNumber)
+    if (existingMobile) {
+      throw new Error('Mobile number already registered. Please use a different number.')
+    }
+
+    // Create user in temp_users
+    const user = await User.createTemp({
       firstName,
       lastName,
       email,
@@ -26,10 +32,44 @@ class AuthService {
       password
     })
 
+    return {
+      message: 'Registration successful! Please verify your account to continue.',
+      user: {
+        email: user.email,
+        mobileNumber: user.mobileNumber
+      }
+    }
+  }
+
+  // Login user with identifier (email or mobile) and password
+  async login(credentials) {
+    const { identifier, password } = credentials
+
+    if (!identifier || !password) {
+      throw new Error('Email/Mobile and password are required')
+    }
+
+    // 1. Find user by identifier
+    const user = await User.findByIdentifier(identifier)
+
+    if (!user) {
+      throw new Error('Invalid email/mobile or password')
+    }
+
+    // 2. Check if verified
+    if (!user.isVerified || user.isTemp) {
+      throw new Error('Account not verified. Please verify your email first.')
+    }
+
+    // 3. Verify password
+    const isPasswordValid = await User.comparePassword(password, user.password)
+    if (!isPasswordValid) {
+      throw new Error('Invalid email/mobile or password')
+    }
+
     // Generate token
     const token = generateToken(user.id)
 
-    // Return user data (without password)
     return {
       user: {
         id: user.id,
@@ -42,15 +82,26 @@ class AuthService {
     }
   }
 
-  // Login user - password login disabled
-  async login(credentials) {
-    throw new Error('Password login is disabled. Please use OTP login.')
+  // Specific login for email
+  async loginWithEmail(email, password) {
+    if (!email || !email.includes('@')) {
+      throw new Error('Please provide a valid email address')
+    }
+    return this.login({ identifier: email, password })
+  }
+
+  // Specific login for mobile
+  async loginWithMobile(mobileNumber, password) {
+    if (!mobileNumber || mobileNumber.length < 10) {
+      throw new Error('Please provide a valid 10-digit mobile number')
+    }
+    return this.login({ identifier: mobileNumber, password })
   }
 
   // Get user by ID
   async getUserById(userId) {
     const user = await User.findById(userId)
-    
+
     if (!user) {
       throw new Error('User not found')
     }

@@ -2,6 +2,37 @@ import { query } from '../config/database.js'
 import bcrypt from 'bcryptjs'
 
 class User {
+  static async createTemp(userData) {
+    const { firstName, lastName, email, mobileNumber, password, uid } = userData
+
+    // Hash password
+    const hashedPassword = await bcrypt.hash(password, 10)
+
+    const sqlQuery = `
+      INSERT INTO public.temp_users (uid, email, first_name, last_name, mobile_number, password)
+      VALUES ($1, $2, $3, $4, $5, $6)
+      ON CONFLICT (email) DO UPDATE SET
+        uid = EXCLUDED.uid,
+        first_name = EXCLUDED.first_name,
+        last_name = EXCLUDED.last_name,
+        mobile_number = EXCLUDED.mobile_number,
+        password = EXCLUDED.password
+      RETURNING uid, first_name, last_name, email, mobile_number, created_at
+    `
+
+    const values = [uid || `temp_${Date.now()}`, email.toLowerCase(), firstName, lastName || null, mobileNumber, hashedPassword]
+    const result = await query(sqlQuery, values)
+
+    return {
+      uid: result.rows[0].uid,
+      firstName: result.rows[0].first_name,
+      lastName: result.rows[0].last_name,
+      email: result.rows[0].email,
+      mobileNumber: result.rows[0].mobile_number,
+      createdAt: result.rows[0].created_at
+    }
+  }
+
   static async create(userData) {
     const { firstName, lastName, email, mobileNumber, password } = userData
 
@@ -30,28 +61,138 @@ class User {
     }
   }
 
-  static async findByEmail(email) {
+  static async findByIdentifier(identifier, includeTemp = true) {
+    if (!identifier) return null;
+    const cleanIdentifier = identifier.trim().toLowerCase();
+
+    // 1. Check main table
+    const sqlQuery = 'SELECT * FROM public.users WHERE email = $1 OR mobile_number = $2'
+    const result = await query(sqlQuery, [cleanIdentifier, identifier.trim()])
+
+    if (result.rows.length > 0) {
+      const user = result.rows[0]
+      return {
+        id: user.id,
+        firstName: user.first_name,
+        lastName: user.last_name,
+        email: user.email,
+        mobileNumber: user.mobile_number,
+        password: user.password,
+        isVerified: user.is_verified,
+        createdAt: user.created_at
+      }
+    }
+
+    // 2. Check temp table if requested
+    if (includeTemp) {
+      const tempQuery = 'SELECT * FROM public.temp_users WHERE email = $1 OR mobile_number = $2'
+      const tempResult = await query(tempQuery, [cleanIdentifier, identifier.trim()])
+
+      if (tempResult.rows.length > 0) {
+        const user = tempResult.rows[0]
+        return {
+          id: null,
+          firstName: user.first_name,
+          lastName: user.last_name,
+          email: user.email,
+          mobileNumber: user.mobile_number,
+          password: user.password,
+          isVerified: false,
+          createdAt: user.created_at,
+          isTemp: true
+        }
+      }
+    }
+
+    return null
+  }
+
+  static async findByMobile(mobileNumber, includeTemp = true) {
+    if (!mobileNumber) return null;
+    const cleanMobile = mobileNumber.trim();
+
+    // 1. Check main table
+    const sqlQuery = 'SELECT * FROM public.users WHERE mobile_number = $1'
+    const result = await query(sqlQuery, [cleanMobile])
+
+    if (result.rows.length > 0) {
+      const user = result.rows[0]
+      return {
+        id: user.id,
+        firstName: user.first_name,
+        lastName: user.last_name,
+        email: user.email,
+        mobileNumber: user.mobile_number,
+        password: user.password,
+        isVerified: user.is_verified,
+        createdAt: user.created_at
+      }
+    }
+
+    // 2. Check temp table
+    if (includeTemp) {
+      const tempQuery = 'SELECT * FROM public.temp_users WHERE mobile_number = $1'
+      const tempResult = await query(tempQuery, [cleanMobile])
+
+      if (tempResult.rows.length > 0) {
+        const user = tempResult.rows[0]
+        return {
+          id: null,
+          firstName: user.first_name,
+          lastName: user.last_name,
+          email: user.email,
+          mobileNumber: user.mobile_number,
+          password: user.password,
+          isVerified: false,
+          createdAt: user.created_at,
+          isTemp: true
+        }
+      }
+    }
+
+    return null
+  }
+
+  static async findByEmail(email, includeTemp = true) {
+    const cleanEmail = email.toLowerCase();
     const sqlQuery = 'SELECT * FROM public.users WHERE email = $1'
-    const result = await query(sqlQuery, [email.toLowerCase()])
+    const result = await query(sqlQuery, [cleanEmail])
 
-    if (result.rows.length === 0) {
-      console.log('User.findByEmail: No user found for:', email);
-      return null
+    if (result.rows.length > 0) {
+      const user = result.rows[0]
+      return {
+        id: user.id,
+        firstName: user.first_name,
+        lastName: user.last_name,
+        email: user.email,
+        mobileNumber: user.mobile_number,
+        password: user.password,
+        isVerified: user.is_verified,
+        createdAt: user.created_at
+      }
     }
 
-    const user = result.rows[0]
-    console.log('User.findByEmail: Found user for:', email);
-    return {
-      id: user.id,
-      firstName: user.first_name,
-      lastName: user.last_name,
-      email: user.email,
-      mobileNumber: user.mobile_number,
-      password: user.password,
-      isVerified: user.is_verified,
-      createdAt: user.created_at
+    if (includeTemp) {
+      const tempQuery = 'SELECT * FROM public.temp_users WHERE email = $1'
+      const tempResult = await query(tempQuery, [cleanEmail])
+
+      if (tempResult.rows.length > 0) {
+        const user = tempResult.rows[0]
+        return {
+          id: null,
+          firstName: user.first_name,
+          lastName: user.last_name,
+          email: user.email,
+          mobileNumber: user.mobile_number,
+          password: user.password,
+          isVerified: false,
+          createdAt: user.created_at,
+          isTemp: true
+        }
+      }
     }
 
+    return null
   }
 
   static async findByUserId(userId) {

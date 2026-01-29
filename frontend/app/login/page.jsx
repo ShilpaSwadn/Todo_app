@@ -3,15 +3,16 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { FiMail, FiKey, FiArrowLeft, FiEye, FiEyeOff, FiLock } from 'react-icons/fi'
+import { FiMail, FiKey, FiArrowLeft, FiEye, FiEyeOff, FiLock, FiUser, FiPhone } from 'react-icons/fi'
 import { HiX } from 'react-icons/hi'
 import { ImSpinner2 } from 'react-icons/im'
-import { sendOTP, verifyOTP, loginWithPasswordDirect } from '@/lib/services/auth'
-import { validateEmail } from '@/lib/utils/validation'
+import { FcGoogle } from 'react-icons/fc'
+import { sendOTP, verifyOTP, loginWithPasswordDirect, loginWithGoogle } from '@/lib/services/auth'
+import { validateEmail, validateIdentifier } from '@/lib/utils/validation'
 
 export default function Login() {
   const router = useRouter()
-  const [email, setEmail] = useState('')
+  const [identifier, setIdentifier] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [otp, setOtp] = useState('')
@@ -32,8 +33,8 @@ export default function Login() {
     return () => clearInterval(timer);
   }, [countdown]);
 
-  const handleEmailChange = (e) => {
-    setEmail(e.target.value)
+  const handleIdentifierChange = (e) => {
+    setIdentifier(e.target.value)
     setError('')
   }
 
@@ -41,6 +42,25 @@ export default function Login() {
     const digitsOnly = e.target.value.replace(/\D/g, '').slice(0, 6)
     setOtp(digitsOnly)
     setError('')
+  }
+
+  const handleGoogleLogin = async () => {
+    setError('')
+    setLoading(true)
+    try {
+      const result = await loginWithGoogle()
+      if (result.success) {
+        if (result.verified) {
+          router.push('/dashboard')
+        } else {
+          setError(result.message)
+        }
+      }
+    } catch (err) {
+      setError(err.message || 'Google login failed. Please try again.')
+    } finally {
+      setLoading(false)
+    }
   }
 
   const handleVerifyOTP = async (e) => {
@@ -55,7 +75,7 @@ export default function Login() {
         return
       }
 
-      await verifyOTP(email.trim().toLowerCase(), otp)
+      await verifyOTP(identifier.trim().toLowerCase(), otp)
       router.push('/dashboard')
     } catch (err) {
       setError(err.message || 'Failed to verify OTP. Please try again.')
@@ -69,14 +89,20 @@ export default function Login() {
     setLoading(true)
 
     try {
-      if (!email || !password) {
-        setError('Email and Password are required')
+      if (!identifier || !password) {
+        setError('Email/Mobile and Password are required')
+        setLoading(false)
+        return
+      }
+
+      if (!validateIdentifier(identifier)) {
+        setError('Please enter a valid email or 10-digit mobile number')
         setLoading(false)
         return
       }
 
       // Direct login with password and verification check
-      await loginWithPasswordDirect(email.trim().toLowerCase(), password)
+      await loginWithPasswordDirect(identifier.trim().toLowerCase(), password)
       router.push('/dashboard')
     } catch (err) {
       setError(err.message || 'Failed to sign in. Please try again.')
@@ -86,8 +112,8 @@ export default function Login() {
 
   const handleSendOTP = async (e) => {
     e.preventDefault()
-    if (!email || !validateEmail(email)) {
-      setError('Please enter a valid email address')
+    if (!identifier || !validateIdentifier(identifier)) {
+      setError('Please enter a valid email or 10-digit mobile number')
       return
     }
 
@@ -95,7 +121,7 @@ export default function Login() {
     setSendingOTP(true)
 
     try {
-      await sendOTP(email.trim().toLowerCase())
+      await sendOTP(identifier.trim().toLowerCase())
       setShowOTP(true)
       setCountdown(60)
     } catch (err) {
@@ -110,7 +136,7 @@ export default function Login() {
     setSendingOTP(true)
 
     try {
-      await sendOTP(email.trim().toLowerCase())
+      await sendOTP(identifier.trim().toLowerCase())
       setCountdown(60)
     } catch (err) {
       setError(err.message || 'Failed to resend OTP. Please try again.')
@@ -119,7 +145,7 @@ export default function Login() {
     }
   }
 
-  const goBackToEmail = () => {
+  const goBackToIdentifier = () => {
     setShowOTP(false)
     setOtp('')
     setError('')
@@ -151,7 +177,7 @@ export default function Login() {
                     : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
                     }`}
                 >
-                  Email + Password
+                  Password Login
                 </button>
                 <button
                   onClick={() => { setLoginMode('otp'); setError(''); }}
@@ -160,7 +186,7 @@ export default function Login() {
                     : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
                     }`}
                 >
-                  Email Only
+                  OTP Login
                 </button>
               </div>
 
@@ -177,22 +203,26 @@ export default function Login() {
                 {loginMode === 'password' ? (
                   <form onSubmit={handlePasswordLogin} className="space-y-5">
                     <div>
-                      <label htmlFor="email" className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
-                        Email Address
+                      <label htmlFor="identifier" className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                        Email or Mobile Number
                       </label>
                       <div className="relative group">
                         <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                          <FiMail className="h-5 w-5 text-gray-400 group-focus-within:text-indigo-500 transition-colors" />
+                          {/^\d+$/.test(identifier) ? (
+                            <FiPhone className="h-5 w-5 text-gray-400 group-focus-within:text-indigo-500 transition-colors" />
+                          ) : (
+                            <FiUser className="h-5 w-5 text-gray-400 group-focus-within:text-indigo-500 transition-colors" />
+                          )}
                         </div>
                         <input
-                          type="email"
-                          id="email"
-                          name="email"
-                          value={email}
-                          onChange={handleEmailChange}
+                          type="text"
+                          id="identifier"
+                          name="identifier"
+                          value={identifier}
+                          onChange={handleIdentifierChange}
                           required
                           className="w-full pl-10 pr-4 py-3 bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 dark:text-white transition-all"
-                          placeholder="name@company.com"
+                          placeholder="Email or mobile number"
                         />
                       </div>
                     </div>
@@ -235,7 +265,7 @@ export default function Login() {
 
                     <button
                       type="submit"
-                      disabled={loading || !email || !password}
+                      disabled={loading || !identifier || !password}
                       className="w-full px-4 py-3 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400 disabled:cursor-not-allowed text-white font-bold rounded-xl transition-all shadow-lg shadow-indigo-200 dark:shadow-none active:scale-[0.98]"
                     >
                       {loading ? (
@@ -251,29 +281,33 @@ export default function Login() {
                 ) : (
                   <form onSubmit={handleSendOTP} className="space-y-5">
                     <div>
-                      <label htmlFor="email-otp" className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
-                        Email Address
+                      <label htmlFor="identifier-otp" className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                        Email or Mobile Number
                       </label>
                       <div className="relative group">
                         <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                          <FiMail className="h-5 w-5 text-gray-400 group-focus-within:text-indigo-500 transition-colors" />
+                          {/^\d+$/.test(identifier) ? (
+                            <FiPhone className="h-5 w-5 text-gray-400 group-focus-within:text-indigo-500 transition-colors" />
+                          ) : (
+                            <FiUser className="h-5 w-5 text-gray-400 group-focus-within:text-indigo-500 transition-colors" />
+                          )}
                         </div>
                         <input
-                          type="email"
-                          id="email-otp"
-                          name="email"
-                          value={email}
-                          onChange={handleEmailChange}
+                          type="text"
+                          id="identifier-otp"
+                          name="identifier"
+                          value={identifier}
+                          onChange={handleIdentifierChange}
                           required
                           className="w-full pl-10 pr-4 py-3 bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 dark:text-white transition-all"
-                          placeholder="name@company.com"
+                          placeholder="Email or mobile number"
                         />
                       </div>
                     </div>
 
                     <button
                       type="submit"
-                      disabled={sendingOTP || !email}
+                      disabled={sendingOTP || !identifier}
                       className="w-full px-4 py-3 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400 disabled:cursor-not-allowed text-white font-bold rounded-xl transition-all shadow-lg shadow-indigo-200 dark:shadow-none active:scale-[0.98]"
                     >
                       {sendingOTP ? (
@@ -287,6 +321,26 @@ export default function Login() {
                     </button>
                   </form>
                 )}
+
+                <div className="mt-6">
+                  <div className="relative">
+                    <div className="absolute inset-0 flex items-center">
+                      <div className="w-full border-t border-gray-100 dark:border-gray-800"></div>
+                    </div>
+                    <div className="relative flex justify-center text-xs uppercase">
+                      <span className="bg-white dark:bg-gray-900 px-2 text-gray-500 dark:text-gray-400">Or continue with</span>
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={handleGoogleLogin}
+                    disabled={loading}
+                    className="mt-4 w-full flex items-center justify-center gap-3 px-4 py-3 border-2 border-gray-100 dark:border-gray-800 hover:border-indigo-500 dark:hover:border-indigo-500 rounded-xl transition-all duration-200 font-bold text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800/50 text-sm"
+                  >
+                    <FcGoogle className="w-5 h-5" />
+                    Sign in with Google
+                  </button>
+                </div>
 
                 <div className="pt-6 border-t border-gray-100 dark:border-gray-800 text-center">
                   <p className="text-sm text-gray-600 dark:text-gray-400">
@@ -303,17 +357,17 @@ export default function Login() {
             <>
               <div className="mb-8">
                 <button
-                  onClick={goBackToEmail}
+                  onClick={goBackToIdentifier}
                   className="mb-4 flex items-center text-sm font-semibold text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 transition-colors"
                 >
                   <FiArrowLeft className="w-4 h-4 mr-1" />
-                  Back to email
+                  Back to login
                 </button>
                 <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
                   Verify Code
                 </h2>
                 <p className="text-gray-500 dark:text-gray-400">
-                  We sent a code to <span className="font-bold text-gray-900 dark:text-white">{email}</span>
+                  We sent a code to <span className="font-bold text-gray-900 dark:text-white">{identifier}</span>
                 </p>
               </div>
 

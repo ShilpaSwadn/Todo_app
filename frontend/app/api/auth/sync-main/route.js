@@ -58,8 +58,8 @@ export async function POST(request) {
             // 3. Not in main table, insert it
             console.log('Sync-main: Moving user from temp to main.');
             const insertMainSql = `
-                INSERT INTO public.users (uid, email, first_name, last_name, mobile_number, is_verified, created_at)
-                VALUES ($1, $2, $3, $4, $5, $6, $7)
+                INSERT INTO public.users (uid, email, first_name, last_name, mobile_number, password, profile_picture, is_verified, created_at)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
                 RETURNING *
             `;
             const insertValues = [
@@ -68,6 +68,8 @@ export async function POST(request) {
                 tempUser.first_name,
                 tempUser.last_name,
                 tempUser.mobile_number,
+                tempUser.password,
+                tempUser.profile_picture,
                 true,
                 tempUser.created_at
             ];
@@ -133,8 +135,8 @@ export async function POST(request) {
         if (body.isSocial) {
             console.log('Sync-main: Social login user not found, performing auto-registration:', targetEmail);
             const insertMainSql = `
-                INSERT INTO public.users (uid, email, first_name, last_name, is_verified, created_at)
-                VALUES ($1, $2, $3, $4, $5, NOW())
+                INSERT INTO public.users (uid, email, first_name, last_name, profile_picture, is_verified, created_at)
+                VALUES ($1, $2, $3, $4, $5, $6, NOW())
                 RETURNING *
             `;
             const mainResult = await query(insertMainSql, [
@@ -142,6 +144,7 @@ export async function POST(request) {
                 targetEmail,
                 body.firstName || 'User',
                 body.lastName || '',
+                body.profilePicture || null,
                 true
             ]);
             const user = mainResult.rows[0];

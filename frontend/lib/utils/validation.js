@@ -20,10 +20,24 @@ export const validateLastName = (name) => {
 
 // Validate mobile number - exactly 10 digits
 export const validateMobileNumber = (mobileNumber) => {
-  if (!mobileNumber || mobileNumber.trim() === '') return true // Optional field
+  if (!mobileNumber || mobileNumber.trim() === '') return false
   // Remove all non-digit characters and check if exactly 10 digits
   const digitsOnly = mobileNumber.replace(/\D/g, '')
   return digitsOnly.length === 10
+}
+
+// Validate identifier (email or mobile number)
+export const validateIdentifier = (identifier) => {
+  if (!identifier || identifier.trim() === '') return false
+  const cleanIdentifier = identifier.trim()
+
+  // If it contains @, validate as email
+  if (cleanIdentifier.includes('@')) {
+    return validateEmail(cleanIdentifier)
+  }
+
+  // Otherwise validate as mobile number
+  return validateMobileNumber(cleanIdentifier)
 }
 
 // Validate password - must be at least 6 characters
@@ -31,7 +45,7 @@ export const validatePassword = (password) => {
   if (password.length < 6) {
     return { valid: false, message: 'Password must be at least 6 characters long' }
   }
-  
+
   return { valid: true }
 }
 
@@ -60,11 +74,11 @@ export const validateRegisterForm = (formData) => {
     errors.email = 'Please provide a valid email address'
   }
 
-  // Mobile Number (optional)
-  if (formData.mobileNumber && formData.mobileNumber.trim() !== '') {
-    if (!validateMobileNumber(formData.mobileNumber)) {
-      errors.mobileNumber = 'Mobile number must be exactly 10 digits'
-    }
+  // Mobile Number
+  if (!formData.mobileNumber || formData.mobileNumber.trim() === '') {
+    errors.mobileNumber = 'Mobile number is required'
+  } else if (!validateMobileNumber(formData.mobileNumber)) {
+    errors.mobileNumber = 'Mobile number must be exactly 10 digits'
   }
 
   // Password

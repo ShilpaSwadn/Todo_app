@@ -14,6 +14,7 @@ const initDatabase = async () => {
         email VARCHAR(255) UNIQUE NOT NULL,
         mobile_number VARCHAR(20),
         password VARCHAR(255),
+        profile_picture TEXT,
         is_verified BOOLEAN DEFAULT FALSE,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -25,6 +26,7 @@ const initDatabase = async () => {
         first_name TEXT NOT NULL,
         last_name TEXT,
         mobile_number TEXT,
+        profile_picture TEXT,
         is_verified BOOLEAN DEFAULT FALSE,
         created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
       );
@@ -44,9 +46,10 @@ const initDatabase = async () => {
       -- Add columns if missing in older versions
       ALTER TABLE public.users ADD COLUMN IF NOT EXISTS uid TEXT;
       ALTER TABLE public.users ADD COLUMN IF NOT EXISTS is_verified BOOLEAN DEFAULT FALSE;
+      ALTER TABLE public.users ADD COLUMN IF NOT EXISTS profile_picture TEXT;
       ALTER TABLE public.users ALTER COLUMN password DROP NOT NULL;
       
-      -- Add unique constraint to uid if missing
+      ALTER TABLE public.temp_users ADD COLUMN IF NOT EXISTS profile_picture TEXT;
       DO $$ 
       BEGIN 
         IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'users_uid_key') THEN

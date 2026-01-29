@@ -3,9 +3,10 @@ import {
   sendEmailVerification,
   signInWithEmailAndPassword,
   signOut,
-  sendPasswordResetEmail
+  sendPasswordResetEmail,
+  signInWithPopup
 } from "firebase/auth";
-import { auth } from "../firebase";
+import { auth, googleProvider } from "../firebase";
 import api from '../api/client'
 import { saveAuthData, clearAuthData } from '../auth/client'
 
@@ -15,12 +16,76 @@ const ensureFirebase = () => {
   }
 };
 
+// Login with Google OAuth
+export const loginWithGoogle = async () => {
+  ensureFirebase();
+  try {
+    const result = await signInWithPopup(auth, googleProvider);
+    const user = result.user;
+
+    console.log("Google Login Success:", user.email, "Verified:", user.emailVerified);
+
+    // If Google says email is verified, sync directly to main table
+    if (user.emailVerified) {
+      const { userData, finalToken } = await handleAuthSync(user);
+      saveAuthData(userData, finalToken);
+      return { success: true, user: userData, verified: true };
+    } else {
+      // If not verified (rare for Google but possible), store in temp and send verification
+      console.log("Google email not verified, sending verification link...");
+
+      const actionCodeSettings = {
+        url: `${window.location.origin}/verify`,
+        handleCodeInApp: true,
+      };
+      await sendEmailVerification(user, actionCodeSettings);
+
+      // Store in temp_users
+      await api.post('/auth/temp-user', {
+        uid: user.uid,
+        email: user.email,
+        firstName: user.displayName ? user.displayName.split(' ')[0] : 'User',
+        lastName: user.displayName ? user.displayName.split(' ').slice(1).join(' ') : '',
+        profilePicture: user.photoURL,
+        mobileNumber: '' // Google doesn't provide mobile by default
+      });
+
+      return {
+        success: true,
+        verified: false,
+        message: "Your Google email is not verified. We've sent an activation link to your inbox."
+      };
+    }
+  } catch (error) {
+    console.error("Google Login Error:", error);
+    if (error.code === 'auth/popup-closed-by-user') {
+      throw new Error("Login cancelled. Please try again.");
+    }
+    throw error;
+  }
+};
+
 // Register a new user using Firebase and send activation link
 export const register = async (userData) => {
   ensureFirebase();
   const { firstName, lastName, email, mobileNumber, password } = userData;
 
   try {
+    // 0. Check if email or mobile already exists in our DB (verified or temp)
+    console.log("Checking uniqueness for:", email, mobileNumber);
+
+    // Check Email
+    const emailStatus = await checkUserStatus(email);
+    if (emailStatus.exists) {
+      throw new Error("This email is already registered. Please login instead.");
+    }
+
+    // Check Mobile
+    const mobileStatus = await checkUserStatus(mobileNumber);
+    if (mobileStatus.exists) {
+      throw new Error("This mobile number is already registered. Please use a different number.");
+    }
+
     console.log("Starting Firebase registration for:", email);
 
     let user;
@@ -121,6 +186,7 @@ const handleAuthSync = async (user) => {
       email: user.email,
       firstName: userData.firstName,
       lastName: userData.lastName,
+      profilePicture: user.photoURL,
       isSocial: !!user.providerData.find(p => p.providerId === 'google.com')
     });
 
@@ -142,10 +208,26 @@ const handleAuthSync = async (user) => {
 };
 
 // Login user with password (Firebase based) - Direct login without OTP
-export const loginWithPasswordDirect = async (email, password) => {
+export const loginWithPasswordDirect = async (identifier, password) => {
   ensureFirebase();
   try {
-    const userCredential = await signInWithEmailAndPassword(auth, email, password);
+    let targetEmail = identifier;
+
+    // If it's not an email, assume it's a mobile number and try to find the email
+    if (!identifier.includes('@')) {
+      try {
+        const response = await api.post('/auth/check-status', { identifier });
+        if (response.success && response.exists && response.email) {
+          targetEmail = response.email;
+        } else {
+          throw new Error("No account found with this mobile number.");
+        }
+      } catch (e) {
+        throw new Error(e.message || "Failed to resolve mobile number to email.");
+      }
+    }
+
+    const userCredential = await signInWithEmailAndPassword(auth, targetEmail, password);
     const user = userCredential.user;
 
     // Pull latest verification status from Firebase
@@ -169,7 +251,7 @@ export const loginWithPasswordDirect = async (email, password) => {
       error.code === 'auth/wrong-password' ||
       error.code === 'auth/invalid-credential'
     ) {
-      throw new Error("Invalid email or password.");
+      throw new Error("Invalid email/mobile or password.");
     }
     throw error;
   }
@@ -369,5 +451,15 @@ export const resetPassword = async (email) => {
       throw new Error("No account found with this email address.");
     }
     throw error;
+  }
+}
+// Check user status (exists, verified, etc.)
+export const checkUserStatus = async (identifier) => {
+  try {
+    const response = await api.post('/auth/check-status', { identifier });
+    return response;
+  } catch (error) {
+    console.error("Check user status error:", error);
+    return { success: false, exists: false };
   }
 }
