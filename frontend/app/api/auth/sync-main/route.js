@@ -17,12 +17,17 @@ export async function POST(request) {
         }
 
         // 1. Fetch from temp_users first to get all data including UID if missing
-        const fetchTempSql = uid
-            ? 'SELECT * FROM public.temp_users WHERE uid = $1 OR email = $2'
-            : 'SELECT * FROM public.temp_users WHERE email = $1';
-        const tempParams = uid ? [uid, targetEmail] : [targetEmail];
-        const tempResult = await query(fetchTempSql, tempParams);
-        const tempUser = tempResult.rows[0];
+        let tempUser = null;
+        if (uid && targetEmail) {
+            const tempResult = await query('SELECT * FROM public.temp_users WHERE uid = $1 OR email = $2', [uid, targetEmail]);
+            tempUser = tempResult.rows[0];
+        } else if (uid) {
+            const tempResult = await query('SELECT * FROM public.temp_users WHERE uid = $1', [uid]);
+            tempUser = tempResult.rows[0];
+        } else if (targetEmail) {
+            const tempResult = await query('SELECT * FROM public.temp_users WHERE email = $1', [targetEmail]);
+            tempUser = tempResult.rows[0];
+        }
 
         if (tempUser) {
             console.log('Sync-main: Found user in temp_users:', tempUser.email);
@@ -31,8 +36,14 @@ export async function POST(request) {
             const finalEmail = targetEmail || tempUser.email;
 
             // 2. Check main table
-            const checkUserSql = 'SELECT * FROM public.users WHERE uid = $1 OR email = $2';
-            const userResult = await query(checkUserSql, [finalUid, finalEmail]);
+            let userResult;
+            if (finalUid && finalEmail) {
+                userResult = await query('SELECT * FROM public.users WHERE uid = $1 OR email = $2', [finalUid, finalEmail]);
+            } else if (finalUid) {
+                userResult = await query('SELECT * FROM public.users WHERE uid = $1', [finalUid]);
+            } else {
+                userResult = await query('SELECT * FROM public.users WHERE email = $1', [finalEmail]);
+            }
 
             if (userResult.rows.length > 0) {
                 const existingUser = userResult.rows[0];
@@ -49,7 +60,13 @@ export async function POST(request) {
                 const user = updatedResult.rows[0];
 
                 // Cleanup temp
-                await query('DELETE FROM public.temp_users WHERE uid = $1 OR email = $2', [finalUid, finalEmail]);
+                if (finalUid && finalEmail) {
+                    await query('DELETE FROM public.temp_users WHERE uid = $1 OR email = $2', [finalUid, finalEmail]);
+                } else if (finalUid) {
+                    await query('DELETE FROM public.temp_users WHERE uid = $1', [finalUid]);
+                } else {
+                    await query('DELETE FROM public.temp_users WHERE email = $1', [finalEmail]);
+                }
 
                 const token = jwt.sign({ userId: user.id }, process.env.JWT_SECRET, { expiresIn: '7d' });
                 return NextResponse.json({ success: true, message: 'User updated in main table', token, user });
@@ -78,7 +95,13 @@ export async function POST(request) {
             const user = mainResult.rows[0];
 
             // Cleanup
-            await query('DELETE FROM public.temp_users WHERE uid = $1 OR email = $2', [tempUser.uid, tempUser.email]);
+            if (tempUser.uid && tempUser.email) {
+                await query('DELETE FROM public.temp_users WHERE uid = $1 OR email = $2', [tempUser.uid, tempUser.email]);
+            } else if (tempUser.uid) {
+                await query('DELETE FROM public.temp_users WHERE uid = $1', [tempUser.uid]);
+            } else {
+                await query('DELETE FROM public.temp_users WHERE email = $1', [tempUser.email]);
+            }
 
             const token = jwt.sign({ userId: user.id }, process.env.JWT_SECRET, { expiresIn: '7d' });
             return NextResponse.json({
@@ -98,11 +121,14 @@ export async function POST(request) {
         }
 
         // 4. Not in temp table, check if already in main table as fallback
-        const finalUid = uid;
-        const checkExistingSql = uid
-            ? 'SELECT * FROM public.users WHERE uid = $1 OR email = $2'
-            : 'SELECT * FROM public.users WHERE email = $1';
-        const existingResult = await query(checkExistingSql, uid ? [uid, targetEmail] : [targetEmail]);
+        let existingResult;
+        if (uid && targetEmail) {
+            existingResult = await query('SELECT * FROM public.users WHERE uid = $1 OR email = $2', [uid, targetEmail]);
+        } else if (uid) {
+            existingResult = await query('SELECT * FROM public.users WHERE uid = $1', [uid]);
+        } else {
+            existingResult = await query('SELECT * FROM public.users WHERE email = $1', [targetEmail]);
+        }
 
         if (existingResult.rows.length > 0) {
             const user = existingResult.rows[0];

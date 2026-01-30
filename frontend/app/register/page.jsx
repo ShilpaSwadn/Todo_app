@@ -7,7 +7,8 @@ import { FiLock, FiUser, FiMail, FiPhone } from 'react-icons/fi'
 import { HiX } from 'react-icons/hi'
 import { ImSpinner2 } from 'react-icons/im'
 import { FcGoogle } from 'react-icons/fc'
-import { register, loginWithGoogle } from '@/lib/services/auth'
+import { RiTwitterXFill } from 'react-icons/ri'
+import { register, loginWithGoogle, loginWithTwitter } from '@/lib/services/auth'
 import { validateRegisterForm, validateMobileNumber } from '@/lib/utils/validation'
 
 export default function Register() {
@@ -62,6 +63,26 @@ export default function Register() {
       setLoading(false)
     }
   }
+
+  const handleTwitterLogin = async () => {
+    setError('')
+    setLoading(true)
+    try {
+      const result = await loginWithTwitter()
+      if (result.success) {
+        if (result.verified) {
+          router.push('/dashboard')
+        } else {
+          setSuccessMsg(result.message)
+        }
+      }
+    } catch (err) {
+      setError(err.message || 'Twitter login failed. Please try again.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -124,12 +145,12 @@ export default function Register() {
   return (
     <main className="min-h-screen bg-gray-50 dark:bg-gray-950 flex items-center justify-center p-4">
       <div className="w-full max-w-lg bg-white dark:bg-gray-900 rounded-2xl shadow-xl border border-gray-100 dark:border-gray-800 overflow-hidden transform transition-all">
-        <div className="p-8 lg:p-10">
-          <div className="mb-4">
-            <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-1">
+        <div className="p-6 lg:p-8">
+          <div className="mb-3">
+            <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-0.5">
               Create Account
             </h2>
-            <p className="text-sm text-gray-600 dark:text-gray-400">
+            <p className="text-xs text-gray-600 dark:text-gray-400">
               Fill in your details to get started
             </p>
           </div>
@@ -280,7 +301,7 @@ export default function Register() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full mt-4 px-4 py-2.5 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 disabled:from-gray-400 disabled:to-gray-500 text-white font-semibold rounded-lg transition-all duration-200 shadow-md hover:shadow-lg disabled:transform-none text-sm"
+              className="w-full mt-2 px-4 py-2.5 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 disabled:from-gray-400 disabled:to-gray-500 text-white font-semibold rounded-lg transition-all duration-200 shadow-md hover:shadow-lg disabled:transform-none text-sm"
             >
               {loading ? (
                 <span className="flex items-center justify-center">
@@ -293,7 +314,7 @@ export default function Register() {
             </button>
           </form>
 
-          <div className="mt-6">
+          <div className="mt-4">
             <div className="relative">
               <div className="absolute inset-0 flex items-center">
                 <div className="w-full border-t border-gray-200 dark:border-gray-700"></div>
@@ -303,17 +324,28 @@ export default function Register() {
               </div>
             </div>
 
-            <button
-              onClick={handleGoogleLogin}
-              disabled={loading}
-              className="mt-4 w-full flex items-center justify-center gap-3 px-4 py-2.5 border-2 border-gray-100 dark:border-gray-700 hover:border-indigo-500 dark:hover:border-indigo-500 rounded-lg transition-all duration-200 font-semibold text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800/50 text-sm"
-            >
-              <FcGoogle className="w-5 h-5" />
-              Sign up with Google
-            </button>
+            <div className="grid grid-cols-2 gap-3 mt-3">
+              <button
+                onClick={handleGoogleLogin}
+                disabled={loading}
+                className="w-full flex items-center justify-center gap-2 px-4 py-2.5 border-2 border-gray-100 dark:border-gray-700 hover:border-indigo-500 dark:hover:border-indigo-500 rounded-lg transition-all duration-200 font-semibold text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800/50 text-xs"
+              >
+                <FcGoogle className="w-4 h-4" />
+                Google
+              </button>
+
+              <button
+                onClick={handleTwitterLogin}
+                disabled={loading}
+                className="w-full flex items-center justify-center gap-2 px-4 py-2.5 border-2 border-gray-100 dark:border-gray-700 hover:border-black dark:hover:border-white rounded-lg transition-all duration-200 font-semibold text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800/50 text-xs"
+              >
+                <RiTwitterXFill className="w-4 h-4 text-black dark:text-white" />
+                Twitter
+              </button>
+            </div>
           </div>
 
-          <div className="mt-4 text-center">
+          <div className="mt-3 text-center">
             <p className="text-xs text-gray-600 dark:text-gray-400">
               Already have an account?{' '}
               <Link href="/login" className="font-semibold text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 transition-colors">

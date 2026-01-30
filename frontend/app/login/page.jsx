@@ -7,7 +7,8 @@ import { FiMail, FiKey, FiArrowLeft, FiEye, FiEyeOff, FiLock, FiUser, FiPhone } 
 import { HiX } from 'react-icons/hi'
 import { ImSpinner2 } from 'react-icons/im'
 import { FcGoogle } from 'react-icons/fc'
-import { sendOTP, verifyOTP, loginWithPasswordDirect, loginWithGoogle } from '@/lib/services/auth'
+import { RiTwitterXFill } from 'react-icons/ri'
+import { sendOTP, verifyOTP, loginWithPasswordDirect, loginWithGoogle, loginWithTwitter } from '@/lib/services/auth'
 import { validateEmail, validateIdentifier } from '@/lib/utils/validation'
 
 export default function Login() {
@@ -62,6 +63,22 @@ export default function Login() {
       setLoading(false)
     }
   }
+
+  const handleTwitterLogin = async () => {
+    setError('')
+    setLoading(true)
+    try {
+      const result = await loginWithTwitter()
+      if (result.success) {
+        router.push('/dashboard')
+      }
+    } catch (err) {
+      setError(err.message || 'Twitter login failed. Please try again.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
 
   const handleVerifyOTP = async (e) => {
     e.preventDefault()
@@ -155,21 +172,21 @@ export default function Login() {
   return (
     <main className="min-h-screen bg-gray-50 dark:bg-gray-950 flex items-center justify-center p-4">
       <div className="w-full max-w-md bg-white dark:bg-gray-900 rounded-2xl shadow-xl border border-gray-100 dark:border-gray-800 overflow-hidden transform transition-all">
-        <div className="p-8 lg:p-10">
+        <div className="p-6 lg:p-8">
           {!showOTP ? (
             /* Main Login Form */
             <>
-              <div className="mb-8 text-center">
-                <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
+              <div className="mb-4 text-center">
+                <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-1">
                   Sign In
                 </h2>
-                <p className="text-gray-500 dark:text-gray-400">
+                <p className="text-xs text-gray-500 dark:text-gray-400">
                   Choose your preferred login method
                 </p>
               </div>
 
               {/* Tab Switcher */}
-              <div className="flex p-1 bg-gray-100 dark:bg-gray-800 rounded-xl mb-8">
+              <div className="flex p-1 bg-gray-100 dark:bg-gray-800 rounded-xl mb-4">
                 <button
                   onClick={() => { setLoginMode('password'); setError(''); }}
                   className={`flex-1 py-2.5 text-sm font-bold rounded-lg transition-all ${loginMode === 'password'
@@ -201,7 +218,7 @@ export default function Login() {
 
               <div className="space-y-4">
                 {loginMode === 'password' ? (
-                  <form onSubmit={handlePasswordLogin} className="space-y-5">
+                  <form onSubmit={handlePasswordLogin} className="space-y-3">
                     <div>
                       <label htmlFor="identifier" className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
                         Email or Mobile Number
@@ -279,7 +296,7 @@ export default function Login() {
                     </button>
                   </form>
                 ) : (
-                  <form onSubmit={handleSendOTP} className="space-y-5">
+                  <form onSubmit={handleSendOTP} className="space-y-3">
                     <div>
                       <label htmlFor="identifier-otp" className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
                         Email or Mobile Number
@@ -322,7 +339,7 @@ export default function Login() {
                   </form>
                 )}
 
-                <div className="mt-6">
+                <div className="mt-4">
                   <div className="relative">
                     <div className="absolute inset-0 flex items-center">
                       <div className="w-full border-t border-gray-100 dark:border-gray-800"></div>
@@ -332,17 +349,28 @@ export default function Login() {
                     </div>
                   </div>
 
-                  <button
-                    onClick={handleGoogleLogin}
-                    disabled={loading}
-                    className="mt-4 w-full flex items-center justify-center gap-3 px-4 py-3 border-2 border-gray-100 dark:border-gray-800 hover:border-indigo-500 dark:hover:border-indigo-500 rounded-xl transition-all duration-200 font-bold text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800/50 text-sm"
-                  >
-                    <FcGoogle className="w-5 h-5" />
-                    Sign in with Google
-                  </button>
+                  <div className="grid grid-cols-2 gap-3 mt-3">
+                    <button
+                      onClick={handleGoogleLogin}
+                      disabled={loading}
+                      className="w-full flex items-center justify-center gap-2 px-4 py-2.5 border-2 border-gray-100 dark:border-gray-800 hover:border-indigo-500 dark:hover:border-indigo-500 rounded-xl transition-all duration-200 font-bold text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800/50 text-xs"
+                    >
+                      <FcGoogle className="w-4 h-4" />
+                      Google
+                    </button>
+
+                    <button
+                      onClick={handleTwitterLogin}
+                      disabled={loading}
+                      className="w-full flex items-center justify-center gap-2 px-4 py-2.5 border-2 border-gray-100 dark:border-gray-800 hover:border-black dark:hover:border-white rounded-xl transition-all duration-200 font-bold text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800/50 text-xs"
+                    >
+                      <RiTwitterXFill className="w-4 h-4 text-black dark:text-white" />
+                      Twitter
+                    </button>
+                  </div>
                 </div>
 
-                <div className="pt-6 border-t border-gray-100 dark:border-gray-800 text-center">
+                <div className="pt-4 border-t border-gray-100 dark:border-gray-800 text-center">
                   <p className="text-sm text-gray-600 dark:text-gray-400">
                     New here?{' '}
                     <Link href="/register" className="font-bold text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 transition-colors">

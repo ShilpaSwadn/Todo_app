@@ -48,7 +48,8 @@ const initDatabase = async () => {
       ALTER TABLE public.users ADD COLUMN IF NOT EXISTS is_verified BOOLEAN DEFAULT FALSE;
       ALTER TABLE public.users ADD COLUMN IF NOT EXISTS profile_picture TEXT;
       ALTER TABLE public.users ALTER COLUMN password DROP NOT NULL;
-      
+      ALTER TABLE public.users ALTER COLUMN email DROP NOT NULL;
+      ALTER TABLE public.temp_users ALTER COLUMN email DROP NOT NULL;
       ALTER TABLE public.temp_users ADD COLUMN IF NOT EXISTS profile_picture TEXT;
       DO $$ 
       BEGIN 

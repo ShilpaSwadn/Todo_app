@@ -6,7 +6,7 @@ import {
   sendPasswordResetEmail,
   signInWithPopup
 } from "firebase/auth";
-import { auth, googleProvider } from "../firebase";
+import { auth, googleProvider, twitterProvider } from "../firebase";
 import api from '../api/client'
 import { saveAuthData, clearAuthData } from '../auth/client'
 
@@ -60,6 +60,31 @@ export const loginWithGoogle = async () => {
     console.error("Google Login Error:", error);
     if (error.code === 'auth/popup-closed-by-user') {
       throw new Error("Login cancelled. Please try again.");
+    }
+    throw error;
+  }
+};
+
+// Login with Twitter OAuth
+export const loginWithTwitter = async () => {
+  ensureFirebase();
+  try {
+    const result = await signInWithPopup(auth, twitterProvider);
+    const user = result.user;
+
+    console.log("Twitter Login Success:", user.email || user.uid);
+
+    // X/Twitter users are usually verified on their platform or don't require verification for our sync
+    const { userData, finalToken } = await handleAuthSync(user);
+    saveAuthData(userData, finalToken);
+    return { success: true, user: userData, verified: true };
+  } catch (error) {
+    console.error("Twitter Login Error:", error);
+    if (error.code === 'auth/popup-closed-by-user') {
+      throw new Error("Login cancelled. Please try again.");
+    }
+    if (error.code === 'auth/account-exists-with-different-credential') {
+      throw new Error("An account already exists with the same email address but different sign-in credentials. Please login with Google or your password.");
     }
     throw error;
   }
@@ -187,7 +212,7 @@ const handleAuthSync = async (user) => {
       firstName: userData.firstName,
       lastName: userData.lastName,
       profilePicture: user.photoURL,
-      isSocial: !!user.providerData.find(p => p.providerId === 'google.com')
+      isSocial: !!user.providerData.find(p => p.providerId === 'google.com' || p.providerId === 'twitter.com')
     });
 
     if (response.success) {
