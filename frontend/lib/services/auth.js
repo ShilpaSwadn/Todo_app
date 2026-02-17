@@ -354,15 +354,29 @@ export const updateProfile = async (userData) => {
  */
 export const setupRecaptcha = (containerId) => {
   ensureFirebase();
-  if (!window.recaptchaVerifier) {
-    window.recaptchaVerifier = new RecaptchaVerifier(auth, containerId, {
-      'size': 'invisible',
-      'callback': (response) => {
-        // reCAPTCHA solved, allow signInWithPhoneNumber.
-        console.log("Recaptcha verified");
-      }
-    });
+
+  const container = document.getElementById(containerId);
+  if (container) {
+    // Manually clear the container to prevent "already rendered" errors
+    container.innerHTML = '';
   }
+
+  // If a global instance exists, try to clear it
+  if (window.recaptchaVerifier) {
+    try {
+      window.recaptchaVerifier.clear();
+    } catch (e) {
+      console.warn("Error clearing existing recaptcha:", e);
+    }
+  }
+
+  window.recaptchaVerifier = new RecaptchaVerifier(auth, containerId, {
+    'size': 'invisible',
+    'callback': (response) => {
+      console.log("reCAPTCHA verified");
+    }
+  });
+
   return window.recaptchaVerifier;
 };
 
@@ -411,7 +425,13 @@ export const verifyMobileOTP = async (confirmationResult, otp) => {
     return userData;
   } catch (error) {
     console.error("Verify Mobile OTP Error:", error);
-    throw error;
+    if (error.code === 'auth/invalid-verification-code') {
+      throw new Error("Invalid OTP code. Please check and try again.");
+    }
+    if (error.code === 'auth/code-expired') {
+      throw new Error("OTP has expired. Please request a new one.");
+    }
+    throw new Error(error.message || "Failed to verify mobile OTP");
   }
 };
 

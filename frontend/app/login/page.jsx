@@ -30,22 +30,27 @@ export default function Login() {
   const [otpHash, setOtpHash] = useState('')
   const [deliveryStatus, setDeliveryStatus] = useState('')
 
-  useEffect(() => {
-    // Initialize Recaptcha for Phone Auth only once on mount
-    const initRecaptcha = () => {
-      try {
-        if (document.getElementById('recaptcha-container')) {
-          setupRecaptcha('recaptcha-container');
-        }
-      } catch (err) {
-        console.error("Recaptcha initialization failed:", err);
+  // Re-initialize or reset Recaptcha if needed
+  const ensureRecaptcha = (forceReset = false) => {
+    try {
+      const container = document.getElementById('recaptcha-container');
+      if (!container) {
+        console.error("recaptcha-container not found in DOM");
+        return null;
       }
-    };
 
-    // Slight delay to ensure DOM is ready
-    const timeoutId = setTimeout(initRecaptcha, 500);
-    return () => clearTimeout(timeoutId);
-  }, []);
+      // If we already have a functional verifier and don't need a reset, reuse it
+      if (window.recaptchaVerifier && !forceReset) {
+        return window.recaptchaVerifier;
+      }
+
+      // Otherwise setup a fresh one
+      return setupRecaptcha('recaptcha-container');
+    } catch (err) {
+      console.error("Recaptcha initialization failed:", err);
+      return null;
+    }
+  };
 
   useEffect(() => {
     let timer;
@@ -166,18 +171,39 @@ export default function Login() {
     setSendingOTP(true)
 
     try {
-      const isPhone = /^\d{10}$/.test(cleanIdentifier) || cleanIdentifier.startsWith('+');
+      // Improved phone detection: Only treat as phone if it's not an email and has digits
+      const isPhone = !cleanIdentifier.includes('@') && (/^\d+$/.test(cleanIdentifier.replace(/\D/g, '')));
       setIsMobile(isPhone);
+
+      // Check user existence first (Consistency with Email flow)
+      const userStatusRes = await fetch('/api/auth/check-status', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ identifier: cleanIdentifier })
+      });
+
+      const userStatus = await userStatusRes.json();
+
+      if (!userStatus.success || !userStatus.exists) {
+        setSendingOTP(false);
+        setError('No account found for this ' + (isPhone ? 'mobile number' : 'email') + '. Please register for an account first.');
+        return;
+      }
 
       if (isPhone) {
         let formattedPhone = cleanIdentifier;
+        // If it doesn't start with +, assume Indian number (+91)
         if (!formattedPhone.startsWith('+')) {
-          formattedPhone = `+91${formattedPhone}`;
+          if (formattedPhone.length === 12 && formattedPhone.startsWith('91')) {
+            formattedPhone = `+${formattedPhone}`;
+          } else {
+            formattedPhone = `+91${formattedPhone}`;
+          }
         }
 
-        const appVerifier = window.recaptchaVerifier;
+        const appVerifier = ensureRecaptcha(true); // Force fresh recaptcha for mobile
         if (!appVerifier) {
-          throw new Error('reCAPTCHA not initialized. Please refresh the page.');
+          throw new Error('Security check (reCAPTCHA) failed to initialize. Please refresh.');
         }
 
         const result = await sendMobileOTP(formattedPhone, appVerifier);
@@ -235,7 +261,21 @@ export default function Login() {
       }
     } catch (err) {
       console.error("OTP send error:", err);
-      setError(err.message || 'Failed to send OTP. Please try again.')
+      let friendlyError = err.message || 'Failed to send OTP. Please try again.';
+
+      if (err.code === 'auth/too-many-requests') {
+        friendlyError = 'Too many attempts. If this is a test number, ensure it is added to Firebase Console EXACTLY as entered (including +91). Otherwise, please wait a few minutes.';
+        // Reset recaptcha on this specific error
+        ensureRecaptcha(true);
+      } else if (err.code === 'auth/invalid-phone-number') {
+        friendlyError = 'The phone number entered is invalid. Please check the format.';
+      } else if (err.code === 'auth/quota-exceeded') {
+        friendlyError = 'SMS quota exceeded for today. Please try again tomorrow.';
+      } else if (err.message?.includes('UNSUPPORTED_FIRST_FACTOR') || err.code === 'auth/unsupported-first-factor') {
+        friendlyError = 'OTP Login is not enabled for this phone number. It may be set up for Multi-Factor Authentication (MFA) instead. Please use Password Login.';
+      }
+
+      setError(friendlyError)
     } finally {
       setSendingOTP(false)
     }

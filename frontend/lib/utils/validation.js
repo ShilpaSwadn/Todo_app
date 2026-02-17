@@ -18,12 +18,12 @@ export const validateLastName = (name) => {
   return nameRegex.test(name.trim())
 }
 
-// Validate mobile number - exactly 10 digits
+// Validate mobile number - 10 to 15 digits (standard international length)
 export const validateMobileNumber = (mobileNumber) => {
   if (!mobileNumber || mobileNumber.trim() === '') return false
-  // Remove all non-digit characters and check if exactly 10 digits
+  // Remove all non-digit characters and check length
   const digitsOnly = mobileNumber.replace(/\D/g, '')
-  return digitsOnly.length === 10
+  return digitsOnly.length >= 10 && digitsOnly.length <= 15
 }
 
 // Validate identifier (email or mobile number)
@@ -36,8 +36,13 @@ export const validateIdentifier = (identifier) => {
     return validateEmail(cleanIdentifier)
   }
 
-  // Otherwise validate as mobile number
-  return validateMobileNumber(cleanIdentifier)
+  // Check if it's potentially a phone number (contains digits and optional +)
+  const phonePattern = /^(\+)?[\d\s-]{10,15}$/
+  if (phonePattern.test(cleanIdentifier)) {
+    return validateMobileNumber(cleanIdentifier)
+  }
+
+  return false
 }
 
 // Validate password - must be at least 6 characters
