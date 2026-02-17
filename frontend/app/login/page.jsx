@@ -266,7 +266,7 @@ export default function Login() {
       let friendlyError = err.message || 'Failed to send OTP. Please try again.';
 
       if (err.code === 'auth/too-many-requests') {
-        friendlyError = 'Too many attempts. If this is a test number, ensure it is added to Firebase Console EXACTLY as entered (including +91). Otherwise, please wait a few minutes.';
+        friendlyError = 'Firebase has blocked this number due to too many attempts. 1. Go to Firebase Console > Users and DELETE this number if it exists. 2. Add it as a Test Number with +91. 3. Wait 5 minutes and try again.';
         clearRecaptcha();
       } else if (err.code === 'auth/unauthorized-domain') {
         friendlyError = 'This domain is not authorized in Firebase Console. Please add your Vercel URL to "Authorized domains" in Authentication settings.';
