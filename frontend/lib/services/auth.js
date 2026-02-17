@@ -355,18 +355,12 @@ export const updateProfile = async (userData) => {
 export const setupRecaptcha = (containerId) => {
   ensureFirebase();
 
-  const container = document.getElementById(containerId);
-  if (container) {
-    // Manually clear the container to prevent "already rendered" errors
-    container.innerHTML = '';
-  }
-
-  // If a global instance exists, try to clear it
+  // Clear any existing verifier first
   if (window.recaptchaVerifier) {
     try {
       window.recaptchaVerifier.clear();
     } catch (e) {
-      console.warn("Error clearing existing recaptcha:", e);
+      console.warn("Clean up error:", e);
     }
   }
 
@@ -378,6 +372,20 @@ export const setupRecaptcha = (containerId) => {
   });
 
   return window.recaptchaVerifier;
+};
+
+/**
+ * Forcefully clear and reset reCAPTCHA
+ */
+export const clearRecaptcha = () => {
+  if (window.recaptchaVerifier) {
+    try {
+      window.recaptchaVerifier.clear();
+    } catch (e) {
+      console.warn("Error clearing recaptcha:", e);
+    }
+    window.recaptchaVerifier = null;
+  }
 };
 
 // Send OTP to email

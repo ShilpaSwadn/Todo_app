@@ -9,7 +9,7 @@ import { HiX } from 'react-icons/hi'
 import { ImSpinner2 } from 'react-icons/im'
 import { FcGoogle } from 'react-icons/fc'
 import { RiTwitterXFill } from 'react-icons/ri'
-import { setupRecaptcha, sendOTP, verifyOTP, verifyMobileOTP, sendMobileOTP, loginWithPasswordDirect, loginWithGoogle, loginWithTwitter } from '@/lib/services/auth'
+import { setupRecaptcha, clearRecaptcha, sendOTP, verifyOTP, verifyMobileOTP, sendMobileOTP, loginWithPasswordDirect, loginWithGoogle, loginWithTwitter } from '@/lib/services/auth'
 import { validateEmail, validateIdentifier } from '@/lib/utils/validation'
 
 export default function Login() {
@@ -30,22 +30,20 @@ export default function Login() {
   const [otpHash, setOtpHash] = useState('')
   const [deliveryStatus, setDeliveryStatus] = useState('')
 
-  // Re-initialize or reset Recaptcha if needed
-  const ensureRecaptcha = (forceReset = false) => {
+  // Ultimate fix: Generate a unique ID for every single request
+  const ensureRecaptcha = () => {
     try {
-      const container = document.getElementById('recaptcha-container');
-      if (!container) {
-        console.error("recaptcha-container not found in DOM");
-        return null;
-      }
+      const wrapper = document.getElementById('recaptcha-wrapper');
+      if (!wrapper) return null;
 
-      // If we already have a functional verifier and don't need a reset, reuse it
-      if (window.recaptchaVerifier && !forceReset) {
-        return window.recaptchaVerifier;
-      }
+      // Always wipe and create a brand new ID
+      const uniqueId = `recaptcha-container-${Date.now()}`;
+      console.log("Generating fresh reCAPTCHA with ID:", uniqueId);
 
-      // Otherwise setup a fresh one
-      return setupRecaptcha('recaptcha-container');
+      clearRecaptcha();
+      wrapper.innerHTML = `<div id="${uniqueId}"></div>`;
+
+      return setupRecaptcha(uniqueId);
     } catch (err) {
       console.error("Recaptcha initialization failed:", err);
       return null;
@@ -191,22 +189,26 @@ export default function Login() {
       }
 
       if (isPhone) {
-        let formattedPhone = cleanIdentifier;
-        // If it doesn't start with +, assume Indian number (+91)
-        if (!formattedPhone.startsWith('+')) {
-          if (formattedPhone.length === 12 && formattedPhone.startsWith('91')) {
-            formattedPhone = `+${formattedPhone}`;
+        // Strip all characters except digits and the + sign
+        let sanitizedPhone = cleanIdentifier.replace(/[^\d+]/g, '');
+
+        // If it still doesn't have a +, assume India (+91)
+        if (!sanitizedPhone.startsWith('+')) {
+          if (sanitizedPhone.length === 12 && sanitizedPhone.startsWith('91')) {
+            sanitizedPhone = `+${sanitizedPhone}`;
           } else {
-            formattedPhone = `+91${formattedPhone}`;
+            sanitizedPhone = `+91${sanitizedPhone}`;
           }
         }
 
-        const appVerifier = ensureRecaptcha(true); // Force fresh recaptcha for mobile
+        console.log("Requesting SMS for sanitized number:", sanitizedPhone);
+
+        const appVerifier = ensureRecaptcha();
         if (!appVerifier) {
           throw new Error('Security check (reCAPTCHA) failed to initialize. Please refresh.');
         }
 
-        const result = await sendMobileOTP(formattedPhone, appVerifier);
+        const result = await sendMobileOTP(sanitizedPhone, appVerifier);
         setConfirmationResult(result);
         setShowOTP(true)
         setCountdown(60)
@@ -265,12 +267,16 @@ export default function Login() {
 
       if (err.code === 'auth/too-many-requests') {
         friendlyError = 'Too many attempts. If this is a test number, ensure it is added to Firebase Console EXACTLY as entered (including +91). Otherwise, please wait a few minutes.';
-        // Reset recaptcha on this specific error
-        ensureRecaptcha(true);
+        clearRecaptcha();
+      } else if (err.code === 'auth/unauthorized-domain') {
+        friendlyError = 'This domain is not authorized in Firebase Console. Please add your Vercel URL to "Authorized domains" in Authentication settings.';
+      } else if (err.code === 'auth/quota-exceeded') {
+        friendlyError = 'Daily SMS quota exceeded for this project. Please try again tomorrow or use a Test Phone Number.';
       } else if (err.code === 'auth/invalid-phone-number') {
         friendlyError = 'The phone number entered is invalid. Please check the format.';
-      } else if (err.code === 'auth/quota-exceeded') {
-        friendlyError = 'SMS quota exceeded for today. Please try again tomorrow.';
+      } else if (err.message?.includes('already been rendered')) {
+        friendlyError = 'Connection issue. Please try clicking the button again.';
+        clearRecaptcha();
       } else if (err.message?.includes('UNSUPPORTED_FIRST_FACTOR') || err.code === 'auth/unsupported-first-factor') {
         friendlyError = 'OTP Login is not enabled for this phone number. It may be set up for Multi-Factor Authentication (MFA) instead. Please use Password Login.';
       }
@@ -655,7 +661,9 @@ export default function Login() {
         </div>
       </button>
 
-      <div id="recaptcha-container"></div>
+      <div id="recaptcha-wrapper">
+        <div id="recaptcha-container"></div>
+      </div>
     </main >
   )
 }
