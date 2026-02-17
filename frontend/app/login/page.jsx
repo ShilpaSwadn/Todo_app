@@ -3,16 +3,18 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { FiMail, FiKey, FiArrowLeft, FiEye, FiEyeOff, FiLock, FiUser, FiPhone } from 'react-icons/fi'
+import { FiMail, FiKey, FiArrowLeft, FiEye, FiEyeOff, FiLock, FiUser, FiPhone, FiSun, FiMoon } from 'react-icons/fi'
+import { useTheme } from '@/context/ThemeContext'
 import { HiX } from 'react-icons/hi'
 import { ImSpinner2 } from 'react-icons/im'
 import { FcGoogle } from 'react-icons/fc'
 import { RiTwitterXFill } from 'react-icons/ri'
-import { sendOTP, verifyOTP, loginWithPasswordDirect, loginWithGoogle, loginWithTwitter } from '@/lib/services/auth'
+import { setupRecaptcha, sendOTP, verifyOTP, verifyMobileOTP, sendMobileOTP, loginWithPasswordDirect, loginWithGoogle, loginWithTwitter } from '@/lib/services/auth'
 import { validateEmail, validateIdentifier } from '@/lib/utils/validation'
 
 export default function Login() {
   const router = useRouter()
+  const { theme, toggleTheme } = useTheme()
   const [identifier, setIdentifier] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
@@ -23,6 +25,27 @@ export default function Login() {
   const [showOTP, setShowOTP] = useState(false)
   const [countdown, setCountdown] = useState(0)
   const [loginMode, setLoginMode] = useState('password') // 'password' or 'otp'
+  const [isMobile, setIsMobile] = useState(false)
+  const [confirmationResult, setConfirmationResult] = useState(null)
+  const [otpHash, setOtpHash] = useState('')
+  const [deliveryStatus, setDeliveryStatus] = useState('')
+
+  useEffect(() => {
+    // Initialize Recaptcha for Phone Auth only once on mount
+    const initRecaptcha = () => {
+      try {
+        if (document.getElementById('recaptcha-container')) {
+          setupRecaptcha('recaptcha-container');
+        }
+      } catch (err) {
+        console.error("Recaptcha initialization failed:", err);
+      }
+    };
+
+    // Slight delay to ensure DOM is ready
+    const timeoutId = setTimeout(initRecaptcha, 500);
+    return () => clearTimeout(timeoutId);
+  }, []);
 
   useEffect(() => {
     let timer;
@@ -51,11 +74,9 @@ export default function Login() {
     try {
       const result = await loginWithGoogle()
       if (result.success) {
-        if (result.verified) {
-          router.push('/dashboard')
-        } else {
-          setError(result.message)
-        }
+        console.log('Google login successful, redirecting to dashboard...');
+        // Force redirect to ensure state is fresh
+        window.location.href = '/dashboard';
       }
     } catch (err) {
       setError(err.message || 'Google login failed. Please try again.')
@@ -70,7 +91,8 @@ export default function Login() {
     try {
       const result = await loginWithTwitter()
       if (result.success) {
-        router.push('/dashboard')
+        console.log('Twitter login successful, redirecting to dashboard...');
+        window.location.href = '/dashboard';
       }
     } catch (err) {
       setError(err.message || 'Twitter login failed. Please try again.')
@@ -92,7 +114,11 @@ export default function Login() {
         return
       }
 
-      await verifyOTP(identifier.trim().toLowerCase(), otp)
+      if (isMobile && confirmationResult) {
+        await verifyMobileOTP(confirmationResult, otp)
+      } else {
+        await verifyOTP(identifier.trim().toLowerCase(), otp, otpHash)
+      }
       router.push('/dashboard')
     } catch (err) {
       setError(err.message || 'Failed to verify OTP. Please try again.')
@@ -107,7 +133,7 @@ export default function Login() {
 
     try {
       if (!identifier || !password) {
-        setError('Email/Mobile and Password are required')
+        setError('Email/Mobile and Password are required. If you don\'t have an account, please register.')
         setLoading(false)
         return
       }
@@ -129,7 +155,9 @@ export default function Login() {
 
   const handleSendOTP = async (e) => {
     e.preventDefault()
-    if (!identifier || !validateIdentifier(identifier)) {
+    const cleanIdentifier = identifier.trim().toLowerCase();
+
+    if (!cleanIdentifier || !validateIdentifier(cleanIdentifier)) {
       setError('Please enter a valid email or 10-digit mobile number')
       return
     }
@@ -138,10 +166,75 @@ export default function Login() {
     setSendingOTP(true)
 
     try {
-      await sendOTP(identifier.trim().toLowerCase())
-      setShowOTP(true)
-      setCountdown(60)
+      const isPhone = /^\d{10}$/.test(cleanIdentifier) || cleanIdentifier.startsWith('+');
+      setIsMobile(isPhone);
+
+      if (isPhone) {
+        let formattedPhone = cleanIdentifier;
+        if (!formattedPhone.startsWith('+')) {
+          formattedPhone = `+91${formattedPhone}`;
+        }
+
+        const appVerifier = window.recaptchaVerifier;
+        if (!appVerifier) {
+          throw new Error('reCAPTCHA not initialized. Please refresh the page.');
+        }
+
+        const result = await sendMobileOTP(formattedPhone, appVerifier);
+        setConfirmationResult(result);
+        setShowOTP(true)
+        setCountdown(60)
+      } else {
+        const response = await sendOTP(cleanIdentifier);
+        if (response && response.hash) {
+          setOtpHash(response.hash);
+        }
+
+        if (response.messageId && !response.isLoggedOnly) {
+          // Poll for delivery status
+          setDeliveryStatus('Queued...');
+          let attempts = 0;
+          const pollInterval = setInterval(async () => {
+            attempts++;
+            try {
+              const statusRes = await fetch(`/api/auth/otp/status?id=${response.messageId}`);
+              const statusData = await statusRes.json();
+
+              if (statusData.status === 'SUCCESS') {
+                clearInterval(pollInterval);
+                setDeliveryStatus('Delivered!');
+                setTimeout(() => {
+                  setShowOTP(true);
+                  setCountdown(60);
+                  setDeliveryStatus('');
+                }, 1000);
+              } else if (statusData.status === 'ERROR') {
+                clearInterval(pollInterval);
+                setError(`Email delivery failed: ${statusData.error || 'Unknown error'}`);
+                setDeliveryStatus('');
+              } else if (attempts > 15) {
+                // Timeout after 30 seconds
+                clearInterval(pollInterval);
+                setDeliveryStatus('Taking longer than usual...');
+                setTimeout(() => {
+                  setShowOTP(true);
+                  setCountdown(60);
+                }, 1000);
+              } else {
+                setDeliveryStatus('Delivering...');
+              }
+            } catch (e) {
+              console.error("Polling error:", e);
+            }
+          }, 2000);
+        } else {
+          // Dev mode or logged only
+          setShowOTP(true)
+          setCountdown(60)
+        }
+      }
     } catch (err) {
+      console.error("OTP send error:", err);
       setError(err.message || 'Failed to send OTP. Please try again.')
     } finally {
       setSendingOTP(false)
@@ -151,10 +244,55 @@ export default function Login() {
   const handleResendOTP = async () => {
     setError('')
     setSendingOTP(true)
+    const cleanIdentifier = identifier.trim().toLowerCase();
 
     try {
-      await sendOTP(identifier.trim().toLowerCase())
-      setCountdown(60)
+      if (isMobile) {
+        let formattedPhone = cleanIdentifier;
+        if (!formattedPhone.startsWith('+')) {
+          formattedPhone = `+91${formattedPhone}`;
+        }
+        const appVerifier = window.recaptchaVerifier;
+        const result = await sendMobileOTP(formattedPhone, appVerifier);
+        setConfirmationResult(result);
+        setCountdown(60)
+      } else {
+        const response = await sendOTP(cleanIdentifier);
+        if (response && response.hash) {
+          setOtpHash(response.hash);
+        }
+
+        if (response.messageId && !response.isLoggedOnly) {
+          setDeliveryStatus('Resending...');
+          let attempts = 0;
+          const pollInterval = setInterval(async () => {
+            attempts++;
+            try {
+              const statusRes = await fetch(`/api/auth/otp/status?id=${response.messageId}`);
+              const statusData = await statusRes.json();
+
+              if (statusData.status === 'SUCCESS') {
+                clearInterval(pollInterval);
+                setDeliveryStatus('Resent!');
+                setCountdown(60);
+                setTimeout(() => setDeliveryStatus(''), 2000);
+              } else if (statusData.status === 'ERROR') {
+                clearInterval(pollInterval);
+                setError(`Resend failed: ${statusData.error || 'Unknown error'}`);
+                setDeliveryStatus('');
+              } else if (attempts > 15) {
+                clearInterval(pollInterval);
+                setCountdown(60);
+                setDeliveryStatus('');
+              }
+            } catch (e) {
+              console.error("Resend polling error:", e);
+            }
+          }, 2000);
+        } else {
+          setCountdown(60)
+        }
+      }
     } catch (err) {
       setError(err.message || 'Failed to resend OTP. Please try again.')
     } finally {
@@ -330,7 +468,7 @@ export default function Login() {
                       {sendingOTP ? (
                         <span className="flex items-center justify-center">
                           <ImSpinner2 className="animate-spin -ml-1 mr-2 h-5 w-5 text-white" />
-                          Sending Code...
+                          {deliveryStatus || 'Sending Code...'}
                         </span>
                       ) : (
                         'Get Login Code'
@@ -464,6 +602,20 @@ export default function Login() {
           )}
         </div>
       </div >
+
+      {/* Theme Toggle Button */}
+      <button
+        onClick={toggleTheme}
+        className="fixed bottom-6 right-6 p-3.5 rounded-2xl bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 text-gray-500 dark:text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-all shadow-xl hover:shadow-2xl flex items-center justify-center z-50 overflow-hidden"
+        title={`Switch to ${theme === 'light' ? 'dark' : 'light'} mode`}
+      >
+        <div className="relative w-6 h-6">
+          <FiSun className={`w-6 h-6 absolute transition-all duration-500 scale-100 rotate-0 dark:scale-0 dark:-rotate-90 ${theme === 'light' ? 'opacity-100' : 'opacity-0'}`} />
+          <FiMoon className={`w-6 h-6 absolute transition-all duration-500 scale-0 rotate-90 dark:scale-100 dark:rotate-0 ${theme === 'dark' ? 'opacity-100' : 'opacity-0'}`} />
+        </div>
+      </button>
+
+      <div id="recaptcha-container"></div>
     </main >
   )
 }

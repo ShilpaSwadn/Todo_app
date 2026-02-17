@@ -1,85 +1,68 @@
-import { NextResponse } from 'next/server'
-import { query } from '@/lib/server/config/database.js'
-import { ensureDbInitialized } from '@/lib/server/middleware/dbInit.js'
-import OTP from '@/lib/server/models/OTP.js'
-import User from '@/lib/server/models/User.js'
-import jwt from 'jsonwebtoken'
-
-// Generate JWT token
-const generateToken = (userId) => {
-  return jwt.sign({ userId }, process.env.JWT_SECRET, { expiresIn: '7d' })
-}
+import { NextResponse } from 'next/server';
+import { adminAuth } from '@/lib/server/config/firebase-admin.js';
+import authService from '@/lib/server/services/authService.js';
+import crypto from 'crypto';
 
 export async function POST(request) {
   try {
-    // Initialize database
-    await ensureDbInitialized()
+    const body = await request.json();
+    const { email: identifier, otp, hash: fullHash } = body;
 
-    // Parse request body
-    const body = await request.json()
-    const { email: identifier, otp } = body
-
-    // Validate input
-    if (!identifier || !identifier.trim()) {
-      return NextResponse.json({
-        success: false,
-        message: 'Email or Mobile Number is required'
-      }, { status: 400 })
+    if (!identifier || !otp || !fullHash) {
+      return NextResponse.json({ success: false, message: 'Identifier, OTP and Hash are required' }, { status: 400 });
     }
 
-    if (!otp || !otp.trim()) {
-      return NextResponse.json({
-        success: false,
-        message: 'OTP is required'
-      }, { status: 400 })
+    const cleanIdentifier = identifier.trim().toLowerCase();
+
+    // 1. Split hash and expiry (format: hash.expiresAt)
+    const [hash, expiresAt] = fullHash.split('.');
+
+    // Check if expired
+    const now = Date.now();
+    if (now > parseInt(expiresAt)) {
+      return NextResponse.json({ success: false, message: 'OTP has expired. Please request a new one.' }, { status: 401 });
     }
 
-    // 1. Find user by identifier
-    const user = await User.findByIdentifier(identifier)
+    // 2. Verify Hash (Stateless)
+    // Recompute signature: data = email + otp + expiry
+    const data = `${cleanIdentifier}.${otp}.${expiresAt}`;
+    const secret = process.env.JWT_SECRET || 'fallback-secret';
+    const computedHash = crypto.createHmac('sha256', secret).update(data).digest('hex');
 
-    if (!user) {
-      return NextResponse.json({
-        success: false,
-        message: 'User not found'
-      }, { status: 404 })
+    if (hash !== computedHash) {
+      return NextResponse.json({ success: false, message: 'Invalid OTP' }, { status: 401 });
     }
 
-    // 2. Verify OTP (always against email)
-    const otpData = await OTP.verify(user.email, otp)
-    if (!otpData) {
-      return NextResponse.json({
-        success: false,
-        message: 'Invalid or expired OTP'
-      }, { status: 400 })
+    // 3. Find User in Firebase
+    let userRecord;
+    try {
+      if (cleanIdentifier.includes('@')) {
+        userRecord = await adminAuth.getUserByEmail(cleanIdentifier);
+      } else {
+        try {
+          userRecord = await adminAuth.getUserByPhoneNumber(cleanIdentifier);
+        } catch (e) {
+          userRecord = await adminAuth.getUserByPhoneNumber(`+91${cleanIdentifier}`);
+        }
+      }
+    } catch (e) {
+      return NextResponse.json({ success: false, message: 'No account found in Firebase for this identifier.' }, { status: 404 });
     }
 
-    // Delete used OTP
-    await OTP.deleteById(otpData.id)
+    // 4. Create Firebase Custom Token
+    const customToken = await authService.createCustomToken(userRecord.uid);
 
-    // Generate token
-    const token = generateToken(user.id)
-
-    // Return user data and token
     return NextResponse.json({
       success: true,
-      message: 'Login successful',
+      message: 'OTP verified successfully.',
       data: {
-        user: {
-          id: user.id,
-          firstName: user.firstName,
-          lastName: user.lastName,
-          email: user.email,
-          mobileNumber: user.mobileNumber
-        },
-        token
+        customToken,
+        uid: userRecord.uid
       }
-    })
+    });
+
   } catch (error) {
-    console.error('Verify OTP error:', error)
-    return NextResponse.json({
-      success: false,
-      message: error.message || 'Failed to verify OTP',
-      error: process.env.NODE_ENV === 'development' ? error.message : undefined
-    }, { status: 500 })
+    console.error('Verify OTP error:', error);
+    return NextResponse.json({ success: false, message: 'Error verifying OTP' }, { status: 500 });
   }
 }

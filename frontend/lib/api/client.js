@@ -1,87 +1,49 @@
-// API Client for making HTTP requests to the backend
-// Using relative paths for Next.js API routes
-const API_BASE_URL = '/api'
+import { getToken } from '@/lib/auth/client';
 
-// Get authentication token from localStorage
-const getToken = () => {
-  if (typeof window !== 'undefined') {
-    return localStorage.getItem('token')
-  }
-  return null
-}
+const BASE_URL = '/api';
 
-// Make API request
-const apiRequest = async (endpoint, options = {}) => {
-  const token = getToken()
+const getHeaders = (headers = {}) => {
+    const token = getToken();
+    const authHeader = token ? { 'Authorization': `Bearer ${token}` } : {};
 
-  const config = {
-    headers: {
-      'Content-Type': 'application/json',
-      ...(token && { Authorization: `Bearer ${token}` }),
-      ...options.headers,
+    return {
+        'Content-Type': 'application/json',
+        ...authHeader,
+        ...headers,
+    };
+};
+
+const client = {
+    get: async (url, headers = {}) => {
+        const res = await fetch(`${BASE_URL}${url}`, {
+            method: 'GET',
+            headers: getHeaders(headers),
+        });
+        return res.json();
     },
-    ...options,
-  }
+    post: async (url, body, headers = {}) => {
+        const res = await fetch(`${BASE_URL}${url}`, {
+            method: 'POST',
+            headers: getHeaders(headers),
+            body: JSON.stringify(body),
+        });
+        return res.json();
+    },
+    put: async (url, body, headers = {}) => {
+        const res = await fetch(`${BASE_URL}${url}`, {
+            method: 'PUT',
+            headers: getHeaders(headers),
+            body: JSON.stringify(body),
+        });
+        return res.json();
+    },
+    delete: async (url, headers = {}) => {
+        const res = await fetch(`${BASE_URL}${url}`, {
+            method: 'DELETE',
+            headers: getHeaders(headers),
+        });
+        return res.json();
+    },
+};
 
-  // Remove headers from options to avoid duplication
-  delete config.headers.headers
-
-  try {
-    const response = await fetch(`${API_BASE_URL}${endpoint}`, config)
-
-    const data = await response.json()
-
-    if (!response.ok) {
-      const error = new Error(data.message || 'An error occurred')
-      error.status = response.status
-      throw error
-    }
-
-    return data
-  } catch (error) {
-    // Handle network errors
-    if (error.message === 'Failed to fetch') {
-      throw new Error('Unable to connect to server. Please check your connection.')
-    }
-    throw error
-  }
-}
-
-// API methods
-export const api = {
-  // GET request
-  get: (endpoint, options = {}) => {
-    return apiRequest(endpoint, {
-      method: 'GET',
-      ...options,
-    })
-  },
-
-  // POST request
-  post: (endpoint, data, options = {}) => {
-    return apiRequest(endpoint, {
-      method: 'POST',
-      body: JSON.stringify(data),
-      ...options,
-    })
-  },
-
-  // PUT request
-  put: (endpoint, data, options = {}) => {
-    return apiRequest(endpoint, {
-      method: 'PUT',
-      body: JSON.stringify(data),
-      ...options,
-    })
-  },
-
-  // DELETE request
-  delete: (endpoint, options = {}) => {
-    return apiRequest(endpoint, {
-      method: 'DELETE',
-      ...options,
-    })
-  },
-}
-
-export default api
+export default client;

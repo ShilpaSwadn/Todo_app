@@ -3,70 +3,40 @@ import { query } from './database.js'
 const initDatabase = async () => {
   console.log('Database: Starting schema initialization...');
   try {
-    // 1. Ensure tables exist
-    console.log('Database: Synchronizing base tables...');
+    // 1. Ensure core users table exists
+    console.log('Database: Synchronizing users table...');
     await query(`
       CREATE TABLE IF NOT EXISTS public.users (
-        id SERIAL PRIMARY KEY,
-        uid TEXT UNIQUE,
-        first_name VARCHAR(100) NOT NULL,
-        last_name VARCHAR(100),
-        email VARCHAR(255) UNIQUE NOT NULL,
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        firebase_uid VARCHAR(255) UNIQUE NOT NULL,
+        first_name VARCHAR(255) NOT NULL,
+        last_name VARCHAR(255),
+        email VARCHAR(255) UNIQUE,
         mobile_number VARCHAR(20),
-        password VARCHAR(255),
-        profile_picture TEXT,
-        is_verified BOOLEAN DEFAULT FALSE,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
       );
-
-      CREATE TABLE IF NOT EXISTS public.temp_users (
-        uid TEXT PRIMARY KEY,
-        email TEXT UNIQUE NOT NULL,
-        first_name TEXT NOT NULL,
-        last_name TEXT,
-        mobile_number TEXT,
-        profile_picture TEXT,
-        is_verified BOOLEAN DEFAULT FALSE,
-        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-      );
-
-      CREATE TABLE IF NOT EXISTS public.otps (
-        id SERIAL PRIMARY KEY,
-        email VARCHAR(255) NOT NULL,
-        otp VARCHAR(6) NOT NULL,
-        expires_at TIMESTAMP NOT NULL,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      );
-    `);
-
-    // 2. Run migrations for existing tables
-    console.log('Database: Running migrations for existing columns...');
-    await query(`
-      -- Add columns if missing in older versions
-      ALTER TABLE public.users ADD COLUMN IF NOT EXISTS uid TEXT;
-      ALTER TABLE public.users ADD COLUMN IF NOT EXISTS is_verified BOOLEAN DEFAULT FALSE;
-      ALTER TABLE public.users ADD COLUMN IF NOT EXISTS profile_picture TEXT;
-      ALTER TABLE public.users ALTER COLUMN password DROP NOT NULL;
-      ALTER TABLE public.users ALTER COLUMN email DROP NOT NULL;
-      ALTER TABLE public.temp_users ALTER COLUMN email DROP NOT NULL;
-      ALTER TABLE public.temp_users ADD COLUMN IF NOT EXISTS profile_picture TEXT;
+      
+      -- Alter table to remove constraints and adjust columns
       DO $$ 
       BEGIN 
-        IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'users_uid_key') THEN
-          ALTER TABLE public.users ADD CONSTRAINT users_uid_key UNIQUE (uid);
+        -- Drop unique constraint on mobile_number if it exists
+        IF EXISTS (SELECT 1 FROM information_schema.table_constraints WHERE table_name = 'users' AND constraint_name = 'users_mobile_number_key') THEN
+          ALTER TABLE public.users DROP CONSTRAINT users_mobile_number_key;
+        END IF;
+
+        -- Drop NOT NULL from email if it exists
+        IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'email' AND is_nullable = 'NO') THEN
+          ALTER TABLE public.users ALTER COLUMN email DROP NOT NULL;
         END IF;
       END $$;
     `);
 
-    // 3. Ensure indexes
-    console.log('Database: Synchronizing indexes...');
+
+    // 3. Cleanup: If temp_users exists, we can drop it as it's no longer used
+    console.log('Database: Cleaning up legacy tables...');
     await query(`
-      CREATE INDEX IF NOT EXISTS idx_users_email ON public.users(email);
-      CREATE INDEX IF NOT EXISTS idx_users_uid ON public.users(uid);
-      CREATE INDEX IF NOT EXISTS idx_otps_email ON public.otps(email);
-      CREATE INDEX IF NOT EXISTS idx_otps_expires ON public.otps(expires_at);
-      CREATE INDEX IF NOT EXISTS idx_temp_users_email ON public.temp_users(email);
+      DROP TABLE IF EXISTS public.temp_users CASCADE;
     `);
 
     console.log('Database: Schema initialization completed successfully.');

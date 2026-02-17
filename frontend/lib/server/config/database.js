@@ -1,6 +1,5 @@
 import pkg from 'pg'
 const { Pool } = pkg
-import 'dotenv/config'
 import { URL } from 'url'
 
 // Support both DATABASE_URL (for Supabase) and individual parameters (for localhost)

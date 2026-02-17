@@ -1,11 +1,8 @@
-import { query } from '@/lib/server/config/database';
 import { NextResponse } from 'next/server';
-import { ensureDbInitialized } from '@/lib/server/middleware/dbInit.js';
-import User from '@/lib/server/models/User.js';
+import { adminAuth } from '@/lib/server/config/firebase-admin';
 
 export async function POST(request) {
     try {
-        await ensureDbInitialized();
         const body = await request.json();
         const { identifier } = body;
 
@@ -13,34 +10,47 @@ export async function POST(request) {
             return NextResponse.json({ success: false, message: 'Identifier is required' }, { status: 400 });
         }
 
-        const cleanIdentifier = identifier.trim().toLowerCase();
+        let userRecord = null;
+        try {
+            if (identifier.includes('@')) {
+                userRecord = await adminAuth.getUserByEmail(identifier.toLowerCase());
+            } else {
+                // Try raw
+                try {
+                    userRecord = await adminAuth.getUserByPhoneNumber(identifier);
+                } catch (e) {
+                    // Try with +91 if not present
+                    if (!identifier.startsWith('+')) {
+                        userRecord = await adminAuth.getUserByPhoneNumber(`+91${identifier}`);
+                    }
+                }
+            }
+        } catch (e) {
+            // User not found in any format
+        }
 
-        // Check in both tables using the improved findByIdentifier
-        const user = await User.findByIdentifier(cleanIdentifier, true);
-
-        if (user) {
+        if (userRecord) {
             return NextResponse.json({
                 success: true,
                 exists: true,
-                isVerified: user.isVerified,
-                email: user.email,
-                source: user.id ? 'users' : 'temp_users',
-                message: user.isVerified ? 'User is verified' : 'User exists but is not verified'
+                emailVerified: userRecord.emailVerified,
+                uid: userRecord.uid,
+                email: userRecord.email,
+                mobileNumber: userRecord.phoneNumber,
+                displayName: userRecord.displayName
             });
         }
 
         return NextResponse.json({
             success: true,
-            exists: false,
-            message: 'User not found'
+            exists: false
         });
 
     } catch (error) {
         console.error('Check Status Error:', error);
         return NextResponse.json({
             success: false,
-            message: 'Error checking user status',
-            error: error.message
+            message: 'Error checking user status'
         }, { status: 500 });
     }
 }

@@ -4,11 +4,15 @@ import {
   signInWithEmailAndPassword,
   signOut,
   sendPasswordResetEmail,
-  signInWithPopup
+  signInWithPopup,
+  updateProfile as updateFirebaseProfile,
+  RecaptchaVerifier,
+  signInWithCustomToken,
+  signInWithPhoneNumber
 } from "firebase/auth";
 import { auth, googleProvider, twitterProvider } from "../firebase";
-import api from '../api/client'
-import { saveAuthData, clearAuthData } from '../auth/client'
+import api from '@/lib/api/client'
+import { saveAuthData, clearAuthData } from '@/lib/auth/client'
 
 const ensureFirebase = () => {
   if (!auth) {
@@ -23,39 +27,13 @@ export const loginWithGoogle = async () => {
     const result = await signInWithPopup(auth, googleProvider);
     const user = result.user;
 
-    console.log("Google Login Success:", user.email, "Verified:", user.emailVerified);
+    console.log("Google Login Success:", user.email, "UID:", user.uid);
 
-    // If Google says email is verified, sync directly to main table
-    if (user.emailVerified) {
-      const { userData, finalToken } = await handleAuthSync(user);
-      saveAuthData(userData, finalToken);
-      return { success: true, user: userData, verified: true };
-    } else {
-      // If not verified (rare for Google but possible), store in temp and send verification
-      console.log("Google email not verified, sending verification link...");
+    // For social login, we sync directly and allow immediate access
+    const { userData, finalToken } = await handleAuthSync(user);
+    saveAuthData(userData, finalToken);
 
-      const actionCodeSettings = {
-        url: `${window.location.origin}/verify`,
-        handleCodeInApp: true,
-      };
-      await sendEmailVerification(user, actionCodeSettings);
-
-      // Store in temp_users
-      await api.post('/auth/temp-user', {
-        uid: user.uid,
-        email: user.email,
-        firstName: user.displayName ? user.displayName.split(' ')[0] : 'User',
-        lastName: user.displayName ? user.displayName.split(' ').slice(1).join(' ') : '',
-        profilePicture: user.photoURL,
-        mobileNumber: '' // Google doesn't provide mobile by default
-      });
-
-      return {
-        success: true,
-        verified: false,
-        message: "Your Google email is not verified. We've sent an activation link to your inbox."
-      };
-    }
+    return { success: true, user: userData };
   } catch (error) {
     console.error("Google Login Error:", error);
     if (error.code === 'auth/popup-closed-by-user') {
@@ -74,10 +52,11 @@ export const loginWithTwitter = async () => {
 
     console.log("Twitter Login Success:", user.email || user.uid);
 
-    // X/Twitter users are usually verified on their platform or don't require verification for our sync
+    // X/Twitter users sync directly and allow immediate access
     const { userData, finalToken } = await handleAuthSync(user);
     saveAuthData(userData, finalToken);
-    return { success: true, user: userData, verified: true };
+
+    return { success: true, user: userData };
   } catch (error) {
     console.error("Twitter Login Error:", error);
     if (error.code === 'auth/popup-closed-by-user') {
@@ -96,101 +75,60 @@ export const register = async (userData) => {
   const { firstName, lastName, email, mobileNumber, password } = userData;
 
   try {
-    // 0. Check if email or mobile already exists in our DB (verified or temp)
-    console.log("Checking uniqueness for:", email, mobileNumber);
+    // 1. Check uniqueness using our API (checks Firebase Admin SDK)
+    console.log("Validating uniqueness for:", email, mobileNumber);
 
-    // Check Email
-    const emailStatus = await checkUserStatus(email);
-    if (emailStatus.exists) {
-      throw new Error("This email is already registered. Please login instead.");
+    // Combine checks into a single status check if needed, but for now we follow the flow:
+
+    // Check Email Uniqueness in Firebase
+    const emailStatus = await api.post('/auth/check-status', {
+      identifier: email.trim().toLowerCase()
+    });
+    if (emailStatus.success && emailStatus.exists) {
+      throw new Error("This email is already registered in Firebase. Please login instead.");
     }
 
-    // Check Mobile
-    const mobileStatus = await checkUserStatus(mobileNumber);
-    if (mobileStatus.exists) {
-      throw new Error("This mobile number is already registered. Please use a different number.");
-    }
 
-    console.log("Starting Firebase registration for:", email);
+    // 2. Create user in Firebase Auth
+    console.log("Uniqueness verified. Creating Firebase user...");
+    const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+    const user = userCredential.user;
 
-    let user;
-    try {
-      // 1. Try to create user in Firebase Auth
-      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-      user = userCredential.user;
-      console.log("User created in Auth successfully:", user.uid);
-    } catch (createError) {
-      if (createError.code === 'auth/email-already-in-use') {
-        console.log("User already exists in Firebase, checking verification status...");
-        // If user exists, we'll try to sign them in to get the user object
-        // and check if they need a re-verification email.
-        try {
-          const userCredential = await signInWithEmailAndPassword(auth, email, password);
-          user = userCredential.user;
-        } catch (loginError) {
-          throw new Error("This email is already registered in our Firebase project. " +
-            "If this is you, please try to login or reset your password.");
-        }
-      } else {
-        throw createError;
-      }
-    }
+    console.log("Firebase user created successfully:", {
+      uid: user.uid,
+      email: user.email,
+      displayName: `${firstName} ${lastName}`.trim(),
+      mobileNumber: mobileNumber
+    });
 
-    // 2. If user is already verified, we should just tell them to login
-    if (user.emailVerified) {
-      // Try to store in Postgres just in case they aren't there yet
-      try {
-        await api.post('/auth/temp-user', {
-          uid: user.uid,
-          email,
-          firstName,
-          lastName,
-          mobileNumber
-        });
-      } catch (e) { }
-      throw new Error("Your email is already verified. Please go to the login page.");
-    }
+    // 3. Set display name in Firebase
+    await updateFirebaseProfile(user, {
+      displayName: `${firstName} ${lastName}`.trim(),
+    });
 
-    // 3. Send verification email
-    console.log("Sending verification email to:", email);
-    try {
-      const actionCodeSettings = {
-        url: `${window.location.origin}/verify`,
-        handleCodeInApp: true,
-      };
-      await sendEmailVerification(user, actionCodeSettings);
-      console.log("Verification email sent successfully.");
-    } catch (emailError) {
-      console.error("Error sending verification email:", emailError);
-      throw new Error("We couldn't send the activation link. " +
-        (emailError.code === 'auth/unauthorized-continue-uri'
-          ? "Domain not authorized in Firebase Console."
-          : emailError.message));
-    }
+    // 4. Update Mobile in Firebase (via Admin SDK)
+    await api.post('/auth/set-mobile', {
+      uid: user.uid,
+      mobileNumber: mobileNumber.trim()
+    });
 
-    // 4. Store in Postgres temp_users via API
-    console.log("Ensuring user data is in Postgres temp_users...");
-    try {
-      await api.post('/auth/temp-user', {
-        uid: user.uid,
-        email,
-        firstName,
-        lastName,
-        mobileNumber
-      });
-    } catch (apiError) {
-      console.error("Postgres Sync Error (Non-critical):", apiError);
-    }
+    // 5. Send email verification
+    await sendEmailVerification(user);
+
+    // 6. Sign out
+    await signOut(auth);
 
     return {
-      message: "Activation link has been sent to your mail. Please check your inbox.",
-      success: true
+      success: true,
+      message: 'Account created! Please check your email to activate your account before logging in.'
     };
   } catch (error) {
-    console.error("Registration main process error:", error);
+    if (error.code === 'auth/email-already-in-use') {
+      throw new Error("This email is already registered. Please login instead.");
+    }
     throw error;
   }
-}
+};
 
 // Internal helper to sync user from Firebase to Postgres
 const handleAuthSync = async (user) => {
@@ -201,33 +139,27 @@ const handleAuthSync = async (user) => {
     firstName: user.displayName ? user.displayName.split(' ')[0] : 'User',
     lastName: user.displayName ? user.displayName.split(' ').slice(1).join(' ') : ''
   };
-  let finalToken = await user.getIdToken();
+  const idToken = await user.getIdToken();
 
   try {
-    // sync-main handles promotion from temp_users -> users
-    // and also handles first-time social login creation
-    const response = await api.post('/auth/sync-main', {
-      uid: user.uid,
-      email: user.email,
-      firstName: userData.firstName,
-      lastName: userData.lastName,
-      profilePicture: user.photoURL,
-      isSocial: !!user.providerData.find(p => p.providerId === 'google.com' || p.providerId === 'twitter.com')
+    // login handles synchronization with PostgreSQL using the ID Token
+    const response = await api.post('/auth/login', {
+      idToken,
+      profileData: {
+        firstName: userData.firstName,
+        lastName: userData.lastName
+      }
     });
 
     if (response.success) {
-      userData = { ...userData, ...response.user };
-      if (response.token) {
-        finalToken = response.token;
-        console.log("Account successfully synced in Postgres.");
-      }
-      return { userData, finalToken };
+      userData = { ...userData, ...response.data.user };
+      console.log("Account successfully synced in Postgres.");
+      return { userData, finalToken: idToken };
     } else {
       throw new Error(response.message || "Email not verified. Please verify your email first.");
     }
   } catch (apiError) {
     console.error("Postgres Synchronization Error:", apiError);
-    // If it's a 404 and not social, it means user missed the verification step
     throw new Error(apiError.message || "Email not verified. Please verify your email first.");
   }
 };
@@ -245,10 +177,10 @@ export const loginWithPasswordDirect = async (identifier, password) => {
         if (response.success && response.exists && response.email) {
           targetEmail = response.email;
         } else {
-          throw new Error("No account found with this mobile number.");
+          throw new Error("No account found with this mobile number. Please register first.");
         }
       } catch (e) {
-        throw new Error(e.message || "Failed to resolve mobile number to email.");
+        throw new Error(e.message || "Account not found. Please register first.");
       }
     }
 
@@ -273,10 +205,12 @@ export const loginWithPasswordDirect = async (identifier, password) => {
   } catch (error) {
     if (
       error.code === 'auth/user-not-found' ||
-      error.code === 'auth/wrong-password' ||
       error.code === 'auth/invalid-credential'
     ) {
-      throw new Error("Invalid email/mobile or password.");
+      throw new Error("Invalid credentials. Please check your email/password or register if you don't have an account.");
+    }
+    if (error.code === 'auth/wrong-password') {
+      throw new Error("Incorrect password. Please try again.");
     }
     throw error;
   }
@@ -312,10 +246,12 @@ export const loginWithPassword = async (email, password, autoSave = true) => {
   } catch (error) {
     if (
       error.code === 'auth/user-not-found' ||
-      error.code === 'auth/wrong-password' ||
       error.code === 'auth/invalid-credential'
     ) {
-      throw new Error("Invalid email or password.");
+      throw new Error("Account not found or invalid credentials. Please register if you don't have an account.");
+    }
+    if (error.code === 'auth/wrong-password') {
+      throw new Error("Incorrect password. Please try again.");
     }
     throw error;
   }
@@ -412,12 +348,31 @@ export const updateProfile = async (userData) => {
   }
 }
 
+/**
+ * Setup Recaptcha for Phone Auth
+ * @param {string} containerId - The ID of the HTML element to render Recaptcha in
+ */
+export const setupRecaptcha = (containerId) => {
+  ensureFirebase();
+  if (!window.recaptchaVerifier) {
+    window.recaptchaVerifier = new RecaptchaVerifier(auth, containerId, {
+      'size': 'invisible',
+      'callback': (response) => {
+        // reCAPTCHA solved, allow signInWithPhoneNumber.
+        console.log("Recaptcha verified");
+      }
+    });
+  }
+  return window.recaptchaVerifier;
+};
+
 // Send OTP to email
 export const sendOTP = async (email) => {
   try {
     const response = await api.post('/auth/otp/send', { email })
 
     if (response.success) {
+      // Returns { success: true, message: "...", hash: "..." }
       return response
     }
 
@@ -427,20 +382,65 @@ export const sendOTP = async (email) => {
   }
 }
 
-// Verify OTP and login
-export const verifyOTP = async (email, otp) => {
+// Send OTP to Mobile (Firebase Client SDK)
+export const sendMobileOTP = async (phoneNumber, appVerifier) => {
+  ensureFirebase();
   try {
-    const response = await api.post('/auth/otp/verify', { email, otp })
+    // Note: PhoneNumber must include country code (e.g., +91...)
+    const confirmationResult = await signInWithPhoneNumber(auth, phoneNumber, appVerifier);
+    return confirmationResult;
+  } catch (error) {
+    console.error("Error sending mobile OTP:", error);
+    throw error;
+  }
+};
 
-    if (response.success && response.data) {
-      // Save user and token
-      saveAuthData(response.data.user, response.data.token)
-      return response.data
+// Verify Mobile OTP
+export const verifyMobileOTP = async (confirmationResult, otp) => {
+  ensureFirebase();
+  try {
+    const result = await confirmationResult.confirm(otp);
+    const user = result.user;
+
+    // Sync user with PostgreSQL
+    const { userData, finalToken } = await handleAuthSync(user);
+
+    // Save auth data
+    saveAuthData(userData, finalToken);
+
+    return userData;
+  } catch (error) {
+    console.error("Verify Mobile OTP Error:", error);
+    throw error;
+  }
+};
+
+// Verify OTP and login
+export const verifyOTP = async (email, otp, hash) => {
+  ensureFirebase();
+  try {
+    const response = await api.post('/auth/otp/verify', { email, otp, hash });
+
+    if (response.success && response.data && response.data.customToken) {
+      // 1. Sign in to Firebase with the Custom Token
+      const userCredential = await signInWithCustomToken(auth, response.data.customToken);
+      const user = userCredential.user;
+
+      console.log("OTP Login Success, syncing user:", user.uid);
+
+      // 2. Sync user with PostgreSQL
+      const { userData, finalToken } = await handleAuthSync(user);
+
+      // 3. Save session
+      saveAuthData(userData, finalToken);
+
+      return userData;
     }
 
-    throw new Error(response.message || 'Failed to verify OTP')
+    throw new Error(response.message || 'Failed to verify OTP');
   } catch (error) {
-    throw error
+    console.error("Verify OTP Error:", error);
+    throw error;
   }
 }
 
@@ -454,7 +454,7 @@ export const resetPassword = async (email) => {
     try {
       const checkResponse = await api.post('/auth/check-email', { email: targetEmail });
       if (!checkResponse.registered) {
-        throw new Error("No account found with this email address.");
+        throw new Error("No account found with this email address. Please register for an account.");
       }
     } catch (apiError) {
       if (apiError.status === 404) {
@@ -473,7 +473,7 @@ export const resetPassword = async (email) => {
   } catch (error) {
     console.error("Password reset error:", error);
     if (error.code === 'auth/user-not-found' || error.message.includes("not registered")) {
-      throw new Error("No account found with this email address.");
+      throw new Error("No account found with this email address. Please register first.");
     }
     throw error;
   }

@@ -1,130 +1,112 @@
-import User from '../models/User.js'
-import jwt from 'jsonwebtoken'
-
-// Generate JWT token
-const generateToken = (userId) => {
-  return jwt.sign({ userId }, process.env.JWT_SECRET, { expiresIn: '7d' })
-}
+import User from '../models/User.js';
+import { adminAuth } from '../config/firebase-admin.js';
 
 class AuthService {
-  // Register a new user (stores in temp_users)
-  async register(userData) {
-    const { firstName, lastName, email, mobileNumber, password } = userData
-
-    // 1. Check if email already exists
-    const existingEmail = await User.findByEmail(email)
-    if (existingEmail) {
-      throw new Error('Email already registered. Please login instead.')
+  /**
+   * Verifies Firebase ID Token
+   */
+  async verifyFirebaseToken(token) {
+    try {
+      const decodedToken = await adminAuth.verifyIdToken(token);
+      return decodedToken;
+    } catch (error) {
+      console.error('Error verifying Firebase token:', error);
+      throw new Error('Invalid or expired session');
     }
+  }
 
-    // 2. Check if mobile number already exists
-    const existingMobile = await User.findByMobile(mobileNumber)
-    if (existingMobile) {
-      throw new Error('Mobile number already registered. Please use a different number.')
-    }
+  /**
+   * Synchronizes Firebase user with local database.
+   * Only called after successful token verification.
+   */
+  async syncUser(tokenData, profileData = {}) {
+    const { uid, email, email_verified, phone_number, name } = tokenData;
 
-    // Create user in temp_users
-    const user = await User.createTemp({
-      firstName,
-      lastName,
-      email,
-      mobileNumber,
-      password
-    })
+    // Strict email verification check removed for social login flexibility
+    // logic now handled inside User.sync which merges accounts if needed
 
-    return {
-      message: 'Registration successful! Please verify your account to continue.',
-      user: {
-        email: user.email,
-        mobileNumber: user.mobileNumber
+    // Prepare user data for DB sync
+    // Prioritize manual profileData if provided (e.g. from registration form), fallback to token data
+    const userData = {
+      uid,
+      email: profileData.email || email || '',
+      firstName: profileData.firstName || name?.split(' ')[0] || 'User',
+      lastName: profileData.lastName || name?.split(' ').slice(1).join(' ') || null,
+      mobileNumber: profileData.mobileNumber || phone_number || null
+    };
+
+    const user = await User.sync(userData);
+    return user;
+  }
+
+  /**
+   * Get user from database by ID
+   */
+  async getUserById(id) {
+    const user = await User.findById(id);
+    if (!user) throw new Error('User not found');
+    return user;
+  }
+
+  /**
+   * Get user from database by Firebase UID
+   */
+  async getUserByUid(uid) {
+    const user = await User.findByFirebaseUid(uid);
+    if (!user) throw new Error('User not found');
+    return user;
+  }
+
+  /**
+   * Update user profile in database
+   */
+  async updateProfile(uid, updates) {
+    return await User.update(uid, updates);
+  }
+
+  /**
+   * Check if email or phone is already taken in Firebase.
+   * This is used during registration to enforce uniqueness at the Auth level.
+   */
+  async checkFirebaseUniqueness(email, mobileNumber) {
+    let emailExists = false;
+    let phoneExists = false;
+
+    if (email) {
+      try {
+        await adminAuth.getUserByEmail(email.toLowerCase());
+        emailExists = true;
+      } catch (error) {
+        // user not found
       }
     }
+
+    if (mobileNumber) {
+      try {
+        await adminAuth.getUserByPhoneNumber(mobileNumber);
+        phoneExists = true;
+      } catch (error) {
+        // user not found
+      }
+    }
+
+    if (emailExists) throw new Error('Email already registered in system.');
+
+    return true;
   }
 
-  // Login user with identifier (email or mobile) and password
-  async login(credentials) {
-    const { identifier, password } = credentials
-
-    if (!identifier || !password) {
-      throw new Error('Email/Mobile and password are required')
+  /**
+   * Generates a Firebase Custom Token for a user UID.
+   */
+  async createCustomToken(uid) {
+    try {
+      const customToken = await adminAuth.createCustomToken(uid);
+      return customToken;
+    } catch (error) {
+      console.error('Error creating custom token:', error);
+      throw new Error('Could not generate authentication session');
     }
-
-    // 1. Find user by identifier
-    const user = await User.findByIdentifier(identifier)
-
-    if (!user) {
-      throw new Error('Invalid email/mobile or password')
-    }
-
-    // 2. Check if verified
-    if (!user.isVerified || user.isTemp) {
-      throw new Error('Account not verified. Please verify your email first.')
-    }
-
-    // 3. Verify password
-    const isPasswordValid = await User.comparePassword(password, user.password)
-    if (!isPasswordValid) {
-      throw new Error('Invalid email/mobile or password')
-    }
-
-    // Generate token
-    const token = generateToken(user.id)
-
-    return {
-      user: {
-        id: user.id,
-        firstName: user.firstName,
-        lastName: user.lastName,
-        email: user.email,
-        mobileNumber: user.mobileNumber
-      },
-      token
-    }
-  }
-
-  // Specific login for email
-  async loginWithEmail(email, password) {
-    if (!email || !email.includes('@')) {
-      throw new Error('Please provide a valid email address')
-    }
-    return this.login({ identifier: email, password })
-  }
-
-  // Specific login for mobile
-  async loginWithMobile(mobileNumber, password) {
-    if (!mobileNumber || mobileNumber.length < 10) {
-      throw new Error('Please provide a valid 10-digit mobile number')
-    }
-    return this.login({ identifier: mobileNumber, password })
-  }
-
-  // Get user by ID
-  async getUserById(userId) {
-    const user = await User.findById(userId)
-
-    if (!user) {
-      throw new Error('User not found')
-    }
-
-    return { user }
-  }
-
-  // Update user profile
-  async updateProfile(userId, userData) {
-    const { firstName, lastName, email, mobileNumber, password, oldPassword } = userData
-
-    // Update user
-    const user = await User.update(userId, {
-      firstName,
-      lastName,
-      email,
-      mobileNumber,
-      password,
-      oldPassword
-    })
-
-    return { user }
   }
 }
 
-export default new AuthService()
+export default new AuthService();

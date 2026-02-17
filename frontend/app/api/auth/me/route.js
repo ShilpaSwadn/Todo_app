@@ -1,48 +1,53 @@
 import { NextResponse } from 'next/server'
 import authService from '@/lib/server/services/authService.js'
 import { ensureDbInitialized } from '@/lib/server/middleware/dbInit.js'
-import { getUserIdFromToken } from '@/lib/server/middleware/authMiddleware.js'
+import { getUidFromToken } from '@/lib/server/middleware/authMiddleware.js'
 
 export async function GET(request) {
   try {
     // Initialize database
     await ensureDbInitialized()
-    
-    // Get userId from token
-    const userId = getUserIdFromToken(request)
-    
-    if (!userId) {
+
+    // Get Firebase UID from token
+    const uid = await getUidFromToken(request)
+
+    if (!uid) {
       return NextResponse.json({
         success: false,
         message: 'No token provided. Access denied.'
       }, { status: 401 })
     }
-    
-    // Call service to get user by ID
-    const result = await authService.getUserById(userId)
+
+    // Call service to get user by Firebase UID
+    // We use getUserByUid because we have the firebase_uid from the token
+    const dbUser = await authService.getUserByUid(uid)
+
+    // Transform database column names to camelCase for frontend
+    const user = {
+      id: dbUser.id,
+      firebaseUid: dbUser.firebase_uid,
+      firstName: dbUser.first_name,
+      lastName: dbUser.last_name,
+      email: dbUser.email,
+      mobileNumber: dbUser.mobile_number,
+      createdAt: dbUser.created_at,
+      updatedAt: dbUser.updated_at
+    }
 
     // Return success response
     return NextResponse.json({
       success: true,
-      data: result
+      data: { user }
     })
   } catch (error) {
     console.error('Get current user error:', error)
-    
+
     // Handle user not found
     if (error.message === 'User not found') {
       return NextResponse.json({
         success: false,
         message: error.message
       }, { status: 404 })
-    }
-
-    // Handle token errors
-    if (error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError') {
-      return NextResponse.json({
-        success: false,
-        message: error.name === 'TokenExpiredError' ? 'Token expired' : 'Invalid token'
-      }, { status: 401 })
     }
 
     // Generic error response

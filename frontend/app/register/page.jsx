@@ -51,11 +51,7 @@ export default function Register() {
     try {
       const result = await loginWithGoogle()
       if (result.success) {
-        if (result.verified) {
-          router.push('/dashboard')
-        } else {
-          setSuccessMsg(result.message)
-        }
+        router.push('/dashboard')
       }
     } catch (err) {
       setError(err.message || 'Google login failed. Please try again.')
@@ -70,11 +66,7 @@ export default function Register() {
     try {
       const result = await loginWithTwitter()
       if (result.success) {
-        if (result.verified) {
-          router.push('/dashboard')
-        } else {
-          setSuccessMsg(result.message)
-        }
+        router.push('/dashboard')
       }
     } catch (err) {
       setError(err.message || 'Twitter login failed. Please try again.')
