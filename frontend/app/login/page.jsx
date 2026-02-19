@@ -9,8 +9,11 @@ import { HiX } from 'react-icons/hi'
 import { ImSpinner2 } from 'react-icons/im'
 import { FcGoogle } from 'react-icons/fc'
 import { RiTwitterXFill } from 'react-icons/ri'
-import { setupRecaptcha, clearRecaptcha, sendOTP, verifyOTP, verifyMobileOTP, sendMobileOTP, loginWithPasswordDirect, loginWithGoogle, loginWithTwitter } from '@/lib/services/auth'
+import { setupRecaptcha, clearRecaptcha, sendOTP, verifyOTP, verifyMobileOTP, sendMobileOTP, loginWithPasswordDirect, loginWithGoogle, loginWithTwitter, resendVerificationEmail } from '@/lib/services/auth'
 import { validateEmail, validateIdentifier } from '@/lib/utils/validation'
+import { countries } from '@/lib/data/countries'
+import { FiChevronDown } from 'react-icons/fi'
+import { parsePhoneNumberFromString } from 'libphonenumber-js'
 
 export default function Login() {
   const router = useRouter()
@@ -29,6 +32,10 @@ export default function Login() {
   const [confirmationResult, setConfirmationResult] = useState(null)
   const [otpHash, setOtpHash] = useState('')
   const [deliveryStatus, setDeliveryStatus] = useState('')
+  const [resendingVerification, setResendingVerification] = useState(false)
+  const [resendSuccess, setResendSuccess] = useState('')
+  const [selectedCountry, setSelectedCountry] = useState(countries[0])
+  const [isCountrySelectorOpen, setIsCountrySelectorOpen] = useState(false)
 
   // Ultimate fix: Generate a unique ID for every single request
   const ensureRecaptcha = () => {
@@ -60,8 +67,31 @@ export default function Login() {
     return () => clearInterval(timer);
   }, [countdown]);
 
+  // Auto-hide error and success messages after 5 seconds
+  useEffect(() => {
+    if (error || resendSuccess) {
+      const timer = setTimeout(() => {
+        setError('');
+        setResendSuccess('');
+      }, 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [error, resendSuccess]);
+
   const handleIdentifierChange = (e) => {
-    setIdentifier(e.target.value)
+    const value = e.target.value
+    setIdentifier(value)
+
+    // Auto-detect country if typed with +
+    if (value.startsWith('+')) {
+      for (const country of countries) {
+        if (value.startsWith(country.dialCode)) {
+          setSelectedCountry(country)
+          break
+        }
+      }
+    }
+
     setError('')
   }
 
@@ -82,7 +112,7 @@ export default function Login() {
         window.location.href = '/dashboard';
       }
     } catch (err) {
-      setError(err.message || 'Google login failed. Please try again.')
+      setError('Google sign-in failed. Please try again.')
     } finally {
       setLoading(false)
     }
@@ -98,7 +128,7 @@ export default function Login() {
         window.location.href = '/dashboard';
       }
     } catch (err) {
-      setError(err.message || 'Twitter login failed. Please try again.')
+      setError('Twitter sign-in failed. Please try again.')
     } finally {
       setLoading(false)
     }
@@ -124,7 +154,13 @@ export default function Login() {
       }
       router.push('/dashboard')
     } catch (err) {
-      setError(err.message || 'Failed to verify OTP. Please try again.')
+      let friendlyMessage = 'The code you entered is incorrect. Please try again.';
+      if (err.message?.includes('expired')) {
+        friendlyMessage = 'Your code has expired. Please request a new one.';
+      } else if (err.message?.includes('network')) {
+        friendlyMessage = 'Connection error. Please check your internet.';
+      }
+      setError(friendlyMessage)
       setLoading(false)
     }
   }
@@ -151,8 +187,19 @@ export default function Login() {
       await loginWithPasswordDirect(identifier.trim().toLowerCase(), password)
       router.push('/dashboard')
     } catch (err) {
-      setError(err.message || 'Failed to sign in. Please try again.')
-      setLoading(false)
+      let friendlyMessage = err.message || 'We could not sign you in. Please check your details and try again.';
+
+      // Map common errors to user-friendly messages
+      if (err.message?.includes('invalid-credential') || err.message?.includes('user-not-found')) {
+        friendlyMessage = 'Invalid email or password. Please check your credentials.';
+      } else if (err.message?.includes('network-request-failed')) {
+        friendlyMessage = 'Connection error. Please check your internet and try again.';
+      } else if (err.message?.includes('too-many-requests')) {
+        friendlyMessage = 'Too many failed attempts. Please try again in a few minutes.';
+      }
+
+      setError(friendlyMessage);
+      setLoading(false);
     }
   }
 
@@ -189,23 +236,19 @@ export default function Login() {
       }
 
       if (isPhone) {
-        // Strip all characters except digits and the + sign
+        // Prepare sanitized phone
         let sanitizedPhone = cleanIdentifier.replace(/[^\d+]/g, '');
 
-        // If it still doesn't have a +, assume India (+91)
+        // If it still doesn't have a +, use the selected country code
         if (!sanitizedPhone.startsWith('+')) {
-          if (sanitizedPhone.length === 12 && sanitizedPhone.startsWith('91')) {
-            sanitizedPhone = `+${sanitizedPhone}`;
-          } else {
-            sanitizedPhone = `+91${sanitizedPhone}`;
-          }
+          sanitizedPhone = `${selectedCountry.dialCode}${sanitizedPhone}`;
         }
 
         console.log("Requesting SMS for sanitized number:", sanitizedPhone);
 
         const appVerifier = ensureRecaptcha();
         if (!appVerifier) {
-          throw new Error('Security check (reCAPTCHA) failed to initialize. Please refresh.');
+          throw new Error('Something went wrong with the security check. Please refresh the page and try again.');
         }
 
         const result = await sendMobileOTP(sanitizedPhone, appVerifier);
@@ -263,22 +306,24 @@ export default function Login() {
       }
     } catch (err) {
       console.error("OTP send error:", err);
-      let friendlyError = err.message || 'Failed to send OTP. Please try again.';
+      let friendlyError = 'We couldn\'t send the code. Please try again.';
 
       if (err.code === 'auth/too-many-requests') {
-        friendlyError = 'Firebase has blocked this number due to too many attempts. 1. Go to Firebase Console > Users and DELETE this number if it exists. 2. Add it as a Test Number with +91. 3. Wait 5 minutes and try again.';
+        friendlyError = 'Too many attempts. Please wait a few minutes before trying again.';
         clearRecaptcha();
       } else if (err.code === 'auth/unauthorized-domain') {
-        friendlyError = 'This domain is not authorized in Firebase Console. Please add your Vercel URL to "Authorized domains" in Authentication settings.';
+        friendlyError = 'This domain is not allowed to send codes. Please contact support.';
       } else if (err.code === 'auth/quota-exceeded') {
-        friendlyError = 'Daily SMS quota exceeded for this project. Please try again tomorrow or use a Test Phone Number.';
+        friendlyError = 'Our daily limit for SMS has been reached. Please try again tomorrow or use email login.';
       } else if (err.code === 'auth/invalid-phone-number') {
-        friendlyError = 'The phone number entered is invalid. Please check the format.';
+        friendlyError = 'The phone number you entered is invalid. Please check the digits.';
       } else if (err.message?.includes('already been rendered')) {
         friendlyError = 'Connection issue. Please try clicking the button again.';
         clearRecaptcha();
       } else if (err.message?.includes('UNSUPPORTED_FIRST_FACTOR') || err.code === 'auth/unsupported-first-factor') {
-        friendlyError = 'OTP Login is not enabled for this phone number. It may be set up for Multi-Factor Authentication (MFA) instead. Please use Password Login.';
+        friendlyError = 'Your account doesn\'t support this login method. Please use your password instead.';
+      } else if (err.message) {
+        friendlyError = err.message;
       }
 
       setError(friendlyError)
@@ -296,7 +341,7 @@ export default function Login() {
       if (isMobile) {
         let formattedPhone = cleanIdentifier;
         if (!formattedPhone.startsWith('+')) {
-          formattedPhone = `+91${formattedPhone}`;
+          formattedPhone = `${selectedCountry.dialCode}${formattedPhone}`;
         }
         const appVerifier = window.recaptchaVerifier;
         const result = await sendMobileOTP(formattedPhone, appVerifier);
@@ -340,9 +385,33 @@ export default function Login() {
         }
       }
     } catch (err) {
-      setError(err.message || 'Failed to resend OTP. Please try again.')
+      setError('We couldn\'t resend the code. Please try again in a moment.')
     } finally {
       setSendingOTP(false)
+    }
+  }
+
+  const handleResendVerification = async () => {
+    if (!identifier || !identifier.includes('@')) {
+      setError('Please enter your registered email address.')
+      return
+    }
+
+    setResendingVerification(true)
+    setError('')
+    setResendSuccess('')
+
+    try {
+      const response = await resendVerificationEmail(identifier.trim().toLowerCase())
+      if (response.success) {
+        setResendSuccess('A new verification link has been sent to your email.')
+      } else {
+        setError(response.message || 'Failed to resend verification link.')
+      }
+    } catch (err) {
+      setError(err.message || 'Failed to resend verification link. Please try again.')
+    } finally {
+      setResendingVerification(false)
     }
   }
 
@@ -393,9 +462,33 @@ export default function Login() {
 
               {error && (
                 <div className="mb-6 p-4 bg-red-50 dark:bg-red-900/20 border-l-4 border-red-500 rounded-r-lg">
+                  <div className="flex flex-col gap-3">
+                    <div className="flex items-center">
+                      <HiX className="h-5 w-5 text-red-500 mr-2 shrink-0" />
+                      <p className="text-sm text-red-700 dark:text-red-400 font-medium">{error}</p>
+                    </div>
+
+                    {error.includes('verify your email') && identifier.includes('@') && (
+                      <button
+                        onClick={handleResendVerification}
+                        disabled={resendingVerification}
+                        className="text-xs font-bold text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 flex items-center gap-1 w-fit transition-all hover:translate-x-1"
+                      >
+                        {resendingVerification ? (
+                          <ImSpinner2 className="animate-spin h-3 w-3" />
+                        ) : null}
+                        {resendingVerification ? 'Resending...' : 'Resend Verification Link →'}
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {resendSuccess && (
+                <div className="mb-6 p-4 bg-green-50 dark:bg-green-900/20 border-l-4 border-green-500 rounded-r-lg">
                   <div className="flex items-center">
-                    <HiX className="h-5 w-5 text-red-500 mr-2" />
-                    <p className="text-sm text-red-700 dark:text-red-400 font-medium">{error}</p>
+                    <div className="h-2 w-2 bg-green-500 rounded-full mr-3 animate-pulse"></div>
+                    <p className="text-sm text-green-700 dark:text-green-400 font-medium">{resendSuccess}</p>
                   </div>
                 </div>
               )}
@@ -408,23 +501,55 @@ export default function Login() {
                         Email or Mobile Number
                       </label>
                       <div className="relative group">
-                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                          {/^\d+$/.test(identifier) ? (
-                            <FiPhone className="h-5 w-5 text-gray-400 group-focus-within:text-indigo-500 transition-colors" />
-                          ) : (
-                            <FiUser className="h-5 w-5 text-gray-400 group-focus-within:text-indigo-500 transition-colors" />
+                        <div className="flex">
+                          {/* Country Selector - Only show if it looks like phone and no + typed manually */}
+                          {(!identifier.includes('@') && !identifier.startsWith('+') && /^\d+/.test(identifier.replace(/\s/g, ''))) && (
+                            <div className="relative">
+                              <button
+                                type="button"
+                                onClick={() => setIsCountrySelectorOpen(!isCountrySelectorOpen)}
+                                className="flex items-center gap-1 px-3 py-3 bg-gray-50 dark:bg-gray-800/50 border border-r-0 border-gray-200 dark:border-gray-700 rounded-l-xl hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors h-full"
+                              >
+                                <span className="text-sm font-bold text-indigo-600 dark:text-indigo-400">{selectedCountry.dialCode}</span>
+                                <FiChevronDown className={`w-3 h-3 text-gray-400 transition-transform ${isCountrySelectorOpen ? 'rotate-180' : ''}`} />
+                              </button>
+                              {isCountrySelectorOpen && (
+                                <div className="absolute z-50 mt-1 w-48 bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-xl shadow-2xl max-h-60 overflow-y-auto">
+                                  {countries.map((country) => (
+                                    <button
+                                      key={country.code}
+                                      type="button"
+                                      onClick={() => { setSelectedCountry(country); setIsCountrySelectorOpen(false); }}
+                                      className="w-full flex items-center justify-between px-4 py-2 text-left text-sm hover:bg-indigo-50 dark:hover:bg-indigo-900/20 text-gray-700 dark:text-gray-300 transition-colors"
+                                    >
+                                      <span>{country.name}</span>
+                                      <span className="text-gray-400 font-mono text-xs">{country.dialCode}</span>
+                                    </button>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
                           )}
+                          <div className="relative flex-1">
+                            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                              {/^\d+$/.test(identifier) ? (
+                                <FiPhone className="h-5 w-5 text-gray-400 group-focus-within:text-indigo-500 transition-colors" />
+                              ) : (
+                                <FiUser className="h-5 w-5 text-gray-400 group-focus-within:text-indigo-500 transition-colors" />
+                              )}
+                            </div>
+                            <input
+                              type="text"
+                              id="identifier"
+                              name="identifier"
+                              value={identifier}
+                              onChange={handleIdentifierChange}
+                              required
+                              className={`w-full pl-10 pr-4 py-3 bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 ${(!identifier.includes('@') && !identifier.startsWith('+') && /^\d+/.test(identifier.replace(/\s/g, ''))) ? 'rounded-r-xl border-l-0' : 'rounded-xl'} focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 dark:text-white transition-all`}
+                              placeholder="Email or mobile number"
+                            />
+                          </div>
                         </div>
-                        <input
-                          type="text"
-                          id="identifier"
-                          name="identifier"
-                          value={identifier}
-                          onChange={handleIdentifierChange}
-                          required
-                          className="w-full pl-10 pr-4 py-3 bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 dark:text-white transition-all"
-                          placeholder="Email or mobile number"
-                        />
                       </div>
                     </div>
 
@@ -486,23 +611,55 @@ export default function Login() {
                         Email or Mobile Number
                       </label>
                       <div className="relative group">
-                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                          {/^\d+$/.test(identifier) ? (
-                            <FiPhone className="h-5 w-5 text-gray-400 group-focus-within:text-indigo-500 transition-colors" />
-                          ) : (
-                            <FiUser className="h-5 w-5 text-gray-400 group-focus-within:text-indigo-500 transition-colors" />
+                        <div className="flex">
+                          {/* Country Selector - Only show if it looks like phone and no + typed manually */}
+                          {(!identifier.includes('@') && !identifier.startsWith('+') && /^\d+/.test(identifier.replace(/\s/g, ''))) && (
+                            <div className="relative">
+                              <button
+                                type="button"
+                                onClick={() => setIsCountrySelectorOpen(!isCountrySelectorOpen)}
+                                className="flex items-center gap-1 px-3 py-3 bg-gray-50 dark:bg-gray-800/50 border border-r-0 border-gray-200 dark:border-gray-700 rounded-l-xl hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors h-full"
+                              >
+                                <span className="text-sm font-bold text-indigo-600 dark:text-indigo-400">{selectedCountry.dialCode}</span>
+                                <FiChevronDown className={`w-3 h-3 text-gray-400 transition-transform ${isCountrySelectorOpen ? 'rotate-180' : ''}`} />
+                              </button>
+                              {isCountrySelectorOpen && (
+                                <div className="absolute z-50 mt-1 w-48 bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-xl shadow-2xl max-h-60 overflow-y-auto">
+                                  {countries.map((country) => (
+                                    <button
+                                      key={country.code}
+                                      type="button"
+                                      onClick={() => { setSelectedCountry(country); setIsCountrySelectorOpen(false); }}
+                                      className="w-full flex items-center justify-between px-4 py-2 text-left text-sm hover:bg-indigo-50 dark:hover:bg-indigo-900/20 text-gray-700 dark:text-gray-300 transition-colors"
+                                    >
+                                      <span>{country.name}</span>
+                                      <span className="text-gray-400 font-mono text-xs">{country.dialCode}</span>
+                                    </button>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
                           )}
+                          <div className="relative flex-1">
+                            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                              {/^\d+$/.test(identifier) ? (
+                                <FiPhone className="h-5 w-5 text-gray-400 group-focus-within:text-indigo-500 transition-colors" />
+                              ) : (
+                                <FiUser className="h-5 w-5 text-gray-400 group-focus-within:text-indigo-500 transition-colors" />
+                              )}
+                            </div>
+                            <input
+                              type="text"
+                              id="identifier-otp"
+                              name="identifier"
+                              value={identifier}
+                              onChange={handleIdentifierChange}
+                              required
+                              className={`w-full pl-10 pr-4 py-3 bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 ${(!identifier.includes('@') && !identifier.startsWith('+') && /^\d+/.test(identifier.replace(/\s/g, ''))) ? 'rounded-r-xl border-l-0' : 'rounded-xl'} focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 dark:text-white transition-all`}
+                              placeholder="Email or mobile number"
+                            />
+                          </div>
                         </div>
-                        <input
-                          type="text"
-                          id="identifier-otp"
-                          name="identifier"
-                          value={identifier}
-                          onChange={handleIdentifierChange}
-                          required
-                          className="w-full pl-10 pr-4 py-3 bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 dark:text-white transition-all"
-                          placeholder="Email or mobile number"
-                        />
                       </div>
                     </div>
 

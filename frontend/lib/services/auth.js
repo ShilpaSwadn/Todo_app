@@ -16,7 +16,7 @@ import { saveAuthData, clearAuthData } from '@/lib/auth/client'
 
 const ensureFirebase = () => {
   if (!auth) {
-    throw new Error("Firebase is not initialized. Please ensure your .env.local has the correct credentials.");
+    throw new Error("Application configuration error. Please contact support.");
   }
 };
 
@@ -85,7 +85,7 @@ export const register = async (userData) => {
       identifier: email.trim().toLowerCase()
     });
     if (emailStatus.success && emailStatus.exists) {
-      throw new Error("This email is already registered in Firebase. Please login instead.");
+      throw new Error("This email is already registered. Please login instead.");
     }
 
 
@@ -106,11 +106,17 @@ export const register = async (userData) => {
       displayName: `${firstName} ${lastName}`.trim(),
     });
 
-    // 4. Update Mobile in Firebase (via Admin SDK)
-    await api.post('/auth/set-mobile', {
+    // 4. Update Mobile in Firebase and Postgres (via Admin SDK)
+    const mobileResponse = await api.post('/auth/set-mobile', {
       uid: user.uid,
       mobileNumber: mobileNumber.trim()
     });
+
+    if (mobileResponse.success === false) {
+      // If setting mobile number fails (and it's not a handled "duplicate" case which now returns success: true)
+      // we should probably stop here to satisfy "without setting mobile number it should not go to send magic link"
+      throw new Error(mobileResponse.message || "Something went wrong while setting up your mobile number. Please try again.");
+    }
 
     // 5. Send email verification
     await sendEmailVerification(user);
@@ -153,14 +159,14 @@ const handleAuthSync = async (user) => {
 
     if (response.success) {
       userData = { ...userData, ...response.data.user };
-      console.log("Account successfully synced in Postgres.");
+      console.log("Account successfully synced.");
       return { userData, finalToken: idToken };
     } else {
-      throw new Error(response.message || "Email not verified. Please verify your email first.");
+      throw new Error(response.message || "Your email is not verified yet. Please check your inbox for the activation link.");
     }
   } catch (apiError) {
-    console.error("Postgres Synchronization Error:", apiError);
-    throw new Error(apiError.message || "Email not verified. Please verify your email first.");
+    console.error("Account Sync Error:", apiError);
+    throw new Error(apiError.message || "Please verify your email address first.");
   }
 };
 
@@ -516,3 +522,15 @@ export const checkUserStatus = async (identifier) => {
     return { success: false, exists: false };
   }
 }
+
+// Resend email verification link
+export const resendVerificationEmail = async (email) => {
+  try {
+    const response = await api.post('/auth/resend-verification', { email });
+    return response;
+  } catch (error) {
+    console.error("Resend verification error:", error);
+    throw error;
+  }
+}
+

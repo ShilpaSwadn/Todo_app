@@ -18,12 +18,18 @@ export const validateLastName = (name) => {
   return nameRegex.test(name.trim())
 }
 
-// Validate mobile number - 10 to 15 digits (standard international length)
-export const validateMobileNumber = (mobileNumber) => {
+import { parsePhoneNumberFromString } from 'libphonenumber-js'
+
+// Validate mobile number - Use libphonenumber-js for international validation
+export const validateMobileNumber = (mobileNumber, countryCode = 'IN') => {
   if (!mobileNumber || mobileNumber.trim() === '') return false
-  // Remove all non-digit characters and check length
-  const digitsOnly = mobileNumber.replace(/\D/g, '')
-  return digitsOnly.length >= 10 && digitsOnly.length <= 15
+
+  try {
+    const phoneNumber = parsePhoneNumberFromString(mobileNumber, countryCode)
+    return phoneNumber ? phoneNumber.isValid() : false
+  } catch (error) {
+    return false
+  }
 }
 
 // Validate identifier (email or mobile number)
@@ -80,10 +86,16 @@ export const validateRegisterForm = (formData) => {
   }
 
   // Mobile Number
-  if (!formData.mobileNumber || formData.mobileNumber.trim() === '') {
+  if (!formData.mobileNumber || (typeof formData.mobileNumber === 'string' && formData.mobileNumber.trim() === '')) {
     errors.mobileNumber = 'Mobile number is required'
-  } else if (!validateMobileNumber(formData.mobileNumber)) {
-    errors.mobileNumber = 'Mobile number must be exactly 10 digits'
+  } else {
+    // If we have fullMobileNumber (from new PhoneInput), use it, otherwise use mobileNumber
+    const numberToValidate = formData.fullMobileNumber || formData.mobileNumber;
+    const countryCode = formData.mobileCountryCode || 'IN';
+
+    if (!validateMobileNumber(numberToValidate, countryCode)) {
+      errors.mobileNumber = 'Please enter a valid mobile number for the selected country'
+    }
   }
 
   // Password

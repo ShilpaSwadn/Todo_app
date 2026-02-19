@@ -56,3 +56,48 @@ export const sendOTPEmail = async (email, otp) => {
     throw new Error('Failed to send OTP email. Please try again.');
   }
 };
+export const sendVerificationEmail = async (email, link) => {
+  try {
+    if (process.env.NODE_ENV !== 'production') {
+      console.log('--- VERIFICATION EMAIL (Firebase) ---');
+      console.log(`To: ${email}`);
+      console.log(`Link: ${link}`);
+      console.log('------------------------------------');
+    }
+
+    if (process.env.NODE_ENV !== 'production' && process.env.FIREBASE_EMAIL_ENABLED !== 'true') {
+      return { success: true, message: 'Link logged to console (Dev Mode)', isLoggedOnly: true };
+    }
+
+    const emailDoc = {
+      to: email,
+      message: {
+        subject: 'Activate your account',
+        html: `
+          <div style="font-family: sans-serif; max-width: 400px; margin: 0 auto; padding: 20px; border: 1px solid #eee; border-radius: 10px;">
+            <h2 style="color: #4F46E5; text-align: center;">Account Activation</h2>
+            <p>Click the button below to verify your email address and activate your account.</p>
+            <div style="text-align: center; margin: 30px 0;">
+              <a href="${link}" style="background: #4F46E5; color: white; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block;">Verify Email</a>
+            </div>
+            <p style="font-size: 12px; color: #6B7280; text-align: center;">
+              If the button doesn't work, copy and paste this link into your browser: <br>
+              <span style="word-break: break-all; color: #4F46E5;">${link}</span>
+            </p>
+          </div>
+        `,
+        text: `Please verify your email by clicking this link: ${link}`,
+      },
+      delivery: {
+        startTime: new Date(),
+        state: 'PENDING',
+      },
+    };
+
+    const emailRef = await adminDb.collection('mail').add(emailDoc);
+    return { success: true, messageId: emailRef.id };
+  } catch (error) {
+    console.error('❌ Error queuing verification email:', error);
+    throw new Error('Failed to send verification email.');
+  }
+};

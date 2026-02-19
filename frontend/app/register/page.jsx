@@ -9,7 +9,9 @@ import { ImSpinner2 } from 'react-icons/im'
 import { FcGoogle } from 'react-icons/fc'
 import { RiTwitterXFill } from 'react-icons/ri'
 import { register, loginWithGoogle, loginWithTwitter } from '@/lib/services/auth'
-import { validateRegisterForm, validateMobileNumber } from '@/lib/utils/validation'
+import { validateRegisterForm } from '@/lib/utils/validation'
+import PhoneInput from '@/components/ui/PhoneInput'
+import { useEffect } from 'react'
 
 export default function Register() {
   const router = useRouter()
@@ -18,6 +20,8 @@ export default function Register() {
     lastName: '',
     email: '',
     mobileNumber: '',
+    fullMobileNumber: '',
+    mobileCountryCode: 'IN',
     password: '',
     confirmPassword: ''
   })
@@ -25,23 +29,32 @@ export default function Register() {
   const [successMsg, setSuccessMsg] = useState('')
   const [loading, setLoading] = useState(false)
 
+  // Auto-hide error message after 5 seconds
+  useEffect(() => {
+    if (error) {
+      const timer = setTimeout(() => {
+        setError('');
+      }, 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [error]);
+
   const handleChange = (e) => {
     const { name, value } = e.target
+    setFormData({
+      ...formData,
+      [name]: value
+    })
+    setError('')
+  }
 
-    // Format mobile number - only allow digits, max 10
-    if (name === 'mobileNumber') {
-      const digitsOnly = value.replace(/\D/g, '')
-      const limitedDigits = digitsOnly.slice(0, 10)
-      setFormData({
-        ...formData,
-        [name]: limitedDigits
-      })
-    } else {
-      setFormData({
-        ...formData,
-        [name]: value
-      })
-    }
+  const handlePhoneChange = (fullNumber, digits, countryCode) => {
+    setFormData({
+      ...formData,
+      mobileNumber: digits,
+      fullMobileNumber: fullNumber,
+      mobileCountryCode: countryCode
+    })
     setError('')
   }
 
@@ -99,7 +112,7 @@ export default function Register() {
         firstName: formData.firstName.trim(),
         lastName: formData.lastName ? formData.lastName.trim() : '',
         email: formData.email.trim().toLowerCase(),
-        mobileNumber: formData.mobileNumber.trim(),
+        mobileNumber: formData.fullMobileNumber,
         password: formData.password,
         confirmPassword: formData.confirmPassword
       })
@@ -107,8 +120,18 @@ export default function Register() {
       setSuccessMsg(response.message || 'Registration successful! Please check your email for the activation link.')
       setLoading(false)
     } catch (err) {
-      setError(err.message || 'Registration failed. Please try again.')
-      setLoading(false)
+      let friendlyMessage = err.message || 'We could not create your account. Please try again.';
+
+      if (err.message?.includes('email-already-in-use')) {
+        friendlyMessage = 'This email is already in use. Please try logging in instead.';
+      } else if (err.message?.includes('weak-password')) {
+        friendlyMessage = 'Your password is too weak. Please use at least 6 characters.';
+      } else if (err.message?.includes('network-request-failed')) {
+        friendlyMessage = 'Connection issue. Please check your internet and try again.';
+      }
+
+      setError(friendlyMessage);
+      setLoading(false);
     }
   }
 
@@ -226,24 +249,11 @@ export default function Register() {
               <label htmlFor="mobileNumber" className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">
                 Mobile Number <span className="text-red-500">*</span>
               </label>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <FiPhone className="h-4 w-4 text-gray-400" />
-                </div>
-                <input
-                  type="tel"
-                  id="mobileNumber"
-                  name="mobileNumber"
-                  value={formData.mobileNumber}
-                  onChange={handleChange}
-                  maxLength={10}
-                  className="w-full pl-9 pr-3 py-2 border-2 border-gray-200 dark:border-gray-700 rounded-lg focus:outline-none focus:border-indigo-500 dark:bg-gray-800 dark:text-white transition-colors text-sm"
-                  placeholder="Enter 10 digit mobile number"
-                />
-              </div>
-              <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                {formData.mobileNumber.length > 0 && `${formData.mobileNumber.length}/10 digits`}
-              </p>
+              <PhoneInput
+                value={formData.mobileNumber}
+                onChange={handlePhoneChange}
+                error={null} // We show error at the top
+              />
             </div>
 
             {/* Password Fields - Side by Side */}

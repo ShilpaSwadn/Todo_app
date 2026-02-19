@@ -6,12 +6,23 @@ import { FiMail, FiArrowLeft, FiCheckCircle } from 'react-icons/fi'
 import { HiX } from 'react-icons/hi'
 import { ImSpinner2 } from 'react-icons/im'
 import { resetPassword } from '@/lib/services/auth'
+import { useEffect } from 'react'
 
 export default function ForgotPassword() {
     const [email, setEmail] = useState('')
     const [error, setError] = useState('')
     const [message, setMessage] = useState('')
     const [loading, setLoading] = useState(false)
+
+    // Auto-hide error after 5 seconds
+    useEffect(() => {
+        if (error) {
+            const timer = setTimeout(() => {
+                setError('');
+            }, 5000);
+            return () => clearTimeout(timer);
+        }
+    }, [error]);
 
     const handleSubmit = async (e) => {
         e.preventDefault()
@@ -29,7 +40,15 @@ export default function ForgotPassword() {
             const response = await resetPassword(email.trim().toLowerCase())
             setMessage(response.message)
         } catch (err) {
-            setError(err.message || 'Failed to send reset link. Please try again.')
+            let friendlyMessage = err.message || 'We could not send the reset link. Please try again later.';
+
+            if (err.message?.includes('user-not-found')) {
+                friendlyMessage = 'No account found with this email address. Please check and try again.';
+            } else if (err.message?.includes('network-request-failed')) {
+                friendlyMessage = 'Connection error. Please check your internet and try again.';
+            }
+
+            setError(friendlyMessage);
         } finally {
             setLoading(false)
         }
