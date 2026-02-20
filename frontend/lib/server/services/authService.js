@@ -22,17 +22,70 @@ class AuthService {
   async syncUser(tokenData, profileData = {}) {
     const { uid, email, email_verified, phone_number, name } = tokenData;
 
-    // Strict email verification check removed for social login flexibility
-    // logic now handled inside User.sync which merges accounts if needed
+    // 1. If user is verified, check if we need to promote them from temp_users
+    let finalMobileNumber = profileData.mobileNumber || phone_number || null;
+    let finalFirstName = profileData.firstName || name?.split(' ')[0] || 'User';
+    let finalLastName = profileData.lastName || name?.split(' ').slice(1).join(' ') || null;
 
-    // Prepare user data for DB sync
-    // Prioritize manual profileData if provided (e.g. from registration form), fallback to token data
+    if (email_verified) {
+      const adminDb = (await import('../config/firebase-admin.js')).adminDb;
+      const tempUserRef = adminDb.collection('temp_users').doc(uid);
+      const tempUserSnap = await tempUserRef.get();
+
+      if (tempUserSnap.exists) {
+        const data = tempUserSnap.data();
+        console.log(`Promoting user ${uid} from temp to main storage...`);
+
+        finalMobileNumber = data.mobileNumber;
+        finalFirstName = data.firstName;
+        finalLastName = data.lastName;
+
+        // Move to final collections atomically
+        const batch = adminDb.batch();
+
+        // Final Profile
+        const userRef = adminDb.collection('users').doc(uid);
+        batch.set(userRef, {
+          uid,
+          email: email.toLowerCase(),
+          mobileNumber: finalMobileNumber,
+          firstName: finalFirstName,
+          lastName: finalLastName,
+          displayName: `${finalFirstName} ${finalLastName}`.trim(),
+          createdAt: data.createdAt || new Date(),
+          updatedAt: new Date(),
+          verifiedAt: new Date()
+        });
+
+        // Combination Lock
+        const combinationId = `${email.toLowerCase()}_${finalMobileNumber}`;
+        const combinationRef = adminDb.collection('user_combinations').doc(combinationId);
+        batch.set(combinationRef, {
+          email: email.toLowerCase(),
+          mobileNumber: finalMobileNumber,
+          uid: uid,
+          createdAt: data.createdAt || new Date()
+        });
+
+        // Delete temp data
+        batch.delete(tempUserRef);
+
+        await batch.commit();
+        console.log(`Promotion complete for ${uid}.`);
+      }
+    }
+
+    // 2. Synchronize with PostgreSQL (only if verified)
+    if (!email_verified) {
+      throw new Error('Please verify your email address before continuing.');
+    }
+
     const userData = {
       uid,
-      email: profileData.email || email || '',
-      firstName: profileData.firstName || name?.split(' ')[0] || 'User',
-      lastName: profileData.lastName || name?.split(' ').slice(1).join(' ') || null,
-      mobileNumber: profileData.mobileNumber || phone_number || null
+      email: email || '',
+      firstName: finalFirstName,
+      lastName: finalLastName,
+      mobileNumber: finalMobileNumber
     };
 
     const user = await User.sync(userData);

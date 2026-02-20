@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { adminAuth } from '@/lib/server/config/firebase-admin';
+import { adminAuth, adminDb } from '@/lib/server/config/firebase-admin';
 import User from '@/lib/server/models/User';
 
 export async function POST(request) {
@@ -25,6 +25,46 @@ export async function POST(request) {
             return NextResponse.json({ success: false, message: 'User not found in authentication system' }, { status: 404 });
         }
 
+        if (!userEmail) {
+            return NextResponse.json({ success: false, message: 'User email is required for this operation' }, { status: 400 });
+        }
+
+        // 2. Check Composite Uniqueness in Firestore (Email + Phone)
+        const combinationId = `${userEmail.toLowerCase()}_${formattedPhone}`;
+        const combinationRef = adminDb.collection('user_combinations').doc(combinationId);
+        const combinationSnap = await combinationRef.get();
+
+        if (combinationSnap.exists && combinationSnap.data().uid !== uid) {
+            return NextResponse.json({
+                success: false,
+                message: 'This combination of email and mobile number is already registered by another account.'
+            }, { status: 400 });
+        }
+
+        // 3. Atomically update Firestore
+        try {
+            const batch = adminDb.batch();
+
+            // Set the combination lock
+            batch.set(combinationRef, {
+                email: userEmail.toLowerCase(),
+                mobileNumber: formattedPhone,
+                uid: uid,
+                updatedAt: new Date()
+            });
+
+            // Update user profile in Firestore
+            const userRef = adminDb.collection('users').doc(uid);
+            batch.set(userRef, {
+                mobileNumber: formattedPhone,
+                updatedAt: new Date()
+            }, { merge: true });
+
+            await batch.commit();
+        } catch (fsError) {
+            console.error('Firestore update error:', fsError);
+        }
+
         // 2. Update/Sync the user in PostgreSQL
         // We use sync to ensure the record exists (it might not if they just registered and haven't logged in)
         try {
@@ -44,35 +84,15 @@ export async function POST(request) {
             console.error('Database sync/update error in set-mobile:', dbError);
         }
 
-        // 3. Try to set the mobile number in Firebase Auth
-        // Firebase enforces uniqueness on phoneNumber. If it fails, we log it but don't necessarily block.
-        try {
-            await adminAuth.updateUser(uid, {
-                phoneNumber: formattedPhone,
-            });
+        // 3. Skip setting global phoneNumber in Firebase Auth
+        // We skip this because Firebase Auth enforces global uniqueness on phoneNumber,
+        // which would prevent reusing the same mobile number with different emails.
+        // The composite uniqueness (email + phone) is now handled in Firestore.
 
-            return NextResponse.json({
-                success: true,
-                message: 'Mobile number updated in both Firebase and database'
-            });
-        } catch (firebaseError) {
-            console.warn('Firebase phoneNumber update failed:', firebaseError.message);
-
-            // If the error is 'already exists', we treat it as success because 
-            // the user wants "email only unique" and the DB has been updated.
-            if (firebaseError.code === 'auth/phone-number-already-exists') {
-                return NextResponse.json({
-                    success: true,
-                    message: 'Mobile number updated in database. (Firebase update skipped: number already in use by another account)'
-                });
-            }
-
-            // For other critical Firebase errors, we return the error
-            return NextResponse.json({
-                success: false,
-                message: firebaseError.message || 'Error updating Firebase profile'
-            }, { status: 400 });
-        }
+        return NextResponse.json({
+            success: true,
+            message: 'User data synced with profile'
+        });
     } catch (error) {
         console.error('Set mobile error:', error);
         return NextResponse.json({

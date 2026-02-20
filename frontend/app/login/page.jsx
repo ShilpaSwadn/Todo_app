@@ -9,7 +9,7 @@ import { HiX } from 'react-icons/hi'
 import { ImSpinner2 } from 'react-icons/im'
 import { FcGoogle } from 'react-icons/fc'
 import { RiTwitterXFill } from 'react-icons/ri'
-import { setupRecaptcha, clearRecaptcha, sendOTP, verifyOTP, verifyMobileOTP, sendMobileOTP, loginWithPasswordDirect, loginWithGoogle, loginWithTwitter, resendVerificationEmail } from '@/lib/services/auth'
+import { setupRecaptcha, clearRecaptcha, sendOTP, verifyOTP, verifyMobileOTP, sendMobileOTP, loginWithPasswordDirect, loginWithGoogle, loginWithTwitter, resendVerificationEmail, sendMobileLinkingOTP, verifyMobileLinkingOTP } from '@/lib/services/auth'
 import { validateEmail, validateIdentifier } from '@/lib/utils/validation'
 import { countries } from '@/lib/data/countries'
 import { FiChevronDown } from 'react-icons/fi'
@@ -36,6 +36,8 @@ export default function Login() {
   const [resendSuccess, setResendSuccess] = useState('')
   const [selectedCountry, setSelectedCountry] = useState(countries[0])
   const [isCountrySelectorOpen, setIsCountrySelectorOpen] = useState(false)
+  const [showMobileEntry, setShowMobileEntry] = useState(false)
+  const [verificationType, setVerificationType] = useState('login') // 'login', 'social-link'
 
   // Ultimate fix: Generate a unique ID for every single request
   const ensureRecaptcha = () => {
@@ -107,8 +109,14 @@ export default function Login() {
     try {
       const result = await loginWithGoogle()
       if (result.success) {
+        if (result.needsMobile) {
+          setVerificationType('social-link');
+          setShowMobileEntry(true);
+          setIdentifier(''); // Clear for phone entry
+          setLoading(false);
+          return;
+        }
         console.log('Google login successful, redirecting to dashboard...');
-        // Force redirect to ensure state is fresh
         window.location.href = '/dashboard';
       }
     } catch (err) {
@@ -124,6 +132,13 @@ export default function Login() {
     try {
       const result = await loginWithTwitter()
       if (result.success) {
+        if (result.needsMobile) {
+          setVerificationType('social-link');
+          setShowMobileEntry(true);
+          setIdentifier(''); // Clear for phone entry
+          setLoading(false);
+          return;
+        }
         console.log('Twitter login successful, redirecting to dashboard...');
         window.location.href = '/dashboard';
       }
@@ -145,6 +160,12 @@ export default function Login() {
         setError('Please enter a valid 6-digit OTP')
         setLoading(false)
         return
+      }
+
+      if (verificationType === 'social-link') {
+        await verifyMobileLinkingOTP(confirmationResult, otp)
+        window.location.href = '/dashboard';
+        return;
       }
 
       if (isMobile && confirmationResult) {
@@ -415,6 +436,42 @@ export default function Login() {
     }
   }
 
+  const handleSendMobileVerify = async (e) => {
+    e.preventDefault()
+    if (!identifier || identifier.length < 5) {
+      setError('Please enter a valid mobile number')
+      return
+    }
+
+    setError('')
+    setSendingOTP(true)
+
+    try {
+      let sanitizedPhone = identifier.replace(/[^\d+]/g, '');
+      if (!sanitizedPhone.startsWith('+')) {
+        sanitizedPhone = `${selectedCountry.dialCode}${sanitizedPhone}`;
+      }
+
+      const appVerifier = ensureRecaptcha();
+      if (!appVerifier) throw new Error('Security check failed. Please refresh the page.');
+
+      const result = await sendMobileLinkingOTP(sanitizedPhone, appVerifier);
+      setConfirmationResult(result);
+      setShowOTP(true);
+      setCountdown(60);
+    } catch (err) {
+      setError(err.message || 'Failed to send verification code');
+    } finally {
+      setSendingOTP(false)
+    }
+  }
+
+  const goBackFromMobileEntry = () => {
+    setShowMobileEntry(false)
+    setVerificationType('login')
+    setError('')
+  }
+
   const goBackToIdentifier = () => {
     setShowOTP(false)
     setOtp('')
@@ -426,7 +483,173 @@ export default function Login() {
     <main className="min-h-screen bg-gray-50 dark:bg-gray-950 flex items-center justify-center p-4">
       <div className="w-full max-w-md bg-white dark:bg-gray-900 rounded-2xl shadow-xl border border-gray-100 dark:border-gray-800 overflow-hidden transform transition-all">
         <div className="p-6 lg:p-8">
-          {!showOTP ? (
+          {showOTP ? (
+            /* OTP Form Section */
+            <>
+              <div className="mb-8">
+                <button
+                  onClick={goBackToIdentifier}
+                  className="mb-4 flex items-center text-sm font-semibold text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 transition-colors"
+                >
+                  <FiArrowLeft className="w-4 h-4 mr-1" />
+                  Back to {verificationType === 'social-link' ? 'profile completion' : 'login'}
+                </button>
+                <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
+                  Verify Code
+                </h2>
+                <p className="text-gray-500 dark:text-gray-400">
+                  We sent a code to <span className="font-bold text-gray-900 dark:text-white">{identifier}</span>
+                </p>
+              </div>
+
+              {error && (
+                <div className="mb-6 p-4 bg-red-50 dark:bg-red-900/20 border-l-4 border-red-500 rounded-r-lg">
+                  <p className="text-sm text-red-700 dark:text-red-400">{error}</p>
+                </div>
+              )}
+
+              <form onSubmit={handleVerifyOTP} className="space-y-6">
+                <div>
+                  <div className="relative group">
+                    <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                      <FiKey className="h-5 w-5 text-gray-400 group-focus-within:text-indigo-500" />
+                    </div>
+                    <input
+                      type="text"
+                      id="otp"
+                      name="otp"
+                      value={otp}
+                      onChange={handleOTPChange}
+                      required
+                      maxLength={6}
+                      autoFocus
+                      className="w-full pl-12 pr-4 py-4 bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-2xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 dark:text-white transition-all text-2xl tracking-[0.5em] font-mono font-bold"
+                      placeholder="000000"
+                    />
+                  </div>
+                  <div className="flex items-center justify-between mt-4">
+                    <p className="text-xs text-gray-500 uppercase tracking-widest font-bold">
+                      6-digit code
+                    </p>
+                    {countdown > 0 ? (
+                      <span className="text-xs font-bold text-gray-400">
+                        Resend in {countdown}s
+                      </span>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={handleResendOTP}
+                        disabled={sendingOTP}
+                        className="text-xs font-bold text-indigo-600 hover:text-indigo-700 disabled:text-gray-300 transition-colors"
+                      >
+                        {sendingOTP ? 'Sending...' : 'Resend Code'}
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={loading || !otp || otp.length !== 6}
+                  className="w-full px-4 py-4 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400 text-white font-bold rounded-2xl transition-all shadow-lg active:scale-[0.98]"
+                >
+                  {loading ? (
+                    <span className="flex items-center justify-center">
+                      <ImSpinner2 className="animate-spin -ml-1 mr-2 h-5 w-5 text-white" />
+                      Verifying...
+                    </span>
+                  ) : (
+                    'Verify & Finish'
+                  )}
+                </button>
+              </form>
+            </>
+          ) : showMobileEntry ? (
+            /* Mobile Entry Section (for Social Linking) */
+            <>
+              <div className="mb-8">
+                <button
+                  onClick={goBackFromMobileEntry}
+                  className="mb-4 flex items-center text-sm font-semibold text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 transition-colors"
+                >
+                  <FiArrowLeft className="w-4 h-4 mr-1" />
+                  Cancel
+                </button>
+                <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
+                  Complete Profile
+                </h2>
+                <p className="text-sm text-gray-500 dark:text-gray-400">
+                  Almost there! Please verify your mobile number to complete your registration.
+                </p>
+              </div>
+
+              {error && (
+                <div className="mb-6 p-4 bg-red-50 dark:bg-red-900/20 border-l-4 border-red-500 rounded-r-lg">
+                  <p className="text-sm text-red-700 dark:text-red-400 font-medium">{error}</p>
+                </div>
+              )}
+
+              <form onSubmit={handleSendMobileVerify} className="space-y-4">
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                    Mobile Number
+                  </label>
+                  <div className="flex">
+                    <div className="relative">
+                      <button
+                        type="button"
+                        onClick={() => setIsCountrySelectorOpen(!isCountrySelectorOpen)}
+                        className="flex items-center gap-1 px-3 py-3 bg-gray-50 dark:bg-gray-800/50 border border-r-0 border-gray-200 dark:border-gray-700 rounded-l-xl hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors h-full"
+                      >
+                        <span className="text-sm font-bold text-indigo-600 dark:text-indigo-400">{selectedCountry.dialCode}</span>
+                        <FiChevronDown className={`w-3 h-3 text-gray-400 transition-transform ${isCountrySelectorOpen ? 'rotate-180' : ''}`} />
+                      </button>
+                      {isCountrySelectorOpen && (
+                        <div className="absolute z-50 mt-1 w-48 bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-xl shadow-2xl max-h-60 overflow-y-auto">
+                          {countries.map((country) => (
+                            <button
+                              key={country.code}
+                              type="button"
+                              onClick={() => { setSelectedCountry(country); setIsCountrySelectorOpen(false); }}
+                              className="w-full flex items-center justify-between px-4 py-2 text-left text-sm hover:bg-indigo-50 dark:hover:bg-indigo-900/20 text-gray-700 dark:text-gray-300 transition-colors"
+                            >
+                              <span>{country.name}</span>
+                              <span className="text-gray-400 font-mono text-xs">{country.dialCode}</span>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    <input
+                      type="text"
+                      id="mobile-verify"
+                      value={identifier}
+                      onChange={handleIdentifierChange}
+                      required
+                      autoFocus
+                      className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-r-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 dark:text-white transition-all"
+                      placeholder="10-digit mobile number"
+                    />
+                  </div>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={sendingOTP || !identifier}
+                  className="w-full px-4 py-3 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400 text-white font-bold rounded-xl transition-all shadow-lg active:scale-[0.98]"
+                >
+                  {sendingOTP ? (
+                    <span className="flex items-center justify-center">
+                      <ImSpinner2 className="animate-spin -ml-1 mr-2 h-5 w-5 text-white" />
+                      Sending OTP...
+                    </span>
+                  ) : (
+                    'Verify & Continue'
+                  )}
+                </button>
+              </form>
+            </>
+          ) : (
             /* Main Login Form */
             <>
               <div className="mb-4 text-center">
@@ -721,90 +944,9 @@ export default function Login() {
                 </div>
               </div>
             </>
-          ) : (
-            /* OTP Form Section */
-            <>
-              <div className="mb-8">
-                <button
-                  onClick={goBackToIdentifier}
-                  className="mb-4 flex items-center text-sm font-semibold text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 transition-colors"
-                >
-                  <FiArrowLeft className="w-4 h-4 mr-1" />
-                  Back to login
-                </button>
-                <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
-                  Verify Code
-                </h2>
-                <p className="text-gray-500 dark:text-gray-400">
-                  We sent a code to <span className="font-bold text-gray-900 dark:text-white">{identifier}</span>
-                </p>
-              </div>
-
-              {error && (
-                <div className="mb-6 p-4 bg-red-50 dark:bg-red-900/20 border-l-4 border-red-500 rounded-r-lg">
-                  <p className="text-sm text-red-700 dark:text-red-400">{error}</p>
-                </div>
-              )}
-
-              <form onSubmit={handleVerifyOTP} className="space-y-6">
-                <div>
-                  <div className="relative group">
-                    <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                      <FiKey className="h-5 w-5 text-gray-400 group-focus-within:text-indigo-500" />
-                    </div>
-                    <input
-                      type="text"
-                      id="otp"
-                      name="otp"
-                      value={otp}
-                      onChange={handleOTPChange}
-                      required
-                      maxLength={6}
-                      autoFocus
-                      className="w-full pl-12 pr-4 py-4 bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-2xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 dark:text-white transition-all text-2xl tracking-[0.5em] font-mono font-bold"
-                      placeholder="000000"
-                    />
-                  </div>
-                  <div className="flex items-center justify-between mt-4">
-                    <p className="text-xs text-gray-500 uppercase tracking-widest font-bold">
-                      6-digit code
-                    </p>
-                    {countdown > 0 ? (
-                      <span className="text-xs font-bold text-gray-400">
-                        Resend in {countdown}s
-                      </span>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={handleResendOTP}
-                        disabled={sendingOTP}
-                        className="text-xs font-bold text-indigo-600 hover:text-indigo-700 disabled:text-gray-300 transition-colors"
-                      >
-                        {sendingOTP ? 'Sending...' : 'Resend Code'}
-                      </button>
-                    )}
-                  </div>
-                </div>
-
-                <button
-                  type="submit"
-                  disabled={loading || !otp || otp.length !== 6}
-                  className="w-full px-4 py-4 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400 text-white font-bold rounded-2xl transition-all shadow-lg active:scale-[0.98]"
-                >
-                  {loading ? (
-                    <span className="flex items-center justify-center">
-                      <ImSpinner2 className="animate-spin -ml-1 mr-2 h-5 w-5 text-white" />
-                      Verifying...
-                    </span>
-                  ) : (
-                    'Verify & Sign In'
-                  )}
-                </button>
-              </form>
-            </>
           )}
         </div>
-      </div >
+      </div>
 
       {/* Theme Toggle Button */}
       <button
@@ -821,6 +963,6 @@ export default function Login() {
       <div id="recaptcha-wrapper">
         <div id="recaptcha-container"></div>
       </div>
-    </main >
+    </main>
   )
 }

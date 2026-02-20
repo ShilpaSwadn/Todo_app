@@ -8,10 +8,13 @@ import {
   updateProfile as updateFirebaseProfile,
   RecaptchaVerifier,
   signInWithCustomToken,
-  signInWithPhoneNumber
+  signInWithPhoneNumber,
+  linkWithPhoneNumber
 } from "firebase/auth";
-import { auth, googleProvider, twitterProvider } from "../firebase";
+import { doc, getDoc, setDoc, runTransaction, collection, query, where, getDocs } from "firebase/firestore";
+import { auth, db, googleProvider, twitterProvider } from "../firebase";
 import api from '@/lib/api/client'
+import { parsePhoneNumberFromString } from 'libphonenumber-js'
 import { saveAuthData, clearAuthData } from '@/lib/auth/client'
 
 const ensureFirebase = () => {
@@ -29,11 +32,25 @@ export const loginWithGoogle = async () => {
 
     console.log("Google Login Success:", user.email, "UID:", user.uid);
 
-    // For social login, we sync directly and allow immediate access
-    const { userData, finalToken } = await handleAuthSync(user);
-    saveAuthData(userData, finalToken);
+    // Check if user exists in our DB and has mobile
+    try {
+      const response = await api.post('/auth/check-status', {
+        identifier: user.email.trim().toLowerCase()
+      });
 
-    return { success: true, user: userData };
+      if (response.success && response.exists && response.mobileNumber) {
+        // Already has mobile, proceed to sync
+        const { userData, finalToken } = await handleAuthSync(user);
+        saveAuthData(userData, finalToken);
+        return { success: true, user: userData };
+      }
+    } catch (e) {
+      console.warn("Check status failed during google login, possibly new user:", e.message);
+    }
+
+    // Either user doesn't exist in DB yet, or doesn't have a mobile number
+    // We need to collect and verify mobile number
+    return { success: true, needsMobile: true };
   } catch (error) {
     console.error("Google Login Error:", error);
     if (error.code === 'auth/popup-closed-by-user') {
@@ -52,11 +69,26 @@ export const loginWithTwitter = async () => {
 
     console.log("Twitter Login Success:", user.email || user.uid);
 
-    // X/Twitter users sync directly and allow immediate access
-    const { userData, finalToken } = await handleAuthSync(user);
-    saveAuthData(userData, finalToken);
+    // Check if user has an email and check DB status
+    if (user.email) {
+      try {
+        const response = await api.post('/auth/check-status', {
+          identifier: user.email.trim().toLowerCase()
+        });
 
-    return { success: true, user: userData };
+        if (response.success && response.exists && response.mobileNumber) {
+          // Already has mobile, proceed to sync
+          const { userData, finalToken } = await handleAuthSync(user);
+          saveAuthData(userData, finalToken);
+          return { success: true, user: userData };
+        }
+      } catch (e) {
+        console.warn("Check status failed during twitter login:", e.message);
+      }
+    }
+
+    // Twitter users often don't have email/phone, so we definitely want to collect details if missing
+    return { success: true, needsMobile: true };
   } catch (error) {
     console.error("Twitter Login Error:", error);
     if (error.code === 'auth/popup-closed-by-user') {
@@ -89,7 +121,20 @@ export const register = async (userData) => {
     }
 
 
-    // 2. Create user in Firebase Auth
+    // 2. Normalize and check uniqueness in Firestore (Composite: Email + Phone)
+    const phoneNumberParsed = parsePhoneNumberFromString(mobileNumber, 'IN');
+    const formattedPhone = phoneNumberParsed ? phoneNumberParsed.format('E164') : mobileNumber;
+    const combinationId = `${email.trim().toLowerCase()}_${formattedPhone}`;
+
+    console.log("Checking composite uniqueness in Firestore for:", combinationId);
+    const combinationRef = doc(db, 'user_combinations', combinationId);
+    const combinationSnap = await getDoc(combinationRef);
+
+    if (combinationSnap.exists()) {
+      throw new Error("This combination of email and mobile number is already registered.");
+    }
+
+    // 3. Create user in Firebase Auth
     console.log("Uniqueness verified. Creating Firebase user...");
     const userCredential = await createUserWithEmailAndPassword(auth, email, password);
     const user = userCredential.user;
@@ -98,27 +143,39 @@ export const register = async (userData) => {
       uid: user.uid,
       email: user.email,
       displayName: `${firstName} ${lastName}`.trim(),
-      mobileNumber: mobileNumber
     });
 
-    // 3. Set display name in Firebase
+    // 4. Set display name in Firebase Auth
     await updateFirebaseProfile(user, {
       displayName: `${firstName} ${lastName}`.trim(),
     });
 
-    // 4. Update Mobile in Firebase and Postgres (via Admin SDK)
-    const mobileResponse = await api.post('/auth/set-mobile', {
-      uid: user.uid,
-      mobileNumber: mobileNumber.trim()
+    // 5. Store user data in Temp collection (Atomically)
+    await runTransaction(db, async (transaction) => {
+      // Re-verify combination in transaction for safety
+      const combDoc = await transaction.get(combinationRef);
+      if (combDoc.exists()) {
+        throw new Error("This combination was just registered by another user.");
+      }
+
+      // Store in temp_users until verified
+      const tempUserRef = doc(db, 'temp_users', user.uid);
+      transaction.set(tempUserRef, {
+        uid: user.uid,
+        email: email.trim().toLowerCase(),
+        mobileNumber: formattedPhone,
+        firstName,
+        lastName: lastName || '',
+        displayName: `${firstName} ${lastName}`.trim(),
+        createdAt: new Date(),
+        status: 'pending_verification'
+      });
     });
 
-    if (mobileResponse.success === false) {
-      // If setting mobile number fails (and it's not a handled "duplicate" case which now returns success: true)
-      // we should probably stop here to satisfy "without setting mobile number it should not go to send magic link"
-      throw new Error(mobileResponse.message || "Something went wrong while setting up your mobile number. Please try again.");
-    }
+    // 6. Skip PostgreSQL sync for now (Wait for verification)
+    console.log("Registration complete. Waiting for email verification...");
 
-    // 5. Send email verification
+    // 7. Send email verification
     await sendEmailVerification(user);
 
     // 6. Sign out
@@ -446,6 +503,45 @@ export const verifyMobileOTP = async (confirmationResult, otp) => {
       throw new Error("OTP has expired. Please request a new one.");
     }
     throw new Error(error.message || "Failed to verify mobile OTP");
+  }
+};
+
+// Send OTP to Mobile for Linking (Social Login Verification)
+export const sendMobileLinkingOTP = async (phoneNumber, appVerifier) => {
+  ensureFirebase();
+  if (!auth.currentUser) throw new Error("Authentication session lost. Please try logging in again.");
+  try {
+    const confirmationResult = await linkWithPhoneNumber(auth.currentUser, phoneNumber, appVerifier);
+    return confirmationResult;
+  } catch (error) {
+    console.error("Error sending linking OTP:", error);
+    if (error.code === 'auth/credential-already-in-use') {
+      throw new Error("This mobile number is already linked to another account.");
+    }
+    throw error;
+  }
+};
+
+// Verify Mobile OTP and sync (for Linking flow)
+export const verifyMobileLinkingOTP = async (confirmationResult, otp) => {
+  ensureFirebase();
+  try {
+    const result = await confirmationResult.confirm(otp);
+    const user = result.user;
+
+    // Sync user with PostgreSQL
+    const { userData, finalToken } = await handleAuthSync(user);
+
+    // Save auth data
+    saveAuthData(userData, finalToken);
+
+    return userData;
+  } catch (error) {
+    console.error("Verify Linking OTP Error:", error);
+    if (error.code === 'auth/invalid-verification-code') {
+      throw new Error("Invalid OTP code. Please check and try again.");
+    }
+    throw error;
   }
 };
 
