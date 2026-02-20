@@ -16,6 +16,9 @@ const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0
 const auth = getAuth(app);
 const db = getFirestore(app);
 const googleProvider = new GoogleAuthProvider();
+googleProvider.setCustomParameters({ prompt: 'select_account' });
+
 const twitterProvider = new TwitterAuthProvider();
+twitterProvider.setCustomParameters({ force_login: 'true' });
 
 export { auth, db, googleProvider, twitterProvider };
