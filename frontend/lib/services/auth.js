@@ -122,8 +122,10 @@ export const register = async (userData) => {
 
 
     // 2. Normalize and check uniqueness in Firestore (Composite: Email + Phone)
-    const phoneNumberParsed = parsePhoneNumberFromString(mobileNumber, 'IN');
-    const formattedPhone = phoneNumberParsed ? phoneNumberParsed.format('E164') : mobileNumber;
+    // Parse with no default country since mobileNumber already has a country prefix (e.g., +1...)
+    const phoneNumberParsed = parsePhoneNumberFromString(mobileNumber);
+    // Use .number property (returns E.164 format like "+17806866468") - NOT .format('E164')
+    const formattedPhone = phoneNumberParsed ? phoneNumberParsed.number : mobileNumber;
     const combinationId = `${email.trim().toLowerCase()}_${formattedPhone}`;
 
     console.log("Checking composite uniqueness in Firestore for:", combinationId);

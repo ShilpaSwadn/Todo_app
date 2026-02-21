@@ -26,11 +26,12 @@ class AuthService {
     let finalMobileNumber = profileData.mobileNumber || phone_number || null;
     let finalFirstName = profileData.firstName || name?.split(' ')[0] || 'User';
     let finalLastName = profileData.lastName || name?.split(' ').slice(1).join(' ') || null;
+    let tempUserSnap;
 
     if (email_verified) {
       const adminDb = (await import('../config/firebase-admin.js')).adminDb;
       const tempUserRef = adminDb.collection('temp_users').doc(uid);
-      const tempUserSnap = await tempUserRef.get();
+      tempUserSnap = await tempUserRef.get();
 
       if (tempUserSnap.exists) {
         const data = tempUserSnap.data();
@@ -88,7 +89,23 @@ class AuthService {
       mobileNumber: finalMobileNumber
     };
 
-    const user = await User.sync(userData);
+    // 2. PRIMARY ACCOUNT REDIRECTION
+    if (finalMobileNumber) {
+      const primaryUser = await User.findPrimaryByMobileNumber(finalMobileNumber);
+      if (primaryUser && primaryUser.firebase_uid !== uid) {
+        console.log(`Redirecting login: UID ${uid} -> Primary UID ${primaryUser.firebase_uid}`);
+        const customToken = await this.createCustomToken(primaryUser.firebase_uid);
+        return {
+          ...primaryUser,
+          redirectToPrimary: true,
+          customToken
+        };
+      }
+    }
+
+    const user = await User.sync(userData, {
+      isPrimaryExplicit: tempUserSnap?.exists ? tempUserSnap.data().isPrimary : false
+    });
     return user;
   }
 
@@ -118,12 +135,70 @@ class AuthService {
   }
 
   /**
+   * Login with Email and Password
+   */
+  async loginWithEmail(email, password) {
+    try {
+      // 1. Authenticate with Firebase using REST API (Admin SDK doesn't support password check)
+      const apiKey = process.env.NEXT_PUBLIC_FIREBASE_API_KEY;
+      const url = `https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${apiKey}`;
+
+      const response = await fetch(url, {
+        method: 'POST',
+        body: JSON.stringify({
+          email,
+          password,
+          returnSecureToken: true
+        }),
+        headers: { 'Content-Type': 'application/json' }
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error?.message || 'Authentication failed');
+      }
+
+      // 2. Verify the ID Token and sync/get user
+      const decodedToken = await this.verifyFirebaseToken(data.idToken);
+      const user = await this.syncUser(decodedToken);
+
+      return {
+        user,
+        token: data.idToken
+      };
+    } catch (error) {
+      console.error('Error in loginWithEmail:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Login with Mobile Number and Password
+   */
+  async loginWithMobile(mobileNumber, password) {
+    try {
+      // 1. Identify the primary account for this mobile number
+      const primaryUser = await User.findPrimaryByMobileNumber(mobileNumber);
+
+      if (!primaryUser || !primaryUser.email) {
+        throw new Error('No primary account found for this mobile number. Please login with email or register.');
+      }
+
+      // 2. Perform login using the primary account's email
+      return await this.loginWithEmail(primaryUser.email, password);
+    } catch (error) {
+      console.error('Error in loginWithMobile:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Check if email or phone is already taken in Firebase.
    * This is used during registration to enforce uniqueness at the Auth level.
    */
   async checkFirebaseUniqueness(email, mobileNumber) {
     let emailExists = false;
-    let phoneExists = false;
 
     if (email) {
       try {
@@ -134,14 +209,9 @@ class AuthService {
       }
     }
 
-    if (mobileNumber) {
-      try {
-        await adminAuth.getUserByPhoneNumber(mobileNumber);
-        phoneExists = true;
-      } catch (error) {
-        // user not found
-      }
-    }
+    // Note: We don't throw for mobileNumber uniqueness here anymore 
+    // because we want to allow multiple accounts with the same mobile number.
+    // The uniqueness is handled by our composite key logic.
 
     if (emailExists) throw new Error('Email already registered in system.');
 
