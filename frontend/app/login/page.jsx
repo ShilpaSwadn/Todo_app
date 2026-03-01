@@ -69,16 +69,7 @@ export default function Login() {
     return () => clearInterval(timer);
   }, [countdown]);
 
-  // Auto-hide error and success messages after 5 seconds
-  useEffect(() => {
-    if (error || resendSuccess) {
-      const timer = setTimeout(() => {
-        setError('');
-        setResendSuccess('');
-      }, 5000);
-      return () => clearTimeout(timer);
-    }
-  }, [error, resendSuccess]);
+
 
   const handleIdentifierChange = (e) => {
     const value = e.target.value

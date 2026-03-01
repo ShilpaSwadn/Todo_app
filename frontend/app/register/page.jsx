@@ -68,15 +68,7 @@ export default function Register() {
     return () => clearInterval(timer);
   }, [countdown]);
 
-  // Auto-hide error message after 5 seconds
-  useEffect(() => {
-    if (error) {
-      const timer = setTimeout(() => {
-        setError('');
-      }, 5000);
-      return () => clearTimeout(timer);
-    }
-  }, [error]);
+
 
   const handleChange = (e) => {
     const { name, value } = e.target
@@ -165,22 +157,31 @@ export default function Register() {
         confirmPassword: formData.confirmPassword
       })
 
+      // STOPS SUCCESS REDIRECT if account already exists
+      if (!response.success || response.message?.includes('already registered')) {
+        throw new Error(response.message || 'Registration failed');
+      }
+
       setSuccessMsg(response.message || 'Registration successful! Please check your email for the activation link.')
       setResendCountdown(60)
       setLoading(false)
     } catch (err) {
+      console.error('Registration submit error:', err);
       let friendlyMessage = err.message || 'We could not create your account. Please try again.';
 
-      if (err.message?.includes('email-already-in-use')) {
-        friendlyMessage = 'This email is already in use. Please try logging in instead.';
+      // Map server-side errors to user-friendly messages
+      if (err.message?.includes('already registered') || err.message?.includes('already in use')) {
+        friendlyMessage = 'This email is already registered. Please try logging in instead.';
       } else if (err.message?.includes('weak-password')) {
         friendlyMessage = 'Your password is too weak. Please use at least 6 characters.';
-      } else if (err.message?.includes('network-request-failed')) {
+      } else if (err.message?.includes('network') || err.message?.includes('fetch')) {
         friendlyMessage = 'Connection issue. Please check your internet and try again.';
       }
 
       setError(friendlyMessage);
       setLoading(false);
+      // HARD FIX: Clear successMsg to ensure we stay on the registration form
+      setSuccessMsg('');
     }
   }
 
@@ -290,7 +291,7 @@ export default function Register() {
               {loading ? (
                 <ImSpinner2 className="animate-spin h-5 w-5" />
               ) : resendCountdown > 0 ? (
-                `Wait ${resendCountdown}s`
+                `Wait ${resendCountdown}s for send code`
               ) : (
                 'Resend Code'
               )}
