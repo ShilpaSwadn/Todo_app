@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { adminAuth } from '@/lib/server/config/firebase-admin.js';
+import User from '@/lib/server/models/User.js';
 import authService from '@/lib/server/services/authService.js';
 import crypto from 'crypto';
 
@@ -24,7 +25,6 @@ export async function POST(request) {
     }
 
     // 2. Verify Hash (Stateless)
-    // Recompute signature: data = email + otp + expiry
     const data = `${cleanIdentifier}.${otp}.${expiresAt}`;
     const secret = process.env.JWT_SECRET || 'fallback-secret';
     const computedHash = crypto.createHmac('sha256', secret).update(data).digest('hex');
@@ -33,31 +33,45 @@ export async function POST(request) {
       return NextResponse.json({ success: false, message: 'Invalid OTP' }, { status: 401 });
     }
 
-    // 3. Find User in Firebase
-    let userRecord;
-    try {
-      if (cleanIdentifier.includes('@')) {
-        userRecord = await adminAuth.getUserByEmail(cleanIdentifier);
-      } else {
-        try {
-          userRecord = await adminAuth.getUserByPhoneNumber(cleanIdentifier);
-        } catch (e) {
-          userRecord = await adminAuth.getUserByPhoneNumber(`+91${cleanIdentifier}`);
-        }
-      }
-    } catch (e) {
-      return NextResponse.json({ success: false, message: 'No account found in Firebase for this identifier.' }, { status: 404 });
+    // 3. Find User in local PostgreSQL
+    const localUser = await User.findByEmail(cleanIdentifier);
+    if (!localUser) {
+      return NextResponse.json({ success: false, message: 'No account found for this email.' }, { status: 404 });
     }
 
-    // 4. Create Firebase Custom Token
-    const customToken = await authService.createCustomToken(userRecord.uid);
+    // 4. Ensure user exists in Firebase Auth for token generation
+    let firebaseUid = localUser.firebase_uid;
+    if (!firebaseUid) {
+      try {
+        const userRecord = await adminAuth.getUserByEmail(cleanIdentifier);
+        firebaseUid = userRecord.uid;
+        await User.updateFirebaseUid(localUser.id, firebaseUid);
+      } catch (e) {
+        // Create in Firebase since we use it for Auth
+        const newUser = await adminAuth.createUser({
+          email: cleanIdentifier,
+          displayName: `${localUser.first_name} ${localUser.last_name || ''}`.trim(),
+          emailVerified: true // They just verified via OTP
+        });
+        firebaseUid = newUser.uid;
+        await User.updateFirebaseUid(localUser.id, firebaseUid);
+      }
+    }
+
+    // 5. Update local account status
+    if (!localUser.account_active) {
+      await User.updateAccountActive(localUser.id, true);
+    }
+
+    // 6. Create Firebase Custom Token
+    const customToken = await authService.createCustomToken(firebaseUid);
 
     return NextResponse.json({
       success: true,
       message: 'OTP verified successfully.',
       data: {
         customToken,
-        uid: userRecord.uid
+        uid: firebaseUid
       }
     });
 

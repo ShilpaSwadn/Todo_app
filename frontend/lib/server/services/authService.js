@@ -1,5 +1,6 @@
 import User from '../models/User.js';
 import { adminAuth } from '../config/firebase-admin.js';
+// Service for handling authentication logic with Firebase and PostgreSQL
 
 class AuthService {
   /**
@@ -16,130 +17,74 @@ class AuthService {
   }
 
   /**
+   * Register a new user.
+   * Creates user in Firebase Auth and profile in PostgreSQL.
+   */
+  async register(userData) {
+    const { email, password, firstName, lastName, mobileNumber } = userData;
+
+    // 1. Check uniqueness
+    await this.checkUniqueness(email, mobileNumber);
+
+    // 2. Create in Firebase Auth
+    // Note: We don't pass phoneNumber here because Firebase enforces global uniqueness on it.
+    // Our application allows multiple accounts per mobile number (each with a unique email).
+    const firebaseUser = await adminAuth.createUser({
+      email,
+      password,
+      displayName: `${firstName} ${lastName || ''}`.trim(),
+    });
+
+    // 3. Create in local database (PostgreSQL)
+    const user = await User.create({
+      email,
+      firstName,
+      lastName,
+      mobileNumber,
+      firebaseUid: firebaseUser.uid
+    });
+
+    // 4. Send Verification Email (Magic Link)
+    try {
+      const { sendVerificationEmail } = await import('../services/emailService.js');
+      const link = await adminAuth.generateEmailVerificationLink(email);
+      await sendVerificationEmail(email, link);
+    } catch (emailError) {
+      console.warn('User created but verification email failed to send:', emailError);
+      // We don't throw here so the user can see the "Success" screen and try the resend button
+    }
+
+    return user;
+  }
+
+  /**
    * Synchronizes Firebase user with local database.
-   * Only called after successful token verification.
+   * Only called after successful token verification (from Social or OTP login).
    */
   async syncUser(tokenData, profileData = {}) {
-    const { uid, email, email_verified, phone_number, name } = tokenData;
+    const { uid, email, phone_number, name } = tokenData;
 
-    // 1. If user is verified, check if we need to promote them from temp_users
-    let finalMobileNumber = profileData.mobileNumber || phone_number || null;
-    let finalFirstName = profileData.firstName || name?.split(' ')[0] || 'User';
-    let finalLastName = profileData.lastName || name?.split(' ').slice(1).join(' ') || null;
-    let tempUserSnap;
-
-    if (email_verified) {
-      const adminDb = (await import('../config/firebase-admin.js')).adminDb;
-      const tempUserRef = adminDb.collection('temp_users').doc(uid);
-      tempUserSnap = await tempUserRef.get();
-
-      if (tempUserSnap.exists) {
-        const data = tempUserSnap.data();
-        console.log(`Promoting user ${uid} from temp to main storage...`);
-
-        finalMobileNumber = data.mobileNumber;
-        finalFirstName = data.firstName;
-        finalLastName = data.lastName;
-
-        // Move to final collections atomically
-        const batch = adminDb.batch();
-
-        // Final Profile
-        const userRef = adminDb.collection('users').doc(uid);
-        batch.set(userRef, {
-          uid,
-          email: email.toLowerCase(),
-          mobileNumber: finalMobileNumber,
-          firstName: finalFirstName,
-          lastName: finalLastName,
-          displayName: `${finalFirstName} ${finalLastName}`.trim(),
-          createdAt: data.createdAt || new Date(),
-          updatedAt: new Date(),
-          verifiedAt: new Date()
-        });
-
-        // Combination Lock
-        const combinationId = `${email.toLowerCase()}_${finalMobileNumber}`;
-        const combinationRef = adminDb.collection('user_combinations').doc(combinationId);
-        batch.set(combinationRef, {
-          email: email.toLowerCase(),
-          mobileNumber: finalMobileNumber,
-          uid: uid,
-          createdAt: data.createdAt || new Date()
-        });
-
-        // Delete temp data
-        batch.delete(tempUserRef);
-
-        await batch.commit();
-        console.log(`Promotion complete for ${uid}.`);
-      }
-    }
-
-    // 2. Synchronize with PostgreSQL (only if verified)
-    if (!email_verified) {
-      throw new Error('Please verify your email address before continuing.');
-    }
-
+    // Synchronize with PostgreSQL
     const userData = {
       uid,
       email: email || '',
-      firstName: finalFirstName,
-      lastName: finalLastName,
-      mobileNumber: finalMobileNumber
+      firstName: profileData.firstName || name?.split(' ')[0] || 'User',
+      lastName: profileData.lastName || name?.split(' ').slice(1).join(' ') || null,
+      mobileNumber: profileData.mobileNumber || phone_number || null
     };
 
-    // 2. PRIMARY ACCOUNT REDIRECTION
-    if (finalMobileNumber) {
-      const primaryUser = await User.findPrimaryByMobileNumber(finalMobileNumber);
-      if (primaryUser && primaryUser.firebase_uid !== uid) {
-        console.log(`Redirecting login: UID ${uid} -> Primary UID ${primaryUser.firebase_uid}`);
-        const customToken = await this.createCustomToken(primaryUser.firebase_uid);
-        return {
-          ...primaryUser,
-          redirectToPrimary: true,
-          customToken
-        };
-      }
-    }
+    const user = await User.sync(userData);
 
-    const user = await User.sync(userData, {
-      isPrimaryExplicit: tempUserSnap?.exists ? tempUserSnap.data().isPrimary : false
-    });
     return user;
-  }
-
-  /**
-   * Get user from database by ID
-   */
-  async getUserById(id) {
-    const user = await User.findById(id);
-    if (!user) throw new Error('User not found');
-    return user;
-  }
-
-  /**
-   * Get user from database by Firebase UID
-   */
-  async getUserByUid(uid) {
-    const user = await User.findByFirebaseUid(uid);
-    if (!user) throw new Error('User not found');
-    return user;
-  }
-
-  /**
-   * Update user profile in database
-   */
-  async updateProfile(uid, updates) {
-    return await User.update(uid, updates);
   }
 
   /**
    * Login with Email and Password
+   * Uses Firebase REST API because Admin SDK doesn't support password check.
    */
   async loginWithEmail(email, password) {
     try {
-      // 1. Authenticate with Firebase using REST API (Admin SDK doesn't support password check)
+      // 1. Authenticate with Firebase using REST API
       const apiKey = process.env.NEXT_PUBLIC_FIREBASE_API_KEY;
       const url = `https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${apiKey}`;
 
@@ -159,13 +104,16 @@ class AuthService {
         throw new Error(data.error?.message || 'Authentication failed');
       }
 
-      // 2. Verify the ID Token and sync/get user
+      // 2. Verify the ID Token and sync/get user from PG
       const decodedToken = await this.verifyFirebaseToken(data.idToken);
       const user = await this.syncUser(decodedToken);
 
+      // 3. Generate a Custom Token for the client
+      const customToken = await this.createCustomToken(user.firebase_uid);
+
       return {
         user,
-        token: data.idToken
+        token: customToken
       };
     } catch (error) {
       console.error('Error in loginWithEmail:', error);
@@ -178,14 +126,18 @@ class AuthService {
    */
   async loginWithMobile(mobileNumber, password) {
     try {
-      // 1. Identify the primary account for this mobile number
-      const primaryUser = await User.findPrimaryByMobileNumber(mobileNumber);
+      // 1. Identify the user by mobile number in PG (picks the first registered)
+      const primaryUser = await User.findByMobileNumber(mobileNumber);
 
-      if (!primaryUser || !primaryUser.email) {
-        throw new Error('No primary account found for this mobile number. Please login with email or register.');
+      if (!primaryUser) {
+        throw new Error('No account found for this mobile number. Please register first.');
       }
 
-      // 2. Perform login using the primary account's email
+      if (!primaryUser.email) {
+        throw new Error('This mobile account has no associated email for password login.');
+      }
+
+      // 2. Use the same logic as loginWithEmail
       return await this.loginWithEmail(primaryUser.email, password);
     } catch (error) {
       console.error('Error in loginWithMobile:', error);
@@ -194,29 +146,50 @@ class AuthService {
   }
 
   /**
-   * Check if email or phone is already taken in Firebase.
-   * This is used during registration to enforce uniqueness at the Auth level.
+   * Check uniqueness in both Firebase and PostgreSQL
    */
-  async checkFirebaseUniqueness(email, mobileNumber) {
-    let emailExists = false;
+  async checkUniqueness(email, mobileNumber) {
+    // 1. Check PostgreSQL
+    if (email) {
+      const existingDbEmail = await User.findByEmail(email);
+      if (existingDbEmail) throw new Error('Email already registered.');
+    }
 
+    // 2. Check Firebase
     if (email) {
       try {
         await adminAuth.getUserByEmail(email.toLowerCase());
-        emailExists = true;
+        throw new Error('Email already exists in authentication system.');
       } catch (error) {
-        // user not found
+        if (error.code !== 'auth/user-not-found') throw error;
       }
     }
 
-    // Note: We don't throw for mobileNumber uniqueness here anymore 
-    // because we want to allow multiple accounts with the same mobile number.
-    // The uniqueness is handled by our composite key logic.
-
-    if (emailExists) throw new Error('Email already registered in system.');
-
     return true;
   }
+
+  /**
+   * Fetches a user from PostgreSQL by Firebase UID.
+   */
+  async getUserByUid(uid) {
+    const user = await User.findByFirebaseUid(uid);
+    if (!user) {
+      throw new Error('User not found');
+    }
+    return user;
+  }
+
+  /**
+   * Updates user profile in PostgreSQL.
+   */
+  async updateProfile(uid, updates) {
+    const user = await User.update(uid, updates);
+    if (!user) {
+      throw new Error('User not found');
+    }
+    return user;
+  }
+
 
   /**
    * Generates a Firebase Custom Token for a user UID.

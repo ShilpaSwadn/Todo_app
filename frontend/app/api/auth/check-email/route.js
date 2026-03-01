@@ -18,18 +18,11 @@ export async function POST(request) {
         const userResult = await query(checkUserSql, [targetEmail]);
 
         if (userResult.rows.length === 0) {
-            // Also check temp_users if you want to support users who haven't verified but forgot password
-            // However, usually reset is for fully active users.
-            const checkTempSql = 'SELECT uid FROM public.temp_users WHERE email = $1';
-            const tempResult = await query(checkTempSql, [targetEmail]);
-
-            if (tempResult.rows.length === 0) {
-                return NextResponse.json({
-                    success: false,
-                    registered: false,
-                    message: 'This email is not registered with us.'
-                }, { status: 404 });
-            }
+            return NextResponse.json({
+                success: false,
+                registered: false,
+                message: 'This email is not registered with us.'
+            }, { status: 404 });
         }
 
         return NextResponse.json({

@@ -8,8 +8,29 @@ const cleanPhoneNumber = (phone) => {
 
 class User {
   /**
+   * Create a new user record in PostgreSQL (Registration)
+   */
+  static async create(userData) {
+    const { email, firstName, lastName, mobileNumber, firebaseUid } = userData;
+    const targetMobile = cleanPhoneNumber(mobileNumber);
+    const firstNameVal = firstName || 'User';
+    const emailLower = email?.toLowerCase().trim();
+    const emailToInsert = emailLower && emailLower.length > 0 ? emailLower : null;
+
+    const sqlQuery = `
+      INSERT INTO public.users (email, first_name, last_name, mobile_number, firebase_uid, account_active)
+      VALUES ($1, $2, $3, $4, $5, $6)
+      RETURNING id, first_name, last_name, email, mobile_number, firebase_uid, account_active, created_at
+    `;
+
+    const values = [emailToInsert, firstNameVal, lastName || null, targetMobile, firebaseUid || null, false];
+    const result = await query(sqlQuery, values);
+
+    return result.rows[0];
+  }
+
+  /**
    * Sync a Firebase user to the PostgreSQL database.
-   * Handles linking existing accounts by Email or Mobile Number when using social login.
    */
   static async sync(userData) {
     const { uid, email, firstName, lastName, mobileNumber } = userData;
@@ -20,32 +41,34 @@ class User {
     // 1. Try to find an existing account to link with via UID
     let existingUser = await this.findByFirebaseUid(uid);
     if (existingUser) {
+      if (!existingUser.account_active) {
+        await this.updateAccountActive(existingUser.id, true);
+        existingUser.account_active = true;
+      }
       return existingUser;
     }
 
-    // 2. If not found by UID, check for identity conflict by Email (common for Social Login linking)
+    // 2. If not found by UID, check for identity conflict by Email
     if (emailLower) {
       existingUser = await this.findByEmail(emailLower);
       if (existingUser) {
         console.log(`Linking identity: Updating existing user ${existingUser.email} with new Firebase UID ${uid}`);
         await this.updateFirebaseUid(existingUser.id, uid);
-        existingUser.firebase_uid = uid;
-        return existingUser;
+        await this.updateAccountActive(existingUser.id, true);
+        return await this.findByFirebaseUid(uid);
       }
     }
 
-
-    // 4. If truly new, insert as a new record
-    // Use NULL for empty email to avoid unique constraint violation if email is not provided
+    // 3. If truly new, insert as a new record
     const emailToInsert = emailLower && emailLower.length > 0 ? emailLower : null;
 
     const sqlQuery = `
-      INSERT INTO public.users (firebase_uid, email, first_name, last_name, mobile_number)
-      VALUES ($1, $2, $3, $4, $5)
-      RETURNING id, firebase_uid, first_name, last_name, email, mobile_number, created_at
+      INSERT INTO public.users (firebase_uid, email, first_name, last_name, mobile_number, account_active)
+      VALUES ($1, $2, $3, $4, $5, $6)
+      RETURNING id, firebase_uid, first_name, last_name, email, mobile_number, account_active, created_at
     `;
 
-    const values = [uid, emailToInsert, firstNameVal, lastName || null, targetMobile];
+    const values = [uid, emailToInsert, firstNameVal, lastName || null, targetMobile, true];
     const result = await query(sqlQuery, values);
 
     return result.rows[0];
@@ -67,15 +90,21 @@ class User {
   static async findByMobileNumber(mobile) {
     const clean = cleanPhoneNumber(mobile);
     if (!clean) return null;
-    const sqlQuery = 'SELECT * FROM public.users WHERE mobile_number = $1';
+    const sqlQuery = 'SELECT * FROM public.users WHERE mobile_number = $1 ORDER BY created_at ASC LIMIT 1';
     const result = await query(sqlQuery, [clean]);
     return result.rows[0] || null;
   }
+
 
   static async findById(id) {
     const sqlQuery = 'SELECT * FROM public.users WHERE id = $1';
     const result = await query(sqlQuery, [id]);
     return result.rows[0] || null;
+  }
+
+  static async updateAccountActive(id, active) {
+    const sqlQuery = 'UPDATE public.users SET account_active = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2';
+    await query(sqlQuery, [active, id]);
   }
 
   /**
@@ -87,7 +116,7 @@ class User {
   }
 
   static async update(firebaseUid, updates) {
-    const { firstName, lastName, mobileNumber, email } = updates;
+    const { firstName, lastName, mobileNumber, email, accountActive } = updates;
 
     const fields = [];
     const values = [];
@@ -109,6 +138,10 @@ class User {
       fields.push(`email = $${idx++}`);
       values.push(email.toLowerCase().trim());
     }
+    if (accountActive !== undefined) {
+      fields.push(`account_active = $${idx++}`);
+      values.push(accountActive);
+    }
 
     if (fields.length === 0) return null;
 
@@ -121,6 +154,7 @@ class User {
     `;
 
     const result = await query(sqlQuery, values);
+
     return result.rows[0];
   }
 }

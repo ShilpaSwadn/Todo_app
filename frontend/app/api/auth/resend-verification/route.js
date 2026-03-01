@@ -36,12 +36,22 @@ export async function POST(request) {
             });
 
         } catch (authError) {
+            console.error('Auth error in resend logic:', authError);
+
             if (authError.code === 'auth/user-not-found') {
                 return NextResponse.json({
                     success: false,
                     message: 'No account found with this email. Please register first.'
                 }, { status: 404 });
             }
+
+            if (authError.message?.includes('TOO_MANY_ATTEMPTS_TRY_LATER')) {
+                return NextResponse.json({
+                    success: false,
+                    message: 'Too many requests. Please wait a few minutes before trying again.'
+                }, { status: 429 });
+            }
+
             throw authError;
         }
 

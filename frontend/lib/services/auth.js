@@ -11,7 +11,7 @@ import {
   signInWithPhoneNumber,
   linkWithPhoneNumber
 } from "firebase/auth";
-import { doc, getDoc, setDoc, runTransaction, collection, query, where, getDocs } from "firebase/firestore";
+import { doc, getDoc, setDoc, runTransaction, collection } from "firebase/firestore";
 import { auth, db, googleProvider, twitterProvider } from "../firebase";
 import api from '@/lib/api/client'
 import { parsePhoneNumberFromString } from 'libphonenumber-js'
@@ -101,96 +101,12 @@ export const loginWithTwitter = async () => {
   }
 };
 
-// Register a new user using Firebase and send activation link
+// Register a new user using Backend API (Local DB first)
 export const register = async (userData) => {
-  ensureFirebase();
-  const { firstName, lastName, email, mobileNumber, password } = userData;
-
   try {
-    // 1. Check uniqueness using our API (checks Firebase Admin SDK)
-    console.log("Validating uniqueness for:", email, mobileNumber);
-
-    // Combine checks into a single status check if needed, but for now we follow the flow:
-
-    // Check Email Uniqueness in Firebase
-    const emailStatus = await api.post('/auth/check-status', {
-      identifier: email.trim().toLowerCase()
-    });
-    if (emailStatus.success && emailStatus.exists) {
-      throw new Error("This email is already registered. Please login instead.");
-    }
-
-
-    // 2. Normalize and check uniqueness in Firestore (Composite: Email + Phone)
-    // Parse with no default country since mobileNumber already has a country prefix (e.g., +1...)
-    const phoneNumberParsed = parsePhoneNumberFromString(mobileNumber);
-    // Use .number property (returns E.164 format like "+17806866468") - NOT .format('E164')
-    const formattedPhone = phoneNumberParsed ? phoneNumberParsed.number : mobileNumber;
-    const combinationId = `${email.trim().toLowerCase()}_${formattedPhone}`;
-
-    console.log("Checking composite uniqueness in Firestore for:", combinationId);
-    const combinationRef = doc(db, 'user_combinations', combinationId);
-    const combinationSnap = await getDoc(combinationRef);
-
-    if (combinationSnap.exists()) {
-      throw new Error("This combination of email and mobile number is already registered.");
-    }
-
-    // 3. Create user in Firebase Auth
-    console.log("Uniqueness verified. Creating Firebase user...");
-    const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-    const user = userCredential.user;
-
-    console.log("Firebase user created successfully:", {
-      uid: user.uid,
-      email: user.email,
-      displayName: `${firstName} ${lastName}`.trim(),
-    });
-
-    // 4. Set display name in Firebase Auth
-    await updateFirebaseProfile(user, {
-      displayName: `${firstName} ${lastName}`.trim(),
-    });
-
-    // 5. Store user data in Temp collection (Atomically)
-    await runTransaction(db, async (transaction) => {
-      // Re-verify combination in transaction for safety
-      const combDoc = await transaction.get(combinationRef);
-      if (combDoc.exists()) {
-        throw new Error("This combination was just registered by another user.");
-      }
-
-      // Store in temp_users until verified
-      const tempUserRef = doc(db, 'temp_users', user.uid);
-      transaction.set(tempUserRef, {
-        uid: user.uid,
-        email: email.trim().toLowerCase(),
-        mobileNumber: formattedPhone,
-        firstName,
-        lastName: lastName || '',
-        displayName: `${firstName} ${lastName}`.trim(),
-        createdAt: new Date(),
-        status: 'pending_verification'
-      });
-    });
-
-    // 6. Skip PostgreSQL sync for now (Wait for verification)
-    console.log("Registration complete. Waiting for email verification...");
-
-    // 7. Send email verification
-    await sendEmailVerification(user);
-
-    // 6. Sign out
-    await signOut(auth);
-
-    return {
-      success: true,
-      message: 'Account created! Please check your email to activate your account before logging in.'
-    };
+    const response = await api.post('/auth/register', userData);
+    return response;
   } catch (error) {
-    if (error.code === 'auth/email-already-in-use') {
-      throw new Error("This email is already registered. Please login instead.");
-    }
     throw error;
   }
 };
@@ -212,7 +128,8 @@ const handleAuthSync = async (user) => {
       idToken,
       profileData: {
         firstName: userData.firstName,
-        lastName: userData.lastName
+        lastName: userData.lastName,
+        mobileNumber: user.phoneNumber || null
       }
     });
 
@@ -221,153 +138,64 @@ const handleAuthSync = async (user) => {
       console.log("Account successfully synced.");
       return { userData, finalToken: idToken };
     } else {
-      throw new Error(response.message || "Your email is not verified yet. Please check your inbox for the activation link.");
+      throw new Error(response.message || "Login synchronization failed.");
     }
   } catch (apiError) {
     console.error("Account Sync Error:", apiError);
-    throw new Error(apiError.message || "Please verify your email address first.");
+    throw apiError;
   }
 };
 
-// Login user with password (Firebase based) - Direct login without OTP
+// Login user with password (Backend based)
 export const loginWithPasswordDirect = async (identifier, password) => {
   ensureFirebase();
   try {
-    let targetEmail = identifier;
-
-    // If it's not an email, assume it's a mobile number and try to find the email
-    if (!identifier.includes('@')) {
-      try {
-        const response = await api.post('/auth/check-status', { identifier });
-        if (response.success && response.exists && response.email) {
-          targetEmail = response.email;
-        } else {
-          throw new Error("No account found with this mobile number. Please register first.");
-        }
-      } catch (e) {
-        throw new Error(e.message || "Account not found. Please register first.");
-      }
-    }
-
-    const userCredential = await signInWithEmailAndPassword(auth, targetEmail, password);
-    const user = userCredential.user;
-
-    // Pull latest verification status from Firebase
-    await user.reload();
-
-    if (!user.emailVerified) {
-      await signOut(auth);
-      throw new Error("Email not verified. Please verify your email first.");
-    }
-
-    // Sync user and get token
-    const { userData, finalToken } = await handleAuthSync(user);
-
-    // Save auth data
-    saveAuthData(userData, finalToken);
-
-    return userData;
-  } catch (error) {
-    if (
-      error.code === 'auth/user-not-found' ||
-      error.code === 'auth/invalid-credential'
-    ) {
-      throw new Error("Invalid credentials. Please check your email/password or register if you don't have an account.");
-    }
-    if (error.code === 'auth/wrong-password') {
-      throw new Error("Incorrect password. Please try again.");
-    }
-    throw error;
-  }
-};
-
-// Login user with password (Firebase based) - Legacy/OTP version
-export const loginWithPassword = async (email, password, autoSave = true) => {
-  ensureFirebase();
-  try {
-    const userCredential = await signInWithEmailAndPassword(auth, email, password);
-    const user = userCredential.user;
-
-    // Pull latest verification status from Firebase
-    await user.reload();
-
-    if (!user.emailVerified) {
-      await signOut(auth);
-      throw new Error("Email not verified. Please verify your email first.");
-    }
-
-    // Format user data from Firebase
-    const firebaseUserData = {
-      uid: user.uid,
-      email: user.email,
-      firstName: user.displayName ? user.displayName.split(' ')[0] : 'User',
-      lastName: user.displayName ? user.displayName.split(' ').slice(1).join(' ') : ''
-    };
-
-    // Trigger the combined sync/OTP process in one API call
-    const response = await prepareLogin(firebaseUserData);
-
-    return response.user || firebaseUserData;
-  } catch (error) {
-    if (
-      error.code === 'auth/user-not-found' ||
-      error.code === 'auth/invalid-credential'
-    ) {
-      throw new Error("Account not found or invalid credentials. Please register if you don't have an account.");
-    }
-    if (error.code === 'auth/wrong-password') {
-      throw new Error("Incorrect password. Please try again.");
-    }
-    throw error;
-  }
-};
-
-// Prepare login by syncing user and sending OTP in one go
-export const prepareLogin = async (userData) => {
-  try {
-    const response = await api.post('/auth/login-prepare', userData);
-    return response;
-  } catch (error) {
-    throw error;
-  }
-};
-
-// Explicitly sync a user from temp to main table by uid
-export const syncMain = async (uid) => {
-  try {
-    const response = await api.post('/auth/sync-main', { uid });
-    return response;
-  } catch (error) {
-    throw error;
-  }
-};
-
-// Explicitly sync a user from temp to main table by email
-export const syncMainByEmail = async (email) => {
-  try {
-    const response = await api.post('/auth/sync-main', { email });
-    return response;
-  } catch (error) {
-    throw error;
-  }
-};
-
-// Login user (legacy/OTP placeholder)
-export const login = async (credentials) => {
-  try {
-    const response = await api.post('/auth/login', credentials)
+    const response = await api.post('/auth/login/email', {
+      email: identifier,
+      password
+    });
 
     if (response.success && response.data) {
-      // Save user and token
-      saveAuthData(response.data.user, response.data.token)
-      return response.data
+      // Backend returns a customToken in result.token (saved in cookie)
+      // and user data in result.user.
+      // We should also sign in to Firebase client-side to keep the session alive for other services if needed.
+      const user = response.data.user;
+
+      // If backend provided a token (it's in the cookie but we might need it for customToken signin)
+      // Actually, my backend loginWithEmail returns result.token as the customToken.
+      // Let's check authService.js loginWithEmail.
+      // Yes: return { user: localUser, token: customToken };
+
+      const customToken = response.data?.token || response.token;
+      if (!customToken) {
+        throw new Error("Authentication failed: Missing session token. Please try again.");
+      }
+      const userCredential = await signInWithCustomToken(auth, customToken);
+      const finalUser = userCredential.user;
+      const finalToken = await finalUser.getIdToken();
+
+      saveAuthData(user, finalToken);
+      return user;
     }
 
-    throw new Error(response.message || 'Login failed')
+    throw new Error(response.message || "Login failed");
   } catch (error) {
-    throw error
+    console.error("Login Error:", error);
+    throw error;
   }
-}
+};
+
+
+
+// Explicitly sync a user to main table by email
+export const syncByEmail = async (email) => {
+  try {
+    const response = await api.post('/auth/verify-sync', { email });
+    return response;
+  } catch (error) {
+    throw error;
+  }
+};
 
 // Global logout (Clears Firebase session and LocalStorage)
 export const logout = async () => {

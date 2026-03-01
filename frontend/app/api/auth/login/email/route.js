@@ -5,14 +5,22 @@ import { ensureDbInitialized } from '@/lib/server/middleware/dbInit.js'
 export async function POST(request) {
     try {
         await ensureDbInitialized()
-        const { email, password } = await request.json()
+        const { email: identifier, password } = await request.json()
 
-        const result = await authService.loginWithEmail(email, password)
+        let result;
+        if (identifier.includes('@')) {
+            result = await authService.loginWithEmail(identifier, password)
+        } else {
+            result = await authService.loginWithMobile(identifier, password)
+        }
 
         const response = NextResponse.json({
             success: true,
             message: 'Login successful',
-            data: { user: result.user }
+            data: {
+                user: result.user,
+                token: result.token
+            }
         })
 
         response.cookies.set('token', result.token, {

@@ -8,7 +8,7 @@ import { HiX } from 'react-icons/hi'
 import { ImSpinner2 } from 'react-icons/im'
 import { FcGoogle } from 'react-icons/fc'
 import { RiTwitterXFill } from 'react-icons/ri'
-import { register, loginWithGoogle, loginWithTwitter, setupRecaptcha, clearRecaptcha, sendMobileLinkingOTP, verifyMobileLinkingOTP } from '@/lib/services/auth'
+import { register, loginWithGoogle, loginWithTwitter, setupRecaptcha, clearRecaptcha, sendMobileLinkingOTP, verifyMobileLinkingOTP, resendVerificationEmail } from '@/lib/services/auth'
 import { validateRegisterForm } from '@/lib/utils/validation'
 import PhoneInput from '@/components/ui/PhoneInput'
 import { countries } from '@/lib/data/countries'
@@ -166,6 +166,7 @@ export default function Register() {
       })
 
       setSuccessMsg(response.message || 'Registration successful! Please check your email for the activation link.')
+      setResendCountdown(60)
       setLoading(false)
     } catch (err) {
       let friendlyMessage = err.message || 'We could not create your account. Please try again.';
@@ -239,6 +240,18 @@ export default function Register() {
     setError('')
   }
 
+  const [resendCountdown, setResendCountdown] = useState(0)
+
+  useEffect(() => {
+    let timer;
+    if (resendCountdown > 0) {
+      timer = setInterval(() => {
+        setResendCountdown((prev) => prev - 1);
+      }, 1000);
+    }
+    return () => clearInterval(timer);
+  }, [resendCountdown]);
+
   if (successMsg) {
     return (
       <main className="h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center p-4">
@@ -246,16 +259,56 @@ export default function Register() {
           <div className="w-16 h-16 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center mx-auto mb-6">
             <FiMail className="w-8 h-8 text-green-600 dark:text-green-400" />
           </div>
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">Check Your Email</h2>
-          <p className="text-gray-600 dark:text-gray-400 mb-8">
+          <p className="text-gray-600 dark:text-gray-400 mb-8 text-sm">
             {successMsg}
           </p>
-          <Link
-            href="/login"
-            className="inline-block w-full px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-lg transition-colors shadow-md"
-          >
-            Go to Login
-          </Link>
+
+          <div className="space-y-3">
+            <button
+              onClick={async () => {
+                if (resendCountdown > 0) return;
+                try {
+                  setLoading(true);
+                  setError('');
+                  await resendVerificationEmail(formData.email);
+                  setSuccessMsg('A new activation link has been sent to your email.');
+                  setResendCountdown(60);
+                } catch (err) {
+                  const msg = err.message || '';
+                  if (msg.includes('TOO_MANY_ATTEMPTS')) {
+                    setError('Too many attempts. Please wait a few minutes before trying again.');
+                  } else {
+                    setError(msg || 'Failed to resend email. Please try again later.');
+                  }
+                } finally {
+                  setLoading(false);
+                }
+              }}
+              disabled={loading || resendCountdown > 0}
+              className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-white dark:bg-gray-800 border-2 border-indigo-600 text-indigo-600 dark:border-indigo-400 dark:text-indigo-400 font-semibold rounded-lg hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-all disabled:opacity-50"
+            >
+              {loading ? (
+                <ImSpinner2 className="animate-spin h-5 w-5" />
+              ) : resendCountdown > 0 ? (
+                `Wait ${resendCountdown}s`
+              ) : (
+                'Resend Code'
+              )}
+            </button>
+
+            <Link
+              href="/login"
+              className="inline-block w-full px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-lg transition-colors shadow-md"
+            >
+              Go to Login
+            </Link>
+          </div>
+
+          {error && (
+            <p className="mt-4 text-xs text-red-600 dark:text-red-400 font-medium">
+              {error}
+            </p>
+          )}
         </div>
       </main>
     )

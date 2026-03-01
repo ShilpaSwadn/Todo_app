@@ -4,7 +4,7 @@ import { useEffect, useState, Suspense, useRef } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { applyActionCode, checkActionCode } from 'firebase/auth'
 import { auth } from '@/lib/firebase'
-import { syncMainByEmail, resendVerificationEmail } from '@/lib/services/auth'
+import { syncByEmail, resendVerificationEmail } from '@/lib/services/auth'
 import Link from 'next/link'
 import { FiCheckCircle, FiXCircle, FiLoader, FiMail, FiArrowLeft } from 'react-icons/fi'
 import { ImSpinner2 } from 'react-icons/im'
@@ -71,7 +71,7 @@ function VerifyContent() {
             setEmailForResend(email)
 
             await applyActionCode(auth, oobCode)
-            const syncResult = await syncMainByEmail(email)
+            const syncResult = await syncByEmail(email)
 
             if (syncResult.success) {
                 setStatus('success')

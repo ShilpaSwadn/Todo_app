@@ -3,6 +3,8 @@ import authService from '@/lib/server/services/authService.js'
 import { ensureDbInitialized } from '@/lib/server/middleware/dbInit.js'
 import { getUidFromToken } from '@/lib/server/middleware/authMiddleware.js'
 
+export const dynamic = 'force-dynamic';
+
 export async function GET(request) {
   try {
     // Initialize database

@@ -412,7 +412,20 @@ export default function Login() {
     }
   }
 
+  const [resendCountdown, setResendCountdown] = useState(0)
+
+  useEffect(() => {
+    let timer;
+    if (resendCountdown > 0) {
+      timer = setInterval(() => {
+        setResendCountdown((prev) => prev - 1);
+      }, 1000);
+    }
+    return () => clearInterval(timer);
+  }, [resendCountdown]);
+
   const handleResendVerification = async () => {
+    if (resendCountdown > 0) return;
     if (!identifier || !identifier.includes('@')) {
       setError('Please enter your registered email address.')
       return
@@ -426,11 +439,17 @@ export default function Login() {
       const response = await resendVerificationEmail(identifier.trim().toLowerCase())
       if (response.success) {
         setResendSuccess('A new verification link has been sent to your email.')
+        setResendCountdown(60)
       } else {
         setError(response.message || 'Failed to resend verification link.')
       }
     } catch (err) {
-      setError(err.message || 'Failed to resend verification link. Please try again.')
+      const msg = err.message || '';
+      if (msg.includes('TOO_MANY_ATTEMPTS')) {
+        setError('Too many attempts. Please wait a few minutes before trying again.');
+      } else {
+        setError(msg || 'Failed to resend verification link. Please try again.');
+      }
     } finally {
       setResendingVerification(false)
     }
@@ -478,6 +497,7 @@ export default function Login() {
     setError('')
     setCountdown(0)
   }
+
 
   return (
     <main className="min-h-screen bg-gray-50 dark:bg-gray-950 flex items-center justify-center p-4">
@@ -694,13 +714,17 @@ export default function Login() {
                     {error.includes('verify your email') && identifier.includes('@') && (
                       <button
                         onClick={handleResendVerification}
-                        disabled={resendingVerification}
-                        className="text-xs font-bold text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 flex items-center gap-1 w-fit transition-all hover:translate-x-1"
+                        disabled={resendingVerification || resendCountdown > 0}
+                        className="text-xs font-bold text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 flex items-center gap-1 w-fit transition-all hover:translate-x-1 disabled:opacity-50 disabled:translate-x-0"
                       >
                         {resendingVerification ? (
                           <ImSpinner2 className="animate-spin h-3 w-3" />
                         ) : null}
-                        {resendingVerification ? 'Resending...' : 'Resend Verification Link →'}
+                        {resendingVerification
+                          ? 'Resending...'
+                          : resendCountdown > 0
+                            ? `Wait ${resendCountdown}s`
+                            : 'Resend Verification Link →'}
                       </button>
                     )}
                   </div>

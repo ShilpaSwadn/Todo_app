@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server'
 import { ensureDbInitialized } from '@/lib/server/middleware/dbInit.js'
 import { query } from '@/lib/server/config/database.js'
 
+export const dynamic = 'force-dynamic';
+
 /**
  * API Route to fetch test users
  * GET /api/admin/users
