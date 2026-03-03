@@ -170,11 +170,16 @@ export default function Register() {
       let friendlyMessage = err.message || 'We could not create your account. Please try again.';
 
       // Map server-side errors to user-friendly messages
-      if (err.message?.includes('already registered') || err.message?.includes('already in use')) {
-        friendlyMessage = 'This email is already registered. Please try logging in instead.';
-      } else if (err.message?.includes('weak-password')) {
+      const msg = err.message || '';
+      if (msg.toLowerCase().includes('email already')) {
+        friendlyMessage = 'This email is already registered. Please use a different email or login.';
+      } else if (msg.toLowerCase().includes('mobile number already') || msg.toLowerCase().includes('phone number already')) {
+        friendlyMessage = 'mobile number linked already to an existing account. Please enter a different mobile number or Login directly using mobile number.';
+      } else if (msg.includes('already registered') || msg.includes('already in use')) {
+        friendlyMessage = 'This account is already registered. Please try logging in instead.';
+      } else if (msg.includes('weak-password')) {
         friendlyMessage = 'Your password is too weak. Please use at least 6 characters.';
-      } else if (err.message?.includes('network') || err.message?.includes('fetch')) {
+      } else if (msg.includes('network') || msg.includes('fetch')) {
         friendlyMessage = 'Connection issue. Please check your internet and try again.';
       }
 
@@ -291,7 +296,7 @@ export default function Register() {
               {loading ? (
                 <ImSpinner2 className="animate-spin h-5 w-5" />
               ) : resendCountdown > 0 ? (
-                `Wait ${resendCountdown}s for send code`
+                `Wait ${resendCountdown}s for resend code`
               ) : (
                 'Resend Code'
               )}
@@ -495,9 +500,24 @@ export default function Register() {
 
               {error && (
                 <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/20 border-l-4 border-red-500 text-red-700 dark:text-red-400 rounded-r-lg">
-                  <div className="flex items-center">
-                    <HiX className="w-4 h-4 mr-2" />
-                    <span className="text-xs font-medium">{error}</span>
+                  <div className="flex items-start">
+                    <HiX className="w-4 h-4 mr-2 mt-0.5 shrink-0" />
+                    <div className="text-xs font-medium leading-relaxed">
+                      {error.includes('Login directly using mobile number') ? (
+                        <>
+                          {error.split('Login')[0]}
+                          <Link
+                            href="/login"
+                            className="text-indigo-600 dark:text-indigo-400 font-bold hover:text-indigo-800 dark:hover:text-indigo-300 transition-colors mx-1 underline decoration-2 underline-offset-2"
+                          >
+                            Login
+                          </Link>
+                          {error.split('Login')[1]}
+                        </>
+                      ) : (
+                        error
+                      )}
+                    </div>
                   </div>
                 </div>
               )}

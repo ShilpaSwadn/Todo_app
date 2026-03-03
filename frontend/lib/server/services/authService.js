@@ -33,6 +33,7 @@ class AuthService {
       email,
       password,
       displayName: `${firstName} ${lastName || ''}`.trim(),
+      phoneNumber: mobileNumber // Enforce uniqueness in Firebase Auth as well
     });
 
     // 3. Create in local database (PostgreSQL)
@@ -106,6 +107,12 @@ class AuthService {
 
       // 2. Verify the ID Token and sync/get user from PG
       const decodedToken = await this.verifyFirebaseToken(data.idToken);
+
+      // Enforce email verification for password login
+      if (!decodedToken.email_verified) {
+        throw new Error('Please verify your email address to continue. Check your inbox for the magic link.');
+      }
+
       const user = await this.syncUser(decodedToken);
 
       // 3. Generate a Custom Token for the client
@@ -149,19 +156,40 @@ class AuthService {
    * Check uniqueness in both Firebase and PostgreSQL
    */
   async checkUniqueness(email, mobileNumber) {
-    // 1. Check PostgreSQL
+    // 1. Check PostgreSQL for Email
     if (email) {
       const existingDbEmail = await User.findByEmail(email);
       if (existingDbEmail) throw new Error('Email already registered.');
     }
 
-    // 2. Check Firebase
+    // 2. Check PostgreSQL for Mobile Number
+    if (mobileNumber) {
+      const existingDbMobile = await User.findByMobileNumber(mobileNumber);
+      if (existingDbMobile) throw new Error('Mobile number already registered.');
+    }
+
+    // 3. Check Firebase for Email
     if (email) {
       try {
         await adminAuth.getUserByEmail(email.toLowerCase());
         throw new Error('Email already exists in authentication system.');
       } catch (error) {
         if (error.code !== 'auth/user-not-found') throw error;
+      }
+    }
+
+    // 4. Check Firebase for Mobile Number
+    if (mobileNumber) {
+      try {
+        let firebasePhone = mobileNumber;
+        if (!firebasePhone.startsWith('+')) {
+          // Fallback to India if no country code provided but it's 10 digits
+          firebasePhone = firebasePhone.length === 10 ? `+91${firebasePhone}` : `+${firebasePhone}`;
+        }
+        await adminAuth.getUserByPhoneNumber(firebasePhone);
+        throw new Error('Mobile number already exists in authentication system.');
+      } catch (error) {
+        if (error.code !== 'auth/user-not-found' && error.code !== 'auth/invalid-phone-number') throw error;
       }
     }
 

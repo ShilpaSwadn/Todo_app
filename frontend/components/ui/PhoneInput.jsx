@@ -32,7 +32,7 @@ export default function PhoneInput({ value, onChange, error, className }) {
     }
 
     const handlePhoneChange = (e) => {
-        const val = e.target.value.replace(/\D/g, '')
+        const val = e.target.value.replace(/\D/g, '').slice(0, selectedCountry.maxLength)
         setPhoneNumber(val)
         const fullNumber = selectedCountry.dialCode + val
         onChange(fullNumber, val, selectedCountry.code)
@@ -78,8 +78,9 @@ export default function PhoneInput({ value, onChange, error, className }) {
                         type="tel"
                         value={phoneNumber}
                         onChange={handlePhoneChange}
+                        maxLength={selectedCountry.maxLength}
                         className={`w-full pl-9 pr-3 py-2 border-2 ${error ? 'border-red-500 pr-10' : 'border-gray-200 dark:border-gray-700'} rounded-r-lg focus:outline-none focus:border-indigo-500 dark:bg-gray-800 dark:text-white transition-colors text-sm h-full`}
-                        placeholder="Enter mobile number"
+                        placeholder={`Enter ${selectedCountry.maxLength}-digit number`}
                     />
                 </div>
             </div>

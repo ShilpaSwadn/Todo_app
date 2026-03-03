@@ -72,7 +72,19 @@ export default function Login() {
 
 
   const handleIdentifierChange = (e) => {
-    const value = e.target.value
+    let value = e.target.value
+
+    // If it looks like a phone number (start with digits or +), enforce maxLength
+    const isPotentiallyPhone = value.startsWith('+') || /^\d+$/.test(value.replace(/\s/g, ''))
+
+    if (isPotentiallyPhone && !value.includes('@')) {
+      // Remove non-digits to check length
+      const digits = value.replace(/\D/g, '')
+      if (digits.length > selectedCountry.maxLength && !value.startsWith('+')) {
+        value = digits.slice(0, selectedCountry.maxLength)
+      }
+    }
+
     setIdentifier(value)
 
     // Auto-detect country if typed with +
@@ -190,28 +202,41 @@ export default function Login() {
       }
 
       if (!validateIdentifier(identifier)) {
-        setError('Please enter a valid email or 10-digit mobile number')
+        setError(`Please enter a valid email or ${selectedCountry.maxLength}-digit mobile number`)
         setLoading(false)
         return
+      }
+
+      // Check length specifically if it's a mobile number
+      if (!identifier.includes('@')) {
+        const digits = identifier.replace(/\D/g, '');
+        if (digits.length !== selectedCountry.maxLength && !identifier.startsWith('+')) {
+          setError(`Mobile number must be exactly ${selectedCountry.maxLength} digits for ${selectedCountry.name}`);
+          setLoading(false);
+          return;
+        }
       }
 
       // Direct login with password and verification check
       await loginWithPasswordDirect(identifier.trim().toLowerCase(), password)
       router.push('/dashboard')
     } catch (err) {
-      let friendlyMessage = err.message || 'We could not sign you in. Please check your details and try again.';
+      setLoading(false);
+      let friendlyMessage = 'Invalid email or password. Please check your credentials or Register for a new account.';
 
-      // Map common errors to user-friendly messages
-      if (err.message?.includes('invalid-credential') || err.message?.includes('user-not-found')) {
-        friendlyMessage = 'Invalid email or password. Please check your credentials.';
-      } else if (err.message?.includes('network-request-failed')) {
+      if (err.message?.includes('verify your email')) {
+        friendlyMessage = 'Please verify your email address to continue. Check your inbox for the magic link.';
+      } else if (err.message?.includes('EMAIL_NOT_FOUND') || err.message?.includes('user-not-found')) {
+        friendlyMessage = `No account found for this ${identifier.includes('@') ? 'email' : 'mobile number'}. Please Register for an account first.`;
+      } else if (err.message?.includes('INVALID_PASSWORD')) {
+        friendlyMessage = 'Incorrect password. Please try again or reset your password.';
+      } else if (err.message?.includes('network')) {
         friendlyMessage = 'Connection error. Please check your internet and try again.';
       } else if (err.message?.includes('too-many-requests')) {
-        friendlyMessage = 'Too many failed attempts. Please try again in a few minutes.';
+        friendlyMessage = 'Too many failed attempts. Please try again in 5 minutes.';
       }
 
       setError(friendlyMessage);
-      setLoading(false);
     }
   }
 
@@ -220,8 +245,17 @@ export default function Login() {
     const cleanIdentifier = identifier.trim().toLowerCase();
 
     if (!cleanIdentifier || !validateIdentifier(cleanIdentifier)) {
-      setError('Please enter a valid email or 10-digit mobile number')
+      setError(`Please enter a valid email or ${selectedCountry.maxLength}-digit mobile number`)
       return
+    }
+
+    // Explicit check for mobile number length
+    if (!cleanIdentifier.includes('@')) {
+      const digits = cleanIdentifier.replace(/\D/g, '');
+      if (digits.length !== selectedCountry.maxLength && !cleanIdentifier.startsWith('+')) {
+        setError(`Mobile number must be exactly ${selectedCountry.maxLength} digits for ${selectedCountry.name}`);
+        return;
+      }
     }
 
     setError('')
@@ -243,7 +277,7 @@ export default function Login() {
 
       if (!userStatus.success || !userStatus.exists) {
         setSendingOTP(false);
-        setError('No account found for this ' + (isPhone ? 'mobile number' : 'email') + '. Please register for an account first.');
+        setError(`No account found for this ${isPhone ? 'mobile number' : 'email'}. Please Register for an account first.`);
         return;
       }
 
@@ -448,9 +482,11 @@ export default function Login() {
 
   const handleSendMobileVerify = async (e) => {
     e.preventDefault()
-    if (!identifier || identifier.length < 5) {
-      setError('Please enter a valid mobile number')
-      return
+    const digits = identifier.replace(/\D/g, '');
+    if (digits.length !== selectedCountry.maxLength && !identifier.startsWith('+')) {
+      setError(`Mobile number must be exactly ${selectedCountry.maxLength} digits for ${selectedCountry.name}`);
+      setSendingOTP(false);
+      return;
     }
 
     setError('')
@@ -637,9 +673,10 @@ export default function Login() {
                       value={identifier}
                       onChange={handleIdentifierChange}
                       required
+                      maxLength={identifier.startsWith('+') ? 20 : selectedCountry.maxLength}
                       autoFocus
                       className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-r-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 dark:text-white transition-all"
-                      placeholder="10-digit mobile number"
+                      placeholder={`${selectedCountry.maxLength}-digit mobile number`}
                     />
                   </div>
                 </div>
@@ -697,12 +734,27 @@ export default function Login() {
               {error && (
                 <div className="mb-6 p-4 bg-red-50 dark:bg-red-900/20 border-l-4 border-red-500 rounded-r-lg">
                   <div className="flex flex-col gap-3">
-                    <div className="flex items-center">
-                      <HiX className="h-5 w-5 text-red-500 mr-2 shrink-0" />
-                      <p className="text-sm text-red-700 dark:text-red-400 font-medium">{error}</p>
+                    <div className="flex items-start">
+                      <HiX className="h-5 w-5 text-red-500 mr-2 mt-0.5 shrink-0" />
+                      <div className="text-sm font-medium leading-relaxed">
+                        {error.includes('Register') ? (
+                          <div className="text-red-700 dark:text-red-400">
+                            {error.split('Register')[0]}
+                            <Link
+                              href="/register"
+                              className="text-indigo-600 dark:text-indigo-400 font-bold hover:text-indigo-800 dark:hover:text-indigo-300 transition-colors mx-1 underline decoration-2 underline-offset-2"
+                            >
+                              Register
+                            </Link>
+                            {error.split('Register')[1]}
+                          </div>
+                        ) : (
+                          <span className="text-red-700 dark:text-red-400">{error}</span>
+                        )}
+                      </div>
                     </div>
 
-                    {error.includes('verify your email') && identifier.includes('@') && (
+                    {(error.toLowerCase().includes('not verified') || error.toLowerCase().includes('verification link')) && identifier.includes('@') && (
                       <button
                         onClick={handleResendVerification}
                         disabled={resendingVerification || resendCountdown > 0}
@@ -783,8 +835,9 @@ export default function Login() {
                               value={identifier}
                               onChange={handleIdentifierChange}
                               required
+                              maxLength={(!identifier.includes('@') && !identifier.startsWith('+') && /^\d+/.test(identifier.replace(/\s/g, ''))) ? selectedCountry.maxLength : 100}
                               className={`w-full pl-10 pr-4 py-3 bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 ${(!identifier.includes('@') && !identifier.startsWith('+') && /^\d+/.test(identifier.replace(/\s/g, ''))) ? 'rounded-r-xl border-l-0' : 'rounded-xl'} focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 dark:text-white transition-all`}
-                              placeholder="Email or mobile number"
+                              placeholder={(!identifier.includes('@') && !identifier.startsWith('+') && /^\d+/.test(identifier.replace(/\s/g, ''))) ? `${selectedCountry.maxLength}-digit mobile number` : "Email or mobile number"}
                             />
                           </div>
                         </div>
@@ -893,8 +946,9 @@ export default function Login() {
                               value={identifier}
                               onChange={handleIdentifierChange}
                               required
+                              maxLength={(!identifier.includes('@') && !identifier.startsWith('+') && /^\d+/.test(identifier.replace(/\s/g, ''))) ? selectedCountry.maxLength : 100}
                               className={`w-full pl-10 pr-4 py-3 bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 ${(!identifier.includes('@') && !identifier.startsWith('+') && /^\d+/.test(identifier.replace(/\s/g, ''))) ? 'rounded-r-xl border-l-0' : 'rounded-xl'} focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 dark:text-white transition-all`}
-                              placeholder="Email or mobile number"
+                              placeholder={(!identifier.includes('@') && !identifier.startsWith('+') && /^\d+/.test(identifier.replace(/\s/g, ''))) ? `${selectedCountry.maxLength}-digit mobile number` : "Email or mobile number"}
                             />
                           </div>
                         </div>

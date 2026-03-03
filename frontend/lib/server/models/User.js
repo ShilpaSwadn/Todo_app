@@ -2,8 +2,12 @@ import { query } from '../config/database.js'
 
 const cleanPhoneNumber = (phone) => {
   if (!phone) return null;
-  // Strip all non-digits and take last 10 characters
-  return phone.replace(/\D/g, '').slice(-10);
+  // Keep the + if present and all digits
+  const cleaned = phone.trim();
+  if (cleaned.startsWith('+')) {
+    return '+' + cleaned.replace(/\D/g, '');
+  }
+  return cleaned.replace(/\D/g, '');
 }
 
 class User {
@@ -41,6 +45,13 @@ class User {
     // 1. Try to find an existing account to link with via UID
     let existingUser = await this.findByFirebaseUid(uid);
     if (existingUser) {
+      // Update mobile number if it's different (e.g. missing country code in DB)
+      if (targetMobile && existingUser.mobile_number !== targetMobile) {
+        console.log(`Syncing mobile number for ${uid}: ${existingUser.mobile_number} -> ${targetMobile}`);
+        await this.update(uid, { mobileNumber: targetMobile });
+        existingUser.mobile_number = targetMobile;
+      }
+
       if (!existingUser.account_active) {
         await this.updateAccountActive(existingUser.id, true);
         existingUser.account_active = true;
@@ -88,10 +99,14 @@ class User {
   }
 
   static async findByMobileNumber(mobile) {
-    const clean = cleanPhoneNumber(mobile);
-    if (!clean) return null;
-    const sqlQuery = 'SELECT * FROM public.users WHERE mobile_number = $1 ORDER BY created_at ASC LIMIT 1';
-    const result = await query(sqlQuery, [clean]);
+    if (!mobile) return null;
+    const fullMatch = cleanPhoneNumber(mobile);
+    const digitsOnly = mobile.replace(/\D/g, '');
+    const last10 = digitsOnly.length >= 10 ? digitsOnly.slice(-10) : digitsOnly;
+
+    // Try exact match first, then last 10 digits
+    const sqlQuery = 'SELECT * FROM public.users WHERE mobile_number = $1 OR mobile_number = $2';
+    const result = await query(sqlQuery, [fullMatch, last10]);
     return result.rows[0] || null;
   }
 

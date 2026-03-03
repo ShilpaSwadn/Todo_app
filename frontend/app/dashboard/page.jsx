@@ -265,7 +265,7 @@ export default function Dashboard() {
                   </div>
                   <div className="px-4 space-y-1">
                     <button
-                      onClick={() => router.push('/dashboard/edit')}
+                      onClick={() => router.push('/dashboard/profile')}
                       className="w-full flex items-center gap-3 px-6 py-3 rounded-2xl text-sm font-bold text-gray-600 dark:text-gray-300 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 hover:text-indigo-600 transition-all"
                     >
                       <FiUser className="w-5 h-5 opacity-50" /> View Account

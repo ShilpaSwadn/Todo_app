@@ -1,4 +1,5 @@
-// Frontend validation utilities
+import { parsePhoneNumberFromString } from 'libphonenumber-js'
+import { countries } from '../data/countries'
 
 // Validate email format
 export const validateEmail = (email) => {
@@ -18,7 +19,6 @@ export const validateLastName = (name) => {
   return nameRegex.test(name.trim())
 }
 
-import { parsePhoneNumberFromString } from 'libphonenumber-js'
 
 // Validate mobile number - Use libphonenumber-js for international validation
 export const validateMobileNumber = (mobileNumber, countryCode = 'IN') => {
@@ -26,7 +26,15 @@ export const validateMobileNumber = (mobileNumber, countryCode = 'IN') => {
 
   try {
     const phoneNumber = parsePhoneNumberFromString(mobileNumber, countryCode)
-    return phoneNumber ? phoneNumber.isValid() : false
+    if (!phoneNumber || !phoneNumber.isValid()) return false
+
+    // Explicit check against our maxLength for consistency
+    const country = countries.find(c => c.code === (phoneNumber.country || countryCode))
+    if (country && phoneNumber.nationalNumber.length !== country.maxLength) {
+      return false
+    }
+
+    return true
   } catch (error) {
     return false
   }
@@ -89,12 +97,17 @@ export const validateRegisterForm = (formData) => {
   if (!formData.mobileNumber || (typeof formData.mobileNumber === 'string' && formData.mobileNumber.trim() === '')) {
     errors.mobileNumber = 'Mobile number is required'
   } else {
-    // If we have fullMobileNumber (from new PhoneInput), use it, otherwise use mobileNumber
     const numberToValidate = formData.fullMobileNumber || formData.mobileNumber;
     const countryCode = formData.mobileCountryCode || 'IN';
 
-    if (!validateMobileNumber(numberToValidate, countryCode)) {
-      errors.mobileNumber = 'Please enter a valid mobile number for the selected country'
+    // Get country info to check length specifically
+    const countryInfo = countries.find(c => c.code === countryCode);
+    const digits = formData.mobileNumber.replace(/\D/g, '');
+
+    if (countryInfo && digits.length !== countryInfo.maxLength) {
+      errors.mobileNumber = `Mobile number must be exactly ${countryInfo.maxLength} digits for ${countryInfo.name}`;
+    } else if (!validateMobileNumber(numberToValidate, countryCode)) {
+      errors.mobileNumber = 'Please enter a valid mobile number for the selected country';
     }
   }
 
