@@ -23,6 +23,29 @@ const ensureFirebase = () => {
   }
 };
 
+/**
+ * Sanitize phone number and ensure correct international format
+ * Prevents double country codes and handles missing plus signs
+ */
+export const sanitizePhoneNumber = (number, country = { dialCode: '+91' }) => {
+  if (!number) return '';
+
+  // Remove all non-digit characters except +
+  let cleaned = number.replace(/[^\d+]/g, '');
+
+  // If it already starts with +, trust the user has provided full format
+  if (cleaned.startsWith('+')) return cleaned;
+
+  // If it starts with the dial code digits but no +, add the +
+  const dialCodeDigits = country.dialCode.replace('+', '');
+  if (cleaned.startsWith(dialCodeDigits)) {
+    return '+' + cleaned;
+  }
+
+  // Fallback: prepend the country's dial code
+  return country.dialCode + cleaned;
+};
+
 // Login with Google OAuth
 export const loginWithGoogle = async () => {
   ensureFirebase();
@@ -245,7 +268,7 @@ export const updateProfile = async (userData) => {
  * Setup Recaptcha for Phone Auth
  * @param {string} containerId - The ID of the HTML element to render Recaptcha in
  */
-export const setupRecaptcha = (containerId) => {
+export const setupRecaptcha = async (containerId) => {
   ensureFirebase();
 
   // Clear any existing verifier first
@@ -257,14 +280,29 @@ export const setupRecaptcha = (containerId) => {
     }
   }
 
-  window.recaptchaVerifier = new RecaptchaVerifier(auth, containerId, {
-    'size': 'invisible',
-    'callback': (response) => {
-      console.log("reCAPTCHA verified");
-    }
-  });
+  try {
+    const verifier = new RecaptchaVerifier(auth, containerId, {
+      'size': 'invisible',
+      'callback': (response) => {
+        console.log("reCAPTCHA verified automatically");
+      },
+      'expired-callback': () => {
+        console.log("reCAPTCHA expired, clearing...");
+        clearRecaptcha();
+      }
+    });
 
-  return window.recaptchaVerifier;
+    // Explicitly render to ensure it's ready and catch domain issues early
+    await verifier.render();
+    window.recaptchaVerifier = verifier;
+    return verifier;
+  } catch (err) {
+    console.error("reCAPTCHA initialization failed:", err);
+    if (err.code === 'auth/invalid-app-credential' || err.message?.includes('authorized domain')) {
+      throw new Error("Security check failed: This domain is not authorized. Please add it in Firebase Console.");
+    }
+    throw new Error("Failed to initialize security check. Please refresh the page.");
+  }
 };
 
 /**
@@ -302,10 +340,17 @@ export const sendMobileOTP = async (phoneNumber, appVerifier) => {
   ensureFirebase();
   try {
     // Note: PhoneNumber must include country code (e.g., +91...)
+    console.log("Starting Firebase Phone Auth for:", phoneNumber);
     const confirmationResult = await signInWithPhoneNumber(auth, phoneNumber, appVerifier);
     return confirmationResult;
   } catch (error) {
     console.error("Error sending mobile OTP:", error);
+    if (error.code === 'auth/invalid-app-credential') {
+      throw new Error("Security configuration error. Please ensure this domain is added to 'Authorized Domains' in your Firebase console.");
+    }
+    if (error.code === 'auth/too-many-requests') {
+      throw new Error("Too many attempts today. Please try again tomorrow or use email login.");
+    }
     throw error;
   }
 };

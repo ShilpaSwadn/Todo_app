@@ -20,7 +20,7 @@ export async function POST(request) {
 
     return NextResponse.json({
       success: true,
-      message: 'Account created successfully. Please login to continue.',
+      message: 'Activation link has been sent to your email. Verify and login',
       data: { user }
     });
 

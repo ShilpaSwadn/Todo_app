@@ -9,7 +9,7 @@ import { HiX } from 'react-icons/hi'
 import { ImSpinner2 } from 'react-icons/im'
 import { FcGoogle } from 'react-icons/fc'
 import { RiTwitterXFill } from 'react-icons/ri'
-import { setupRecaptcha, clearRecaptcha, sendOTP, verifyOTP, verifyMobileOTP, sendMobileOTP, loginWithPasswordDirect, loginWithGoogle, loginWithTwitter, resendVerificationEmail, sendMobileLinkingOTP, verifyMobileLinkingOTP } from '@/lib/services/auth'
+import { setupRecaptcha, clearRecaptcha, sendOTP, verifyOTP, verifyMobileOTP, sendMobileOTP, loginWithPasswordDirect, loginWithGoogle, loginWithTwitter, resendVerificationEmail, sendMobileLinkingOTP, verifyMobileLinkingOTP, sanitizePhoneNumber } from '@/lib/services/auth'
 import { validateEmail, validateIdentifier } from '@/lib/utils/validation'
 import { countries } from '@/lib/data/countries'
 import { FiChevronDown } from 'react-icons/fi'
@@ -40,21 +40,25 @@ export default function Login() {
   const [verificationType, setVerificationType] = useState('login') // 'login', 'social-link'
 
   // Ultimate fix: Generate a unique ID for every single request
-  const ensureRecaptcha = () => {
+  const ensureRecaptcha = async () => {
     try {
       const wrapper = document.getElementById('recaptcha-wrapper');
-      if (!wrapper) return null;
+      if (!wrapper) {
+        console.error("Recaptcha wrapper div missing from DOM");
+        return null;
+      }
 
-      // Always wipe and create a brand new ID
+      // Always wipe and create a brand new ID to prevent "already rendered" issues
       const uniqueId = `recaptcha-container-${Date.now()}`;
       console.log("Generating fresh reCAPTCHA with ID:", uniqueId);
 
       clearRecaptcha();
       wrapper.innerHTML = `<div id="${uniqueId}"></div>`;
 
-      return setupRecaptcha(uniqueId);
+      return await setupRecaptcha(uniqueId);
     } catch (err) {
       console.error("Recaptcha initialization failed:", err);
+      setError(err.message || "Security check failed. Please refresh the page.");
       return null;
     }
   };
@@ -282,20 +286,13 @@ export default function Login() {
       }
 
       if (isPhone) {
-        // Prepare sanitized phone
-        let sanitizedPhone = cleanIdentifier.replace(/[^\d+]/g, '');
+        // Use the new robust sanitization logic
+        const sanitizedPhone = sanitizePhoneNumber(cleanIdentifier, selectedCountry);
 
-        // If it still doesn't have a +, use the selected country code
-        if (!sanitizedPhone.startsWith('+')) {
-          sanitizedPhone = `${selectedCountry.dialCode}${sanitizedPhone}`;
-        }
+        console.log("Requesting SMS for number:", sanitizedPhone);
 
-        console.log("Requesting SMS for sanitized number:", sanitizedPhone);
-
-        const appVerifier = ensureRecaptcha();
-        if (!appVerifier) {
-          throw new Error('Something went wrong with the security check. Please refresh the page and try again.');
-        }
+        const appVerifier = await ensureRecaptcha();
+        if (!appVerifier) return; // Error handled inside ensureRecaptcha
 
         const result = await sendMobileOTP(sanitizedPhone, appVerifier);
         setConfirmationResult(result);
@@ -385,12 +382,10 @@ export default function Login() {
 
     try {
       if (isMobile) {
-        let formattedPhone = cleanIdentifier;
-        if (!formattedPhone.startsWith('+')) {
-          formattedPhone = `${selectedCountry.dialCode}${formattedPhone}`;
-        }
-        const appVerifier = window.recaptchaVerifier;
-        const result = await sendMobileOTP(formattedPhone, appVerifier);
+        const sanitizedPhone = sanitizePhoneNumber(cleanIdentifier, selectedCountry);
+        const appVerifier = await ensureRecaptcha();
+        if (!appVerifier) return;
+        const result = await sendMobileOTP(sanitizedPhone, appVerifier);
         setConfirmationResult(result);
         setCountdown(60)
       } else {
@@ -493,13 +488,11 @@ export default function Login() {
     setSendingOTP(true)
 
     try {
-      let sanitizedPhone = identifier.replace(/[^\d+]/g, '');
-      if (!sanitizedPhone.startsWith('+')) {
-        sanitizedPhone = `${selectedCountry.dialCode}${sanitizedPhone}`;
-      }
+      const sanitizedPhone = sanitizePhoneNumber(identifier, selectedCountry);
+      console.log("Linking mobile number:", sanitizedPhone);
 
-      const appVerifier = ensureRecaptcha();
-      if (!appVerifier) throw new Error('Security check failed. Please refresh the page.');
+      const appVerifier = await ensureRecaptcha();
+      if (!appVerifier) return;
 
       const result = await sendMobileLinkingOTP(sanitizedPhone, appVerifier);
       setConfirmationResult(result);

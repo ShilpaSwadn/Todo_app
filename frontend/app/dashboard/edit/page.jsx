@@ -90,16 +90,17 @@ export default function EditProfile() {
     return () => clearInterval(timer);
   }, [resendCountdown]);
 
-  const ensureRecaptcha = () => {
+  const ensureRecaptcha = async () => {
     const { setupRecaptcha, clearRecaptcha } = require('@/lib/services/auth');
     try {
       const container = document.getElementById('recaptcha-container');
       if (!container) return null;
       clearRecaptcha();
       container.innerHTML = `<div id="recaptcha-verifier"></div>`;
-      return setupRecaptcha('recaptcha-verifier');
+      return await setupRecaptcha('recaptcha-verifier');
     } catch (err) {
       console.error("Recaptcha init failed:", err);
+      setError(err.message || "Security check failed. Please refresh.");
       return null;
     }
   };
@@ -147,8 +148,8 @@ export default function EditProfile() {
         setSaving(false);
       } else if (mobileChanged) {
         // Send Mobile OTP
-        const verifier = ensureRecaptcha();
-        if (!verifier) throw new Error('Security check initialization failed. Please refresh.');
+        const verifier = await ensureRecaptcha();
+        if (!verifier) return;
         const result = await sendMobileOTP(formData.fullMobileNumber, verifier);
         setConfirmationResult(result);
         setVerificationMode('mobile');
@@ -508,8 +509,8 @@ export default function EditProfile() {
         </div>
       )}
 
-      {/* Hidden Recaptcha */}
-      <div id="recaptcha-container" className="hidden"></div>
+      {/* Recaptcha Container (Keep in DOM but low profile) */}
+      <div id="recaptcha-container" className="fixed bottom-0 right-0 opacity-0 pointer-events-none"></div>
     </main>
   )
 }

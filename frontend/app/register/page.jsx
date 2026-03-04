@@ -8,7 +8,7 @@ import { HiX } from 'react-icons/hi'
 import { ImSpinner2 } from 'react-icons/im'
 import { FcGoogle } from 'react-icons/fc'
 import { RiTwitterXFill } from 'react-icons/ri'
-import { register, loginWithGoogle, loginWithTwitter, setupRecaptcha, clearRecaptcha, sendMobileLinkingOTP, verifyMobileLinkingOTP, resendVerificationEmail } from '@/lib/services/auth'
+import { register, loginWithGoogle, loginWithTwitter, setupRecaptcha, clearRecaptcha, sendMobileLinkingOTP, verifyMobileLinkingOTP, resendVerificationEmail, sanitizePhoneNumber } from '@/lib/services/auth'
 import { validateRegisterForm } from '@/lib/utils/validation'
 import PhoneInput from '@/components/ui/PhoneInput'
 import { countries } from '@/lib/data/countries'
@@ -39,7 +39,7 @@ export default function Register() {
   const [isCountrySelectorOpen, setIsCountrySelectorOpen] = useState(false)
 
   // Ultimate fix: Generate a unique ID for every single request
-  const ensureRecaptcha = () => {
+  const ensureRecaptcha = async () => {
     try {
       const wrapper = document.getElementById('recaptcha-wrapper');
       if (!wrapper) return null;
@@ -51,9 +51,10 @@ export default function Register() {
       clearRecaptcha();
       wrapper.innerHTML = `<div id="${uniqueId}"></div>`;
 
-      return setupRecaptcha(uniqueId);
+      return await setupRecaptcha(uniqueId);
     } catch (err) {
       console.error("Recaptcha initialization failed:", err);
+      setError(err.message || "Security check failed. Please refresh the page.");
       return null;
     }
   };
@@ -201,13 +202,11 @@ export default function Register() {
     setSendingOTP(true)
 
     try {
-      let sanitizedPhone = socialMobile.replace(/[^\d+]/g, '');
-      if (!sanitizedPhone.startsWith('+')) {
-        sanitizedPhone = `${selectedCountry.dialCode}${sanitizedPhone}`;
-      }
+      const sanitizedPhone = sanitizePhoneNumber(socialMobile, selectedCountry);
+      console.log("Requesting Linking OTP for:", sanitizedPhone);
 
-      const appVerifier = ensureRecaptcha();
-      if (!appVerifier) throw new Error('Security check failed. Please refresh the page.');
+      const appVerifier = await ensureRecaptcha();
+      if (!appVerifier) return;
 
       const result = await sendMobileLinkingOTP(sanitizedPhone, appVerifier);
       setConfirmationResult(result);
