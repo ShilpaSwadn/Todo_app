@@ -12,6 +12,7 @@ import { register, loginWithGoogle, loginWithTwitter, setupRecaptcha, clearRecap
 import { validateRegisterForm } from '@/lib/utils/validation'
 import PhoneInput from '@/components/ui/PhoneInput'
 import { countries } from '@/lib/data/countries'
+import { formatFirebaseError } from '@/lib/utils/error-handler'
 
 export default function Register() {
   const router = useRouter()
@@ -104,7 +105,7 @@ export default function Register() {
         router.push('/dashboard')
       }
     } catch (err) {
-      setError(err.message || 'Google login failed. Please try again.')
+      setError(formatFirebaseError(err))
     } finally {
       setLoading(false)
     }
@@ -124,7 +125,7 @@ export default function Register() {
         router.push('/dashboard')
       }
     } catch (err) {
-      setError(err.message || 'Twitter login failed. Please try again.')
+      setError(formatFirebaseError(err))
     } finally {
       setLoading(false)
     }
@@ -203,6 +204,24 @@ export default function Register() {
 
     try {
       const sanitizedPhone = sanitizePhoneNumber(socialMobile, selectedCountry);
+
+      // 1. Check if this mobile is already in use
+      try {
+        const checkRes = await fetch('/api/auth/check-status', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ identifier: sanitizedPhone })
+        });
+        const status = await checkRes.json();
+        if (status.success && status.exists) {
+          setError('This mobile number is already linked to another account. Please use a different number or login directly.');
+          setSendingOTP(false);
+          return;
+        }
+      } catch (checkErr) {
+        console.warn("Pre-link check failed, continuing anyway:", checkErr);
+      }
+
       console.log("Requesting Linking OTP for:", sanitizedPhone);
 
       const appVerifier = await ensureRecaptcha();
@@ -213,7 +232,7 @@ export default function Register() {
       setShowOTP(true);
       setCountdown(60);
     } catch (err) {
-      setError(err.message || 'Failed to send verification code');
+      setError(formatFirebaseError(err))
     } finally {
       setSendingOTP(false)
     }
@@ -234,7 +253,8 @@ export default function Register() {
       await verifyMobileLinkingOTP(confirmationResult, otp)
       window.location.href = '/dashboard';
     } catch (err) {
-      setError(err.message || 'Verification failed. Please try again.')
+      setError(formatFirebaseError(err))
+    } finally {
       setLoading(false)
     }
   }

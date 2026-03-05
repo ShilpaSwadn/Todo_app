@@ -8,6 +8,7 @@ import { syncByEmail, resendVerificationEmail } from '@/lib/services/auth'
 import Link from 'next/link'
 import { FiCheckCircle, FiXCircle, FiLoader, FiMail, FiArrowLeft } from 'react-icons/fi'
 import { ImSpinner2 } from 'react-icons/im'
+import { formatFirebaseError } from '@/lib/utils/error-handler'
 
 function VerifyContent() {
     const router = useRouter()
@@ -78,7 +79,7 @@ function VerifyContent() {
                 setMessage(result.message || 'We couldn\'t resend the link. Please try again.');
             }
         } catch (err) {
-            setMessage('Something went wrong. Please try again later.');
+            setMessage(formatFirebaseError(err));
         } finally {
             setResending(false);
         }
@@ -101,10 +102,7 @@ function VerifyContent() {
         } catch (error) {
             console.error('Verification error:', error)
             setStatus('error')
-            const errorMsg = error.message === 'User not found in temporary storage'
-                ? 'Your account may already be verified. Please try signing in.'
-                : 'This verification link has expired or has already been used.';
-            setMessage(errorMsg)
+            setMessage(formatFirebaseError(error))
         }
     }
 

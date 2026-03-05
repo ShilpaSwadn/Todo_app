@@ -296,13 +296,16 @@ export const setupRecaptcha = async (containerId) => {
       }
     });
 
+    // Settle delay: Firebase Phone Auth sometimes fails on first call if rendered too fast
+    await new Promise(resolve => setTimeout(resolve, 500));
+
     // Explicitly render to ensure it's ready and catch domain issues early
     await verifier.render();
     window.recaptchaVerifier = verifier;
     return verifier;
-  } catch (err) {
-    console.error("reCAPTCHA initialization failed:", err);
-    if (err.code === 'auth/invalid-app-credential' || err.message?.includes('authorized domain')) {
+  } catch (error) {
+    console.error("reCAPTCHA initialization failed:", error);
+    if (error.code === 'auth/invalid-app-credential' || error.message?.includes('authorized domain')) {
       throw new Error("Security check failed: This domain is not authorized. Please add it in Firebase Console.");
     }
     throw new Error("Failed to initialize security check. Please refresh the page.");
@@ -393,6 +396,17 @@ export const sendMobileLinkingOTP = async (phoneNumber, appVerifier) => {
     const confirmationResult = await linkWithPhoneNumber(auth.currentUser, phoneNumber, appVerifier);
     return confirmationResult;
   } catch (error) {
+    if (error.code === 'auth/invalid-app-credential' || error.message?.includes('INVALID_APP_CREDENTIAL')) {
+      console.warn("Invalid app credential error, retrying with fresh verifier...");
+      try {
+        // Wait slightly and try one more time - sometimes the first call is flaky
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        return await linkWithPhoneNumber(auth.currentUser, phoneNumber, appVerifier);
+      } catch (retryError) {
+        console.error("Retry failed:", retryError);
+        throw retryError;
+      }
+    }
     console.error("Error sending linking OTP:", error);
     if (error.code === 'auth/credential-already-in-use') {
       throw new Error("This mobile number is already linked to another account.");

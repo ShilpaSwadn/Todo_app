@@ -135,19 +135,26 @@ class AuthService {
    */
   async loginWithMobile(mobileNumber, password) {
     try {
-      // 1. Identify the user by mobile number in PG (picks the first registered)
-      const primaryUser = await User.findByMobileNumber(mobileNumber);
+      // 1. Identify the user by mobile number in FIREBASE (primary source of truth)
+      // Clean mobile number for Firebase search
+      const cleanedMobile = (mobileNumber.startsWith('+') ? mobileNumber : (mobileNumber.length === 10 ? `+91${mobileNumber}` : `+${mobileNumber}`)).replace(/\s/g, '');
 
-      if (!primaryUser) {
-        throw new Error('No account found for this mobile number. Please register first.');
+      let firebaseUser;
+      try {
+        firebaseUser = await adminAuth.getUserByPhoneNumber(cleanedMobile);
+      } catch (fbError) {
+        if (fbError.code === 'auth/user-not-found') {
+          throw new Error('No account found for this mobile number in our authentication system. Please register first.');
+        }
+        throw fbError;
       }
 
-      if (!primaryUser.email) {
-        throw new Error('This mobile account has no associated email for password login.');
+      if (!firebaseUser.email) {
+        throw new Error('This mobile account has no associated email for password login. Please try OTP login or link an email first.');
       }
 
       // 2. Use the same logic as loginWithEmail
-      return await this.loginWithEmail(primaryUser.email, password);
+      return await this.loginWithEmail(firebaseUser.email, password);
     } catch (error) {
       console.error('Error in loginWithMobile:', error);
       throw error;
@@ -158,43 +165,29 @@ class AuthService {
    * Check uniqueness in both Firebase and PostgreSQL
    */
   async checkUniqueness(email, mobileNumber) {
-    // 1. Check PostgreSQL for Email
-    if (email) {
-      const existingDbEmail = await User.findByEmail(email);
-      if (existingDbEmail) throw new Error('Email already registered.');
-    }
-
-    // 2. Check PostgreSQL for Mobile Number
-    if (mobileNumber) {
-      const existingDbMobile = await User.findByMobileNumber(mobileNumber);
-      if (existingDbMobile) throw new Error('Mobile number already registered.');
-    }
-
-    // 3. Check Firebase for Email
+    // 1. Check Firebase for Email
     if (email) {
       try {
-        await adminAuth.getUserByEmail(email.toLowerCase());
-        throw new Error('Email already exists in authentication system.');
+        await adminAuth.getUserByEmail(email.toLowerCase().trim());
+        throw new Error('Email already registered in our authentication system.');
       } catch (error) {
         if (error.code !== 'auth/user-not-found') throw error;
       }
     }
 
-    // 4. Check Firebase for Mobile Number
+    // 2. Check Firebase for Mobile Number
     if (mobileNumber) {
       try {
-        let firebasePhone = mobileNumber;
-        if (!firebasePhone.startsWith('+')) {
-          // Fallback to India if no country code provided but it's 10 digits
-          firebasePhone = firebasePhone.length === 10 ? `+91${firebasePhone}` : `+${firebasePhone}`;
-        }
-        await adminAuth.getUserByPhoneNumber(firebasePhone);
-        throw new Error('Mobile number already exists in authentication system.');
+        const cleanedMobile = (mobileNumber.startsWith('+') ? mobileNumber : (mobileNumber.length === 10 ? `+91${mobileNumber}` : `+${mobileNumber}`)).replace(/\s/g, '');
+        await adminAuth.getUserByPhoneNumber(cleanedMobile);
+        throw new Error('Mobile number already registered in our authentication system.');
       } catch (error) {
         if (error.code !== 'auth/user-not-found' && error.code !== 'auth/invalid-phone-number') throw error;
       }
     }
 
+    // Note: We skip PostgreSQL checks here to treat Firebase as the primary identity source.
+    // User.sync will handle merging or creating records in DB post-authentication.
     return true;
   }
 

@@ -14,6 +14,7 @@ import { validateEmail, validateIdentifier } from '@/lib/utils/validation'
 import { countries } from '@/lib/data/countries'
 import { FiChevronDown } from 'react-icons/fi'
 import { parsePhoneNumberFromString } from 'libphonenumber-js'
+import { formatFirebaseError } from '@/lib/utils/error-handler'
 
 export default function Login() {
   const router = useRouter()
@@ -124,10 +125,10 @@ export default function Login() {
           return;
         }
         console.log('Google login successful, redirecting to dashboard...');
-        window.location.href = '/dashboard';
+        router.push('/dashboard')
       }
     } catch (err) {
-      setError('Google sign-in failed. Please try again.')
+      setError(formatFirebaseError(err));
     } finally {
       setLoading(false)
     }
@@ -147,10 +148,10 @@ export default function Login() {
           return;
         }
         console.log('Twitter login successful, redirecting to dashboard...');
-        window.location.href = '/dashboard';
+        router.push('/dashboard');
       }
     } catch (err) {
-      setError('Twitter sign-in failed. Please try again.')
+      setError(formatFirebaseError(err));
     } finally {
       setLoading(false)
     }
@@ -182,13 +183,7 @@ export default function Login() {
       }
       router.push('/dashboard')
     } catch (err) {
-      let friendlyMessage = 'The code you entered is incorrect. Please try again.';
-      if (err.message?.includes('expired')) {
-        friendlyMessage = 'Your code has expired. Please request a new one.';
-      } else if (err.message?.includes('network')) {
-        friendlyMessage = 'Connection error. Please check your internet.';
-      }
-      setError(friendlyMessage)
+      setError(formatFirebaseError(err))
       setLoading(false)
     }
   }
@@ -232,21 +227,7 @@ export default function Login() {
       router.push('/dashboard')
     } catch (err) {
       setLoading(false);
-      let friendlyMessage = 'Invalid email or password. Please check your credentials or Register for a new account.';
-
-      if (err.message?.includes('verify your email')) {
-        friendlyMessage = 'Please verify your email address to continue. Check your inbox for the magic link.';
-      } else if (err.message?.includes('EMAIL_NOT_FOUND') || err.message?.includes('user-not-found')) {
-        friendlyMessage = `No account found for this ${identifier.includes('@') ? 'email' : 'mobile number'}. Please Register for an account first.`;
-      } else if (err.message?.includes('INVALID_PASSWORD')) {
-        friendlyMessage = 'Incorrect password. Please try again or reset your password.';
-      } else if (err.message?.includes('network')) {
-        friendlyMessage = 'Connection error. Please check your internet and try again.';
-      } else if (err.message?.includes('too-many-requests')) {
-        friendlyMessage = 'Too many failed attempts. Please try again in 5 minutes.';
-      }
-
-      setError(friendlyMessage);
+      setError(formatFirebaseError(err));
     }
   }
 
@@ -357,27 +338,7 @@ export default function Login() {
       }
     } catch (err) {
       console.error("OTP send error:", err);
-      let friendlyError = 'We couldn\'t send the code. Please try again.';
-
-      if (err.code === 'auth/too-many-requests') {
-        friendlyError = 'Too many attempts. Please wait a few minutes before trying again.';
-        clearRecaptcha();
-      } else if (err.code === 'auth/unauthorized-domain') {
-        friendlyError = 'This domain is not allowed to send codes. Please contact support.';
-      } else if (err.code === 'auth/quota-exceeded') {
-        friendlyError = 'Our daily limit for SMS has been reached. Please try again tomorrow or use email login.';
-      } else if (err.code === 'auth/invalid-phone-number') {
-        friendlyError = 'The phone number you entered is invalid. Please check the digits.';
-      } else if (err.message?.includes('already been rendered')) {
-        friendlyError = 'Connection issue. Please try clicking the button again.';
-        clearRecaptcha();
-      } else if (err.message?.includes('UNSUPPORTED_FIRST_FACTOR') || err.code === 'auth/unsupported-first-factor') {
-        friendlyError = 'Your account doesn\'t support this login method. Please use your password instead.';
-      } else if (err.message) {
-        friendlyError = err.message;
-      }
-
-      setError(friendlyError)
+      setError(formatFirebaseError(err))
     } finally {
       setSendingOTP(false)
     }
@@ -434,7 +395,7 @@ export default function Login() {
         }
       }
     } catch (err) {
-      setError('We couldn\'t resend the code. Please try again in a moment.')
+      setError(formatFirebaseError(err))
     } finally {
       setSendingOTP(false)
     }
@@ -497,6 +458,24 @@ export default function Login() {
 
     try {
       const sanitizedPhone = sanitizePhoneNumber(identifier, selectedCountry);
+
+      // 1. Check if this mobile is already in use
+      try {
+        const checkRes = await fetch('/api/auth/check-status', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ identifier: sanitizedPhone })
+        });
+        const status = await checkRes.json();
+        if (status.success && status.exists) {
+          setError('This mobile number is already linked to another account. Please use a different number or login directly.');
+          setSendingOTP(false);
+          return;
+        }
+      } catch (checkErr) {
+        console.warn("Pre-link check failed, continuing anyway:", checkErr);
+      }
+
       console.log("Linking mobile number:", sanitizedPhone);
 
       const appVerifier = await ensureRecaptcha();
@@ -507,7 +486,7 @@ export default function Login() {
       setShowOTP(true);
       setCountdown(60);
     } catch (err) {
-      setError(err.message || 'Failed to send verification code');
+      setError(formatFirebaseError(err));
     } finally {
       setSendingOTP(false)
     }

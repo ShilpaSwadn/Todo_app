@@ -14,21 +14,36 @@ export async function POST(request) {
     }
 
     const cleanIdentifier = identifier.trim().toLowerCase();
+    const isEmail = cleanIdentifier.includes('@');
 
-    // 1. Check in PostgreSQL (Source of Truth)
-    let user = null;
-    if (cleanIdentifier.includes('@')) {
-      user = await User.findByEmail(cleanIdentifier);
-    } else {
-      user = await User.findByMobileNumber(cleanIdentifier);
+    // 1. Check in FIREBASE (Primary Source of Truth)
+    let firebaseUser = null;
+    try {
+      if (isEmail) {
+        firebaseUser = await adminAuth.getUserByEmail(cleanIdentifier);
+      } else {
+        const digits = cleanIdentifier.replace(/\D/g, '');
+        const normalizedMobile = cleanIdentifier.startsWith('+') ? cleanIdentifier : (digits.length === 10 ? `+91${digits}` : `+${digits}`);
+        firebaseUser = await adminAuth.getUserByPhoneNumber(normalizedMobile);
+      }
+    } catch (error) {
+      if (error.code === 'auth/user-not-found') {
+        return NextResponse.json({
+          success: false,
+          message: 'No account found for this registered identifier in our authentication system. Please register first.'
+        }, { status: 404 });
+      }
+      throw error;
     }
 
-    if (!user) {
+    if (!firebaseUser.email) {
       return NextResponse.json({
         success: false,
-        message: 'No account found for this registered identifier. Please register first.'
-      }, { status: 404 });
+        message: 'This account has no associated email address for OTP delivery.'
+      }, { status: 400 });
     }
+
+    const targetEmail = firebaseUser.email;
 
     // 2. Generate OTP (Stateless)
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
@@ -42,11 +57,11 @@ export async function POST(request) {
 
     // 3. Send OTP
     try {
-      const emailResult = await sendOTPEmail(user.email, otp);
+      const emailResult = await sendOTPEmail(targetEmail, otp);
 
       return NextResponse.json({
         success: true,
-        message: `OTP sent to your email: ${user.email.replace(/(.{2})(.*)(?=@)/, "$1***")}`,
+        message: `OTP sent to your email: ${targetEmail.replace(/(.{2})(.*)(?=@)/, "$1***")}`,
         hash: fullHash,
         messageId: emailResult.messageId || null,
         isLoggedOnly: emailResult.isLoggedOnly || false

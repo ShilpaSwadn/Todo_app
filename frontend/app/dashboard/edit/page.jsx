@@ -5,10 +5,11 @@ import { useRouter } from 'next/navigation'
 import { clearAuthData, isAuthenticated, saveAuthData } from '@/lib/auth/client'
 import { getCurrentUser as getCurrentUserAPI, updateProfile, resetPassword, sendOTP, sendMobileOTP, setupRecaptcha, clearRecaptcha } from '@/lib/services/auth'
 import { validatePassword, validateMobileNumber } from '@/lib/utils/validation'
-import { FiSave, FiEye, FiEyeOff, FiArrowLeft } from 'react-icons/fi'
+import { FiSave, FiArrowLeft } from 'react-icons/fi'
 import Link from 'next/link'
 import PhoneInput from '@/components/ui/PhoneInput'
 import { countries } from '@/lib/data/countries'
+import { formatFirebaseError } from '@/lib/utils/error-handler'
 
 export default function EditProfile() {
   const router = useRouter()
@@ -16,17 +17,13 @@ export default function EditProfile() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
-  const [showPassword, setShowPassword] = useState(false)
-  const [showOldPassword, setShowOldPassword] = useState(false)
   const [formData, setFormData] = useState({
     firstName: '',
     lastName: '',
     email: '',
     mobileNumber: '',
     fullMobileNumber: '',
-    mobileCountryCode: 'IN',
-    oldPassword: '',
-    password: ''
+    mobileCountryCode: 'IN'
   })
   const [forgotPwdLoading, setForgotPwdLoading] = useState(false)
   const [forgotPwdSuccess, setForgotPwdSuccess] = useState('')
@@ -34,8 +31,7 @@ export default function EditProfile() {
   // Check if form is dirty (has changes)
   const isDirty = user ? (
     formData.firstName !== (user.firstName || '') ||
-    formData.lastName !== (user.lastName || '') ||
-    (formData.password && formData.password.trim() !== '')
+    formData.lastName !== (user.lastName || '')
   ) : false
 
   useEffect(() => {
@@ -55,9 +51,7 @@ export default function EditProfile() {
           email: userData.email || '',
           mobileNumber: userData.mobileNumber || '',
           fullMobileNumber: userData.mobileNumber || '',
-          mobileCountryCode: 'IN',
-          oldPassword: '',
-          password: ''
+          mobileCountryCode: 'IN'
         })
       } catch (error) {
         clearAuthData()
@@ -119,32 +113,10 @@ export default function EditProfile() {
         }
       }
 
-      if (formData.password && formData.password.trim() !== '') {
-        if (!formData.oldPassword || formData.oldPassword.trim() === '') {
-          setError('Current password is required to set a new password');
-          setSaving(false);
-          return;
-        }
-        const passwordValidation = validatePassword(formData.password);
-        if (!passwordValidation.valid) {
-          setError(passwordValidation.message);
-          setSaving(false);
-          return;
-        }
-      }
-
-      const passwordChanged = formData.password && formData.password.trim() !== '';
-
-      if (passwordChanged) {
-        // Password solo change - ask for final confirmation
-        setVerificationMode('confirm');
-        setSaving(false);
-      } else {
-        // No sensitive changes (just name), proceed normally
-        await proceedWithUpdate();
-      }
+      // No sensitive changes (just name), proceed normally
+      await proceedWithUpdate();
     } catch (err) {
-      setError(err.message || 'Verification failed to start');
+      setError(formatFirebaseError(err));
       setSaving(false);
     }
   };
@@ -171,7 +143,7 @@ export default function EditProfile() {
 
       await proceedWithUpdate();
     } catch (err) {
-      setError(err.message || 'OTP verification failed');
+      setError(formatFirebaseError(err));
       setSaving(false);
     }
   };
@@ -182,27 +154,15 @@ export default function EditProfile() {
         firstName: formData.firstName.trim(),
         lastName: formData.lastName.trim()
       };
-      const passwordChanged = formData.password && formData.password.trim() !== '';
-
-      if (passwordChanged) {
-        updateData.password = formData.password;
-        updateData.oldPassword = formData.oldPassword;
-      }
 
       const updatedUser = await updateProfile(updateData);
-
-      if (passwordChanged) {
-        clearAuthData();
-        router.push('/login');
-        return;
-      }
 
       const token = localStorage.getItem('token');
       if (token) saveAuthData(updatedUser, token);
 
       router.push('/dashboard/profile');
     } catch (err) {
-      setError(err.message || 'Failed to update profile');
+      setError(formatFirebaseError(err));
       setSaving(false);
     }
   };
@@ -220,12 +180,15 @@ export default function EditProfile() {
     try {
       await resetPassword(user.email);
       setForgotPwdSuccess('Reset link sent to your email!');
+      setTimeout(() => setForgotPwdSuccess(''), 5000);
     } catch (err) {
-      setError(err.message || 'Failed to send reset email');
+      setError(formatFirebaseError(err));
     } finally {
       setForgotPwdLoading(false);
     }
   };
+
+
 
   if (loading || !user) {
     return (
@@ -315,7 +278,6 @@ export default function EditProfile() {
                       className="w-full px-4 py-2.5 border border-gray-200 dark:border-gray-800 rounded-xl bg-gray-50 dark:bg-gray-900/50 text-gray-400 dark:text-gray-500 cursor-not-allowed transition-all text-sm font-medium"
                       placeholder="Enter email address"
                     />
-                    <p className="text-[10px] text-gray-400 dark:text-gray-600 mt-1 ml-1 font-bold uppercase tracking-wider">Email cannot be changed</p>
                   </div>
 
                   <div>
@@ -330,84 +292,37 @@ export default function EditProfile() {
                         className="w-full opacity-60 grayscale-[0.5]"
                       />
                     </div>
-                    <p className="text-[10px] text-gray-400 dark:text-gray-600 mt-1 ml-1 font-bold uppercase tracking-wider">Mobile number cannot be changed</p>
                   </div>
                 </div>
-              </div>
 
-              <div className="pt-5 border-t border-gray-200 dark:border-gray-700">
-                <h2 className="text-base font-semibold text-gray-900 dark:text-white mb-4">Change Password</h2>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label htmlFor="oldPassword" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-                      Current Password
-                    </label>
-                    <div className="relative border border-gray-300 dark:border-gray-600 rounded-lg overflow-hidden">
-                      <input
-                        type={showOldPassword ? 'text' : 'password'}
-                        id="oldPassword"
-                        name="oldPassword"
-                        value={formData.oldPassword}
-                        onChange={handleChange}
-                        className="w-full px-3 py-2 pr-10 focus:ring-2 focus:ring-indigo-500 focus:border-transparent dark:bg-gray-700 dark:text-white transition-colors text-sm"
-                        placeholder="Enter current password"
-                      />
-                      <button
-                        type="button"
-                        disabled={forgotPwdLoading}
-                        onClick={() => setShowOldPassword(!showOldPassword)}
-                        className={`absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors ${forgotPwdLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
-                      >
-                        {showOldPassword ? <FiEyeOff className="w-4 h-4" /> : <FiEye className="w-4 h-4" />}
-                      </button>
+                <div className="mt-8 pt-6 border-t border-gray-100 dark:border-gray-700/50">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-gray-50/50 dark:bg-gray-900/30 p-4 rounded-2xl border border-gray-100 dark:border-gray-800">
+                    <div>
+                      <h3 className="text-sm font-bold text-gray-900 dark:text-white">Security Settings</h3>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Need to update your password? We can send you a secure link.</p>
                     </div>
-                    <div className="flex justify-between items-center mt-1.5 px-1">
-                      <button
-                        type="button"
-                        onClick={handleForgotPassword}
-                        disabled={forgotPwdLoading}
-                        className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 transition-colors uppercase tracking-widest disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        {forgotPwdLoading ? 'Sending...' : 'Forgot password?'}
-                      </button>
-                      {forgotPwdSuccess && (
-                        <span className="text-[10px] font-bold text-green-600 dark:text-green-400 uppercase tracking-widest animate-in fade-in slide-in-from-right-2">
+                    <div className="flex items-center gap-3">
+                      {forgotPwdSuccess ? (
+                        <span className="text-xs font-bold text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/20 px-3 py-1.5 rounded-lg animate-in fade-in zoom-in-95">
                           {forgotPwdSuccess}
                         </span>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={handleForgotPassword}
+                          disabled={forgotPwdLoading}
+                          className="text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 transition-colors py-2 px-4 rounded-xl border border-indigo-100 dark:border-indigo-900/50 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 disabled:opacity-50 flex items-center gap-2"
+                        >
+                          {forgotPwdLoading && <div className="w-3 h-3 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>}
+                          Reset Password via Email
+                        </button>
                       )}
                     </div>
                   </div>
-
-                  <div>
-                    <label htmlFor="password" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-                      New Password
-                    </label>
-                    <div className="relative border border-gray-300 dark:border-gray-600 rounded-lg overflow-hidden">
-                      <input
-                        type={showPassword ? 'text' : 'password'}
-                        id="password"
-                        name="password"
-                        value={formData.password}
-                        onChange={handleChange}
-                        minLength={6}
-                        className="w-full px-3 py-2 pr-10 focus:ring-2 focus:ring-indigo-500 focus:border-transparent dark:bg-gray-700 dark:text-white transition-colors text-sm"
-                        placeholder="Min 6 characters"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowPassword(!showPassword)}
-                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
-                      >
-                        {showPassword ? <FiEyeOff className="w-4 h-4" /> : <FiEye className="w-4 h-4" />}
-                      </button>
-                    </div>
-                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                      Leave blank to keep current password
-                    </p>
-                  </div>
                 </div>
               </div>
+
+
 
               <div className="flex flex-col sm:flex-row justify-end gap-3 mt-6 pt-5 border-t border-gray-200 dark:border-gray-700">
                 <button
@@ -451,12 +366,10 @@ export default function EditProfile() {
                 <h3 className="text-xl font-black text-gray-900 dark:text-white">
                   {verificationMode === 'email' && 'Verify New Email'}
                   {verificationMode === 'mobile' && 'Verify New Mobile'}
-                  {verificationMode === 'confirm' && 'Confirm password change'}
                 </h3>
                 <p className="text-sm text-gray-500 dark:text-gray-400 mt-2 font-medium">
                   {verificationMode === 'email' && `We've sent a 6-digit code to ${formData.email}`}
                   {verificationMode === 'mobile' && `We've sent a 6-digit code to ${formData.fullMobileNumber}`}
-                  {verificationMode === 'confirm' && 'Are you sure you want to change your password? This will log you out.'}
                 </p>
               </div>
 

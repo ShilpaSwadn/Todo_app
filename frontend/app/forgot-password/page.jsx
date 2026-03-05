@@ -6,6 +6,7 @@ import { FiMail, FiArrowLeft, FiCheckCircle } from 'react-icons/fi'
 import { HiX } from 'react-icons/hi'
 import { ImSpinner2 } from 'react-icons/im'
 import { resetPassword } from '@/lib/services/auth'
+import { formatFirebaseError } from '@/lib/utils/error-handler'
 import { useEffect } from 'react'
 
 export default function ForgotPassword() {
@@ -40,15 +41,7 @@ export default function ForgotPassword() {
             const response = await resetPassword(email.trim().toLowerCase())
             setMessage(response.message)
         } catch (err) {
-            let friendlyMessage = err.message || 'We could not send the reset link. Please try again later.';
-
-            if (err.message?.includes('user-not-found')) {
-                friendlyMessage = 'No account found with this email address. Please check and try again.';
-            } else if (err.message?.includes('network-request-failed')) {
-                friendlyMessage = 'Connection error. Please check your internet and try again.';
-            }
-
-            setError(friendlyMessage);
+            setError(formatFirebaseError(err));
         } finally {
             setLoading(false)
         }

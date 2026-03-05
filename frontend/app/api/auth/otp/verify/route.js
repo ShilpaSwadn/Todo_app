@@ -33,35 +33,27 @@ export async function POST(request) {
       return NextResponse.json({ success: false, message: 'Invalid OTP' }, { status: 401 });
     }
 
-    // 3. Find User in local PostgreSQL
-    const localUser = await User.findByEmail(cleanIdentifier);
-    if (!localUser) {
-      return NextResponse.json({ success: false, message: 'No account found for this email.' }, { status: 404 });
-    }
-
-    // 4. Ensure user exists in Firebase Auth for token generation
-    let firebaseUid = localUser.firebase_uid;
-    if (!firebaseUid) {
-      try {
-        const userRecord = await adminAuth.getUserByEmail(cleanIdentifier);
-        firebaseUid = userRecord.uid;
-        await User.updateFirebaseUid(localUser.id, firebaseUid);
-      } catch (e) {
-        // Create in Firebase since we use it for Auth
-        const newUser = await adminAuth.createUser({
-          email: cleanIdentifier,
-          displayName: `${localUser.first_name} ${localUser.last_name || ''}`.trim(),
-          emailVerified: true // They just verified via OTP
-        });
-        firebaseUid = newUser.uid;
-        await User.updateFirebaseUid(localUser.id, firebaseUid);
+    // 3. Find User in FIREBASE (Primary Source of Truth)
+    let firebaseUser = null;
+    try {
+      firebaseUser = await adminAuth.getUserByEmail(cleanIdentifier);
+    } catch (error) {
+      if (error.code === 'auth/user-not-found') {
+        return NextResponse.json({ success: false, message: 'No registered account found in our authentication system. Please register first.' }, { status: 404 });
       }
+      throw error;
     }
 
-    // 5. Update local account status
-    if (!localUser.account_active) {
-      await User.updateAccountActive(localUser.id, true);
-    }
+    const firebaseUid = firebaseUser.uid;
+
+    // 4. Synchronize with local PostgreSQL (ensure profile exists)
+    // syncUser handles both creating if missing and updating if existing
+    const localUser = await authService.syncUser({
+      uid: firebaseUid,
+      email: firebaseUser.email,
+      email_verified: true, // They just verified via OTP
+      name: firebaseUser.displayName
+    });
 
     // 6. Create Firebase Custom Token
     const customToken = await authService.createCustomToken(firebaseUid);

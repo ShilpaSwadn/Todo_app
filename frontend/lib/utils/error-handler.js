@@ -1,0 +1,76 @@
+/**
+ * Formats technical Firebase error messages into user-friendly ones.
+ * @param {Error|Object|string} error The error object or string from Firebase
+ * @returns {string} A human-readable error message
+ */
+export const formatFirebaseError = (error) => {
+    if (!error) return 'An unexpected error occurred. Please try again.';
+
+    // Support both Error objects and string messages
+    const errorStr = typeof error === 'string' ? error : (error.code || error.message || '');
+
+    if (errorStr.includes('auth/provider-already-linked')) {
+        return 'This mobile number is already linked to another account. Please use a different number.';
+    }
+
+    if (errorStr.includes('auth/credential-already-in-use')) {
+        return 'This account or mobile number is already in use by another user.';
+    }
+
+    if (errorStr.includes('auth/email-already-in-use')) {
+        return 'This email address is already registered. Please login instead.';
+    }
+
+    if (errorStr.includes('auth/invalid-verification-code')) {
+        return 'The verification code you entered is incorrect. Please check and try again.';
+    }
+
+    if (errorStr.includes('auth/code-expired')) {
+        return 'The verification code has expired. Please request a new one.';
+    }
+
+    if (errorStr.includes('auth/invalid-phone-number')) {
+        return 'The phone number format is invalid. Please check the country code and digits.';
+    }
+
+    if (errorStr.includes('auth/too-many-requests')) {
+        return 'Too many failed attempts. For your security, this account is temporarily locked. Please try again in 5-10 minutes.';
+    }
+
+    if (errorStr.includes('auth/network-request-failed')) {
+        return 'A network error occurred. Please check your internet connection and try again.';
+    }
+
+    if (errorStr.includes('auth/user-not-found')) {
+        return 'No account found with these details. Please register for a new account.';
+    }
+
+    if (errorStr.includes('auth/wrong-password')) {
+        return 'Incorrect password. Please try again or use the "Forgot Password" option.';
+    }
+
+    if (errorStr.includes('auth/invalid-email')) {
+        return 'The email address provided is not valid. Please check for typos.';
+    }
+
+    if (errorStr.includes('auth/popup-closed-by-user')) {
+        return 'The login popup was closed before completion. Please try again.';
+    }
+
+    if (errorStr.includes('auth/internal-error')) {
+        return 'A system error occurred. Please refresh the page and try again.';
+    }
+
+    if (errorStr.includes('auth/invalid-app-credential')) {
+        return 'The verification system had trouble confirming your session. Please try clicking the button again in 2 seconds.';
+    }
+
+    // Fallback for generic Firebase messages that already contain some info
+    if (errorStr.startsWith('Firebase:')) {
+        // Extract the part inside parentheses if it exists, or remove "Firebase: Error"
+        const descriptive = errorStr.replace('Firebase: Error ', '').replace('Firebase:', '').trim();
+        if (descriptive) return descriptive;
+    }
+
+    return error.message || 'An unexpected authentication error occurred. Please try again.';
+};

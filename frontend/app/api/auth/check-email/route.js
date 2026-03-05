@@ -7,29 +7,34 @@ export async function POST(request) {
         await ensureDbInitialized();
         const body = await request.json();
         const { email } = body;
-        const targetEmail = email?.toLowerCase();
+        const targetEmail = email?.toLowerCase().trim();
 
         if (!targetEmail) {
             return NextResponse.json({ message: 'Missing Email' }, { status: 400 });
         }
 
-        // Check if user exists in the main users table
-        const checkUserSql = 'SELECT id FROM public.users WHERE email = $1';
-        const userResult = await query(checkUserSql, [targetEmail]);
+        // Check if user exists in FIREBASE only (Primary Auth Source)
+        const { adminAuth } = await import('@/lib/server/config/firebase-admin');
 
-        if (userResult.rows.length === 0) {
+        try {
+            const firebaseUser = await adminAuth.getUserByEmail(targetEmail);
+
             return NextResponse.json({
-                success: false,
-                registered: false,
-                message: 'This email is not registered with us.'
-            }, { status: 404 });
+                success: true,
+                registered: true,
+                emailVerified: firebaseUser.emailVerified,
+                message: 'Email is registered.'
+            });
+        } catch (error) {
+            if (error.code === 'auth/user-not-found') {
+                return NextResponse.json({
+                    success: false,
+                    registered: false,
+                    message: 'This email is not registered with us.'
+                }, { status: 404 });
+            }
+            throw error;
         }
-
-        return NextResponse.json({
-            success: true,
-            registered: true,
-            message: 'Email is registered.'
-        });
 
     } catch (error) {
         console.error('Error in check-email API:', error);
