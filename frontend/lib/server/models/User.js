@@ -2,12 +2,25 @@ import { query } from '../config/database.js'
 
 const cleanPhoneNumber = (phone) => {
   if (!phone) return null;
-  // Keep the + if present and all digits
-  const cleaned = phone.trim();
-  if (cleaned.startsWith('+')) {
-    return '+' + cleaned.replace(/\D/g, '');
+  const digits = phone.replace(/\D/g, '');
+
+  // If it already starts with +, just clean the rest
+  if (phone.trim().startsWith('+')) {
+    return '+' + digits;
   }
-  return cleaned.replace(/\D/g, '');
+
+  // If it's 10 digits, assume India (+91)
+  if (digits.length === 10) {
+    return '+91' + digits;
+  }
+
+  // If it starts with 91 and is 12 digits, assume it's India without the +
+  if (digits.startsWith('91') && digits.length === 12) {
+    return '+' + digits;
+  }
+
+  // Otherwise just prepend + and hope for the best, or log a warning
+  return '+' + digits;
 }
 
 class User {

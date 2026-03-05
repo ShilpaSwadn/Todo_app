@@ -24,26 +24,30 @@ const ensureFirebase = () => {
 };
 
 /**
- * Sanitize phone number and ensure correct international format
- * Prevents double country codes and handles missing plus signs
+ * Sanitize phone number and ensure correct international format (E.164)
+ * Format: +[country_code][subscriber_number] (e.g., +919876543210)
+ * Handles missing +, extra spaces, dashes, and missing country codes.
  */
 export const sanitizePhoneNumber = (number, country = { dialCode: '+91' }) => {
   if (!number) return '';
 
-  // Remove all non-digit characters except +
-  let cleaned = number.replace(/[^\d+]/g, '');
+  // 1. Remove all non-digit characters (except + if it's at the start)
+  let rawDigits = number.replace(/\D/g, '');
 
-  // If it already starts with +, trust the user has provided full format
-  if (cleaned.startsWith('+')) return cleaned;
-
-  // If it starts with the dial code digits but no +, add the +
-  const dialCodeDigits = country.dialCode.replace('+', '');
-  if (cleaned.startsWith(dialCodeDigits)) {
-    return '+' + cleaned;
+  // 2. If the user provided a number starting with +, prioritize that
+  if (number.trim().startsWith('+')) {
+    return '+' + rawDigits;
   }
 
-  // Fallback: prepend the country's dial code
-  return country.dialCode + cleaned;
+  // 3. Check if the number already starts with the dial code digits (e.g. "919876...")
+  const dialCodeDigits = country.dialCode.replace('+', '');
+  if (rawDigits.startsWith(dialCodeDigits) && rawDigits.length > country.maxLength) {
+    // It likely already has the country code
+    return '+' + rawDigits;
+  }
+
+  // 4. Otherwise, prepend the selected country's dial code
+  return country.dialCode + rawDigits;
 };
 
 // Login with Google OAuth

@@ -29,11 +29,13 @@ class AuthService {
     // 2. Create in Firebase Auth
     // Note: We don't pass phoneNumber here because Firebase enforces global uniqueness on it.
     // Our application allows multiple accounts per mobile number (each with a unique email).
+    const cleanedMobile = mobileNumber ? (mobileNumber.startsWith('+') ? mobileNumber : (mobileNumber.length === 10 ? `+91${mobileNumber}` : `+${mobileNumber}`)).replace(/\s/g, '') : null;
+
     const firebaseUser = await adminAuth.createUser({
       email,
       password,
       displayName: `${firstName} ${lastName || ''}`.trim(),
-      phoneNumber: mobileNumber // Enforce uniqueness in Firebase Auth as well
+      phoneNumber: cleanedMobile // Enforce uniqueness in Firebase Auth as well
     });
 
     // 3. Create in local database (PostgreSQL)

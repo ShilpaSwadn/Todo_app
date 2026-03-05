@@ -221,8 +221,14 @@ export default function Login() {
         }
       }
 
+      // Sanitize identifier if it's a phone number
+      let finalIdentifier = identifier.trim().toLowerCase();
+      if (!finalIdentifier.includes('@')) {
+        finalIdentifier = sanitizePhoneNumber(finalIdentifier, selectedCountry);
+      }
+
       // Direct login with password and verification check
-      await loginWithPasswordDirect(identifier.trim().toLowerCase(), password)
+      await loginWithPasswordDirect(finalIdentifier, password)
       router.push('/dashboard')
     } catch (err) {
       setLoading(false);
@@ -271,10 +277,12 @@ export default function Login() {
       setIsMobile(isPhone);
 
       // Check user existence first (Consistency with Email flow)
+      const identifierForStatus = isPhone ? sanitizePhoneNumber(cleanIdentifier, selectedCountry) : cleanIdentifier;
+
       const userStatusRes = await fetch('/api/auth/check-status', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ identifier: cleanIdentifier })
+        body: JSON.stringify({ identifier: identifierForStatus })
       });
 
       const userStatus = await userStatusRes.json();
