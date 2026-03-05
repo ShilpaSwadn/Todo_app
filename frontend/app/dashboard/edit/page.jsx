@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { clearAuthData, isAuthenticated, saveAuthData } from '@/lib/auth/client'
-import { getCurrentUser as getCurrentUserAPI, updateProfile } from '@/lib/services/auth'
+import { getCurrentUser as getCurrentUserAPI, updateProfile, resetPassword, sendOTP, sendMobileOTP, setupRecaptcha, clearRecaptcha } from '@/lib/services/auth'
 import { validatePassword, validateMobileNumber } from '@/lib/utils/validation'
 import { FiSave, FiEye, FiEyeOff, FiArrowLeft } from 'react-icons/fi'
 import Link from 'next/link'
@@ -28,13 +28,13 @@ export default function EditProfile() {
     oldPassword: '',
     password: ''
   })
+  const [forgotPwdLoading, setForgotPwdLoading] = useState(false)
+  const [forgotPwdSuccess, setForgotPwdSuccess] = useState('')
 
   // Check if form is dirty (has changes)
   const isDirty = user ? (
     formData.firstName !== (user.firstName || '') ||
     formData.lastName !== (user.lastName || '') ||
-    formData.email !== (user.email || '') ||
-    formData.fullMobileNumber !== (user.mobileNumber || '') ||
     (formData.password && formData.password.trim() !== '')
   ) : false
 
@@ -91,7 +91,6 @@ export default function EditProfile() {
   }, [resendCountdown]);
 
   const ensureRecaptcha = async () => {
-    const { setupRecaptcha, clearRecaptcha } = require('@/lib/services/auth');
     try {
       const container = document.getElementById('recaptcha-container');
       if (!container) return null;
@@ -134,32 +133,14 @@ export default function EditProfile() {
         }
       }
 
-      const emailChanged = user.email.toLowerCase() !== formData.email.trim().toLowerCase();
-      const mobileChanged = (user.mobileNumber || '') !== formData.fullMobileNumber;
       const passwordChanged = formData.password && formData.password.trim() !== '';
 
-      const { sendOTP, sendMobileOTP } = require('@/lib/services/auth');
-
-      if (emailChanged) {
-        // Send Email OTP
-        const res = await sendOTP(formData.email.trim());
-        setOtpHash(res.hash);
-        setVerificationMode('email');
-        setSaving(false);
-      } else if (mobileChanged) {
-        // Send Mobile OTP
-        const verifier = await ensureRecaptcha();
-        if (!verifier) return;
-        const result = await sendMobileOTP(formData.fullMobileNumber, verifier);
-        setConfirmationResult(result);
-        setVerificationMode('mobile');
-        setSaving(false);
-      } else if (passwordChanged) {
+      if (passwordChanged) {
         // Password solo change - ask for final confirmation
         setVerificationMode('confirm');
         setSaving(false);
       } else {
-        // No sensitive changes, proceed normally
+        // No sensitive changes (just name), proceed normally
         await proceedWithUpdate();
       }
     } catch (err) {
@@ -198,20 +179,19 @@ export default function EditProfile() {
   const proceedWithUpdate = async () => {
     try {
       const updateData = {
-        ...formData,
-        mobileNumber: formData.fullMobileNumber
+        firstName: formData.firstName.trim(),
+        lastName: formData.lastName.trim()
       };
-      const passwordChanged = updateData.password && updateData.password.trim() !== '';
-      const emailChanged = user.email.toLowerCase() !== formData.email.trim().toLowerCase();
+      const passwordChanged = formData.password && formData.password.trim() !== '';
 
-      if (!passwordChanged) {
-        delete updateData.password;
-        delete updateData.oldPassword;
+      if (passwordChanged) {
+        updateData.password = formData.password;
+        updateData.oldPassword = formData.oldPassword;
       }
 
       const updatedUser = await updateProfile(updateData);
 
-      if (passwordChanged || emailChanged) {
+      if (passwordChanged) {
         clearAuthData();
         router.push('/login');
         return;
@@ -230,6 +210,21 @@ export default function EditProfile() {
   const handleSubmit = (e) => {
     e.preventDefault();
     handleStartVerification();
+  };
+
+  const handleForgotPassword = async () => {
+    if (!user?.email) return;
+    setForgotPwdLoading(true);
+    setError('');
+    setForgotPwdSuccess('');
+    try {
+      await resetPassword(user.email);
+      setForgotPwdSuccess('Reset link sent to your email!');
+    } catch (err) {
+      setError(err.message || 'Failed to send reset email');
+    } finally {
+      setForgotPwdLoading(false);
+    }
   };
 
   if (loading || !user) {
@@ -315,30 +310,27 @@ export default function EditProfile() {
                       type="email"
                       name="email"
                       value={formData.email}
-                      onChange={handleChange}
-                      required
-                      className="w-full px-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent dark:bg-gray-700 dark:text-white transition-all text-sm font-medium"
+                      readOnly
+                      disabled
+                      className="w-full px-4 py-2.5 border border-gray-200 dark:border-gray-800 rounded-xl bg-gray-50 dark:bg-gray-900/50 text-gray-400 dark:text-gray-500 cursor-not-allowed transition-all text-sm font-medium"
                       placeholder="Enter email address"
                     />
+                    <p className="text-[10px] text-gray-400 dark:text-gray-600 mt-1 ml-1 font-bold uppercase tracking-wider">Email cannot be changed</p>
                   </div>
 
                   <div>
                     <label className="block text-xs font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-1.5">
                       Mobile Number
                     </label>
-                    <PhoneInput
-                      value={formData.fullMobileNumber || formData.mobileNumber}
-                      onChange={(full, digits, code) => {
-                        setFormData(prev => ({
-                          ...prev,
-                          fullMobileNumber: full,
-                          mobileNumber: digits,
-                          mobileCountryCode: code
-                        }))
-                        setError('')
-                      }}
-                      className="w-full"
-                    />
+                    <div className="relative group/phone">
+                      <div className="absolute inset-0 z-10 cursor-not-allowed" title="Mobile number cannot be changed"></div>
+                      <PhoneInput
+                        value={formData.fullMobileNumber || formData.mobileNumber}
+                        onChange={() => { }} // No-op
+                        className="w-full opacity-60 grayscale-[0.5]"
+                      />
+                    </div>
+                    <p className="text-[10px] text-gray-400 dark:text-gray-600 mt-1 ml-1 font-bold uppercase tracking-wider">Mobile number cannot be changed</p>
                   </div>
                 </div>
               </div>
@@ -363,11 +355,27 @@ export default function EditProfile() {
                       />
                       <button
                         type="button"
+                        disabled={forgotPwdLoading}
                         onClick={() => setShowOldPassword(!showOldPassword)}
-                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+                        className={`absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors ${forgotPwdLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
                       >
                         {showOldPassword ? <FiEyeOff className="w-4 h-4" /> : <FiEye className="w-4 h-4" />}
                       </button>
+                    </div>
+                    <div className="flex justify-between items-center mt-1.5 px-1">
+                      <button
+                        type="button"
+                        onClick={handleForgotPassword}
+                        disabled={forgotPwdLoading}
+                        className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 transition-colors uppercase tracking-widest disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {forgotPwdLoading ? 'Sending...' : 'Forgot password?'}
+                      </button>
+                      {forgotPwdSuccess && (
+                        <span className="text-[10px] font-bold text-green-600 dark:text-green-400 uppercase tracking-widest animate-in fade-in slide-in-from-right-2">
+                          {forgotPwdSuccess}
+                        </span>
+                      )}
                     </div>
                   </div>
 

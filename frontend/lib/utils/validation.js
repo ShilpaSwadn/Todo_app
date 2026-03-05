@@ -23,25 +23,38 @@ export const validateLastName = (name) => {
 // Validate mobile number - Use libphonenumber-js for international validation
 export const validateMobileNumber = (mobileNumber, countryCode = 'IN') => {
   if (!mobileNumber || mobileNumber.trim() === '') return false
+  const cleanNumber = mobileNumber.trim()
 
   try {
-    const phoneNumber = parsePhoneNumberFromString(mobileNumber, countryCode)
-    if (!phoneNumber || !phoneNumber.isValid()) return false
-
-    // Explicit check against our maxLength for consistency
-    const country = countries.find(c => c.code === (phoneNumber.country || countryCode))
-    if (country && phoneNumber.nationalNumber.length !== country.maxLength) {
-      return false
+    // 1. Try strict validation first
+    const phoneNumber = parsePhoneNumberFromString(cleanNumber, countryCode)
+    if (phoneNumber && phoneNumber.isValid()) {
+      // Regular check against our maxLength metadata
+      const country = countries.find(c => c.code === (phoneNumber.country || countryCode))
+      if (country && phoneNumber.nationalNumber.length !== country.maxLength) {
+        return false
+      }
+      return true
     }
 
-    return true
+    // 2. Fallback: If not strictly valid, check if it's "possible" and matches our length
+    // This is useful for regions where the library might be outdated or too strict
+    const digitsOnly = cleanNumber.replace(/\D/g, '')
+    const selectedCountry = countries.find(c => c.code === countryCode)
+    
+    if (selectedCountry && digitsOnly.length === selectedCountry.maxLength) {
+       // If it's the exact length we expect for this country, we allow it even if library is unsure
+       return true
+    }
+
+    return false
   } catch (error) {
     return false
   }
 }
 
 // Validate identifier (email or mobile number)
-export const validateIdentifier = (identifier) => {
+export const validateIdentifier = (identifier, countryCode = 'IN') => {
   if (!identifier || identifier.trim() === '') return false
   const cleanIdentifier = identifier.trim()
 
@@ -51,9 +64,10 @@ export const validateIdentifier = (identifier) => {
   }
 
   // Check if it's potentially a phone number (contains digits and optional +)
-  const phonePattern = /^(\+)?[\d\s-]{10,15}$/
+  // Inclusive enough for most countries (6 to 15 digits)
+  const phonePattern = /^(\+)?[\d\s-]{6,15}$/
   if (phonePattern.test(cleanIdentifier)) {
-    return validateMobileNumber(cleanIdentifier)
+    return validateMobileNumber(cleanIdentifier, countryCode)
   }
 
   return false

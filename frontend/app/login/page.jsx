@@ -205,7 +205,7 @@ export default function Login() {
         return
       }
 
-      if (!validateIdentifier(identifier)) {
+      if (!validateIdentifier(identifier, selectedCountry.code)) {
         setError(`Please enter a valid email or ${selectedCountry.maxLength}-digit mobile number`)
         setLoading(false)
         return
@@ -254,7 +254,7 @@ export default function Login() {
     e.preventDefault()
     const cleanIdentifier = identifier.trim().toLowerCase();
 
-    if (!cleanIdentifier || !validateIdentifier(cleanIdentifier)) {
+    if (!cleanIdentifier || !validateIdentifier(cleanIdentifier, selectedCountry.code)) {
       setError(`Please enter a valid email or ${selectedCountry.maxLength}-digit mobile number`)
       return
     }
