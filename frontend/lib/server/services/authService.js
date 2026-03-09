@@ -87,7 +87,16 @@ class AuthService {
    */
   async loginWithEmail(email, password) {
     try {
-      // 1. Authenticate with Firebase using REST API
+      // 1. Verify if the email actually exists first to provide a friendly "needs-registration" error
+      try {
+        await adminAuth.getUserByEmail(email.toLowerCase().trim());
+      } catch (fbError) {
+        if (fbError.code === 'auth/user-not-found') {
+          throw new Error('No account found for this email address in our authentication system. Please register first.');
+        }
+      }
+
+      // 2. Authenticate with Firebase using REST API
       const apiKey = process.env.NEXT_PUBLIC_FIREBASE_API_KEY;
       const url = `https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${apiKey}`;
 
@@ -104,6 +113,9 @@ class AuthService {
       const data = await response.json();
 
       if (!response.ok) {
+        if (data.error?.message === 'INVALID_LOGIN_CREDENTIALS' || data.error?.message === 'INVALID_PASSWORD') {
+          throw new Error('Invalid email or password. Please try again.');
+        }
         throw new Error(data.error?.message || 'Authentication failed');
       }
 
@@ -202,10 +214,31 @@ class AuthService {
     return user;
   }
 
-  /**
-   * Updates user profile in PostgreSQL.
-   */
   async updateProfile(uid, updates) {
+    // If they are adding an email or mobile number, ensure uniqueness and update Firebase Auth natively
+    if (updates.email || updates.mobileNumber) {
+      const firebaseUpdates = {};
+
+      if (updates.email) {
+        await this.checkUniqueness(updates.email, null);
+        firebaseUpdates.email = updates.email.toLowerCase().trim();
+      }
+
+      if (updates.mobileNumber) {
+        const cleanedMobile = (updates.mobileNumber.startsWith('+') ? updates.mobileNumber : (updates.mobileNumber.length === 10 ? `+91${updates.mobileNumber}` : `+${updates.mobileNumber}`)).replace(/\s/g, '');
+        await this.checkUniqueness(null, cleanedMobile);
+        firebaseUpdates.phoneNumber = cleanedMobile;
+      }
+
+      try {
+        await adminAuth.updateUser(uid, firebaseUpdates);
+      } catch (fbErr) {
+        if (fbErr.code === 'auth/email-already-exists') throw new Error('Email already registered');
+        if (fbErr.code === 'auth/phone-number-already-exists') throw new Error('Mobile number already registered');
+        throw fbErr;
+      }
+    }
+
     const user = await User.update(uid, updates);
     if (!user) {
       throw new Error('User not found');

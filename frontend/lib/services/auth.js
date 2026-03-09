@@ -1,20 +1,14 @@
 import {
-  createUserWithEmailAndPassword,
-  sendEmailVerification,
-  signInWithEmailAndPassword,
   signOut,
-  sendPasswordResetEmail,
   signInWithPopup,
-  updateProfile as updateFirebaseProfile,
+  sendPasswordResetEmail,
   RecaptchaVerifier,
   signInWithCustomToken,
   signInWithPhoneNumber,
   linkWithPhoneNumber
 } from "firebase/auth";
-import { doc, getDoc, setDoc, runTransaction, collection } from "firebase/firestore";
-import { auth, db, googleProvider, twitterProvider } from "../firebase";
+import { auth, googleProvider, twitterProvider } from "../firebase";
 import api from '@/lib/api/client'
-import { parsePhoneNumberFromString } from 'libphonenumber-js'
 import { saveAuthData, clearAuthData } from '@/lib/auth/client'
 
 const ensureFirebase = () => {
@@ -499,16 +493,6 @@ export const resetPassword = async (email) => {
       throw new Error("No account found with this email address. Please register first.");
     }
     throw error;
-  }
-}
-// Check user status (exists, verified, etc.)
-export const checkUserStatus = async (identifier) => {
-  try {
-    const response = await api.post('/auth/check-status', { identifier });
-    return response;
-  } catch (error) {
-    console.error("Check user status error:", error);
-    return { success: false, exists: false };
   }
 }
 
