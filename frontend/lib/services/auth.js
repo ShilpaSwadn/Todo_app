@@ -65,8 +65,8 @@ export const loginWithGoogle = async () => {
         identifier: user.email.trim().toLowerCase()
       });
 
-      if (response.success && response.exists && response.mobileNumber) {
-        // Already has mobile, proceed to sync
+      if (response.success && response.exists) {
+        // Already exists, proceed to sync
         const { userData, finalToken } = await handleAuthSync(user);
         saveAuthData(userData, finalToken);
         return { success: true, user: userData };
@@ -81,7 +81,7 @@ export const loginWithGoogle = async () => {
   } catch (error) {
     console.error("Google Login Error:", error);
     if (error.code === 'auth/popup-closed-by-user') {
-      throw new Error("Login cancelled. Please try again.");
+      return { success: false, cancelled: true };
     }
     throw error;
   }
@@ -103,8 +103,8 @@ export const loginWithTwitter = async () => {
           identifier: user.email.trim().toLowerCase()
         });
 
-        if (response.success && response.exists && response.mobileNumber) {
-          // Already has mobile, proceed to sync
+        if (response.success && response.exists) {
+          // Already exists, proceed to sync
           const { userData, finalToken } = await handleAuthSync(user);
           saveAuthData(userData, finalToken);
           return { success: true, user: userData };
@@ -119,7 +119,7 @@ export const loginWithTwitter = async () => {
   } catch (error) {
     console.error("Twitter Login Error:", error);
     if (error.code === 'auth/popup-closed-by-user') {
-      throw new Error("Login cancelled. Please try again.");
+      return { success: false, cancelled: true };
     }
     if (error.code === 'auth/account-exists-with-different-credential') {
       throw new Error("An account already exists with the same email address but different sign-in credentials. Please login with Google or your password.");

@@ -295,41 +295,46 @@ export default function Login() {
 
         if (response.messageId && !response.isLoggedOnly) {
           // Poll for delivery status
-          setDeliveryStatus('Queued...');
-          let attempts = 0;
-          const pollInterval = setInterval(async () => {
-            attempts++;
-            try {
-              const statusRes = await fetch(`/api/auth/otp/status?id=${response.messageId}`);
-              const statusData = await statusRes.json();
+          await new Promise((resolve) => {
+            setDeliveryStatus('Queued...');
+            let attempts = 0;
+            const pollInterval = setInterval(async () => {
+              attempts++;
+              try {
+                const statusRes = await fetch(`/api/auth/otp/status?id=${response.messageId}`);
+                const statusData = await statusRes.json();
 
-              if (statusData.status === 'SUCCESS') {
-                clearInterval(pollInterval);
-                setDeliveryStatus('Delivered!');
-                setTimeout(() => {
-                  setShowOTP(true);
-                  setCountdown(60);
+                if (statusData.status === 'SUCCESS') {
+                  clearInterval(pollInterval);
+                  setDeliveryStatus('Delivered!');
+                  setTimeout(() => {
+                    setShowOTP(true);
+                    setCountdown(60);
+                    setDeliveryStatus('');
+                    resolve();
+                  }, 1000);
+                } else if (statusData.status === 'ERROR') {
+                  clearInterval(pollInterval);
+                  setError(`Email delivery failed: ${statusData.error || 'Unknown error'}`);
                   setDeliveryStatus('');
-                }, 1000);
-              } else if (statusData.status === 'ERROR') {
-                clearInterval(pollInterval);
-                setError(`Email delivery failed: ${statusData.error || 'Unknown error'}`);
-                setDeliveryStatus('');
-              } else if (attempts > 15) {
-                // Timeout after 30 seconds
-                clearInterval(pollInterval);
-                setDeliveryStatus('Taking longer than usual...');
-                setTimeout(() => {
-                  setShowOTP(true);
-                  setCountdown(60);
-                }, 1000);
-              } else {
-                setDeliveryStatus('Delivering...');
+                  resolve();
+                } else if (attempts > 15) {
+                  // Timeout after 30 seconds
+                  clearInterval(pollInterval);
+                  setDeliveryStatus('Taking longer than usual...');
+                  setTimeout(() => {
+                    setShowOTP(true);
+                    setCountdown(60);
+                    resolve();
+                  }, 1000);
+                } else {
+                  setDeliveryStatus('Delivering...');
+                }
+              } catch (e) {
+                console.error("Polling error:", e);
               }
-            } catch (e) {
-              console.error("Polling error:", e);
-            }
-          }, 2000);
+            }, 2000);
+          });
         } else {
           // Dev mode or logged only
           setShowOTP(true)
@@ -364,32 +369,39 @@ export default function Login() {
         }
 
         if (response.messageId && !response.isLoggedOnly) {
-          setDeliveryStatus('Resending...');
-          let attempts = 0;
-          const pollInterval = setInterval(async () => {
-            attempts++;
-            try {
-              const statusRes = await fetch(`/api/auth/otp/status?id=${response.messageId}`);
-              const statusData = await statusRes.json();
+          await new Promise((resolve) => {
+            setDeliveryStatus('Resending...');
+            let attempts = 0;
+            const pollInterval = setInterval(async () => {
+              attempts++;
+              try {
+                const statusRes = await fetch(`/api/auth/otp/status?id=${response.messageId}`);
+                const statusData = await statusRes.json();
 
-              if (statusData.status === 'SUCCESS') {
-                clearInterval(pollInterval);
-                setDeliveryStatus('Resent!');
-                setCountdown(60);
-                setTimeout(() => setDeliveryStatus(''), 2000);
-              } else if (statusData.status === 'ERROR') {
-                clearInterval(pollInterval);
-                setError(`Resend failed: ${statusData.error || 'Unknown error'}`);
-                setDeliveryStatus('');
-              } else if (attempts > 15) {
-                clearInterval(pollInterval);
-                setCountdown(60);
-                setDeliveryStatus('');
+                if (statusData.status === 'SUCCESS') {
+                  clearInterval(pollInterval);
+                  setDeliveryStatus('Resent!');
+                  setCountdown(60);
+                  setTimeout(() => {
+                    setDeliveryStatus('');
+                    resolve();
+                  }, 2000);
+                } else if (statusData.status === 'ERROR') {
+                  clearInterval(pollInterval);
+                  setError(`Resend failed: ${statusData.error || 'Unknown error'}`);
+                  setDeliveryStatus('');
+                  resolve();
+                } else if (attempts > 15) {
+                  clearInterval(pollInterval);
+                  setCountdown(60);
+                  setDeliveryStatus('');
+                  resolve();
+                }
+              } catch (e) {
+                console.error("Resend polling error:", e);
               }
-            } catch (e) {
-              console.error("Resend polling error:", e);
-            }
-          }, 2000);
+            }, 2000);
+          });
         } else {
           setCountdown(60)
         }
@@ -715,7 +727,10 @@ export default function Login() {
                 <div className="mb-6 p-4 bg-red-50 dark:bg-red-900/20 border-l-4 border-red-500 rounded-r-lg">
                   <div className="flex flex-col gap-3">
                     <div className="flex items-start">
-                      <HiX className="h-5 w-5 text-red-500 mr-2 mt-0.5 shrink-0" />
+                      <HiX
+                        className="h-5 w-5 text-red-500 mr-2 mt-0.5 shrink-0 cursor-pointer hover:text-red-700 transition-colors"
+                        onClick={() => setError('')}
+                      />
                       <div className="text-sm font-medium leading-relaxed">
                         {error.includes('Register') ? (
                           <div className="text-red-700 dark:text-red-400">

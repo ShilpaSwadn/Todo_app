@@ -520,7 +520,10 @@ export default function Register() {
               {error && (
                 <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/20 border-l-4 border-red-500 text-red-700 dark:text-red-400 rounded-r-lg">
                   <div className="flex items-start">
-                    <HiX className="w-4 h-4 mr-2 mt-0.5 shrink-0" />
+                    <HiX
+                      className="w-4 h-4 mr-2 mt-0.5 shrink-0 cursor-pointer hover:text-red-700 transition-colors"
+                      onClick={() => setError('')}
+                    />
                     <div className="text-xs font-medium leading-relaxed">
                       {error.includes('Login directly using mobile number') ? (
                         <>
