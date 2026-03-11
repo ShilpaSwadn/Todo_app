@@ -17,16 +17,24 @@ export async function POST(request) {
         const isEmail = cleanIdentifier.includes('@');
 
         if (isEmail) {
-            // Email flow: Check Firebase primarily
+            // Email flow: Check Firebase exclusively for account status and providers
             try {
                 const firebaseUser = await adminAuth.getUserByEmail(cleanIdentifier);
+
+                // Identify providers to see if it's a social account (Google/Twitter)
+                const providers = firebaseUser.providerData.map(p => p.providerId);
+                const isSocial = providers.includes('google.com') || providers.includes('twitter.com');
+
                 return NextResponse.json({
                     success: true,
                     exists: true,
                     emailVerified: firebaseUser.emailVerified,
                     uid: firebaseUser.uid,
                     email: firebaseUser.email,
-                    displayName: firebaseUser.displayName
+                    displayName: firebaseUser.displayName,
+                    hasMobile: !!firebaseUser.phoneNumber,
+                    isSocial: isSocial,
+                    providers: providers
                 });
             } catch (error) {
                 if (error.code !== 'auth/user-not-found') throw error;
@@ -44,7 +52,8 @@ export async function POST(request) {
                     isMobile: true,
                     email: firebaseUser.email,
                     displayName: firebaseUser.displayName,
-                    uid: firebaseUser.uid
+                    uid: firebaseUser.uid,
+                    hasMobile: true
                 });
             } catch (error) {
                 if (error.code !== 'auth/user-not-found' && error.code !== 'auth/invalid-phone-number') throw error;

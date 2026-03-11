@@ -59,8 +59,8 @@ export const loginWithGoogle = async () => {
         identifier: user.email.trim().toLowerCase()
       });
 
-      if (response.success && response.exists) {
-        // Already exists, proceed to sync
+      if (response.success && response.exists && (response.hasMobile || user.phoneNumber)) {
+        // Already exists and has a mobile number (either in DB or already in Firebase), proceed to sync
         const { userData, finalToken } = await handleAuthSync(user);
         saveAuthData(userData, finalToken);
         return { success: true, user: userData };
@@ -69,7 +69,7 @@ export const loginWithGoogle = async () => {
       console.warn("Check status failed during google login, possibly new user:", e.message);
     }
 
-    // Either user doesn't exist in DB yet, or doesn't have a mobile number
+    // Either user doesn't exist in DB yet, or doesn't have a mobile number in both DB and Firebase
     // We need to collect and verify mobile number
     return { success: true, needsMobile: true };
   } catch (error) {
@@ -97,8 +97,8 @@ export const loginWithTwitter = async () => {
           identifier: user.email.trim().toLowerCase()
         });
 
-        if (response.success && response.exists) {
-          // Already exists, proceed to sync
+        if (response.success && response.exists && (response.hasMobile || user.phoneNumber)) {
+          // Already exists and verified, proceed to sync
           const { userData, finalToken } = await handleAuthSync(user);
           saveAuthData(userData, finalToken);
           return { success: true, user: userData };
