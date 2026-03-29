@@ -1,13 +1,12 @@
 {
-  "name": "todo-app",
+  "name": "swadn",
   "version": "0.1.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint",
-    "generate-users": "node --experimental-modules --loader ./scripts/loader.mjs scripts/generatePerformanceUsers.js"
+    "lint": "next lint"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",
@@ -19,10 +18,13 @@
     "pg": "^8.11.3",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "react-icons": "^5.5.0"
+    "react-icons": "^5.5.0",
+    "uuid": "^13.0.0"
   },
   "devDependencies": {
     "autoprefixer": "^10.4.16",
+    "eslint": "^9.39.4",
+    "eslint-config-next": "^16.2.1",
     "postcss": "^8.4.31",
     "tailwindcss": "^3.3.5"
   }

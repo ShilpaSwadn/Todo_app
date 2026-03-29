@@ -114,7 +114,7 @@ export default function Dashboard() {
                 <FiLogOut className="w-8 h-8" />
               </div>
               <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">Sign Out</h3>
-              <p className="text-gray-500 text-sm mb-8 px-4">Are you sure you want to end your SkyDining session?</p>
+              <p className="text-gray-500 text-sm mb-8 px-4">Are you sure you want to end your Swadn session?</p>
               <div className="flex w-full gap-3">
                 <button
                   onClick={() => setShowLogoutConfirm(false)}
@@ -187,7 +187,7 @@ export default function Dashboard() {
               <FiActivity className="w-6 h-6" />
             </div>
             <div>
-              <p className="text-xl font-black text-gray-900 dark:text-white uppercase tracking-tighter leading-none">SkyDining</p>
+              <p className="text-xl font-black text-gray-900 dark:text-white uppercase tracking-tighter leading-none">Swadn</p>
               <p className="text-[10px] text-gray-400 uppercase tracking-widest font-black">Pre-Flight Booking</p>
             </div>
           </div>

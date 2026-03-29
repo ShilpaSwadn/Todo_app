@@ -1,4 +1,5 @@
 import { query } from '../config/database.js'
+import { v7 as uuidv7 } from 'uuid'
 
 const cleanPhoneNumber = (phone) => {
   if (!phone) return null;
@@ -33,14 +34,26 @@ class User {
     const firstNameVal = firstName || 'User';
     const emailLower = email?.toLowerCase().trim();
     const emailToInsert = emailLower && emailLower.length > 0 ? emailLower : null;
+    const newId = uuidv7();
 
     const sqlQuery = `
-      INSERT INTO public.users (email, first_name, last_name, mobile_number, firebase_uid, account_active)
-      VALUES ($1, $2, $3, $4, $5, $6)
-      RETURNING id, first_name, last_name, email, mobile_number, firebase_uid, account_active, created_at
+      INSERT INTO public.users (id, email, first_name, last_name, mobile_number, firebase_uid, account_active, profile_data, language_preference, time_zone)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+      RETURNING id, firebase_uid, first_name, last_name, email, mobile_number, language_preference, time_zone, account_active, profile_data, created_at
     `;
 
-    const values = [emailToInsert, firstNameVal, lastName || null, targetMobile, firebaseUid || null, false];
+    const values = [
+      newId,
+      emailToInsert, 
+      firstNameVal, 
+      lastName || null, 
+      targetMobile, 
+      firebaseUid || null, 
+      false, 
+      userData.profileData || {}, 
+      userData.languagePreference || 'en', 
+      userData.timeZone || 'UTC'
+    ];
     const result = await query(sqlQuery, values);
 
     return result.rows[0];
@@ -85,14 +98,26 @@ class User {
 
     // 3. If truly new, insert as a new record
     const emailToInsert = emailLower && emailLower.length > 0 ? emailLower : null;
+    const newId = uuidv7();
 
     const sqlQuery = `
-      INSERT INTO public.users (firebase_uid, email, first_name, last_name, mobile_number, account_active)
-      VALUES ($1, $2, $3, $4, $5, $6)
-      RETURNING id, firebase_uid, first_name, last_name, email, mobile_number, account_active, created_at
+      INSERT INTO public.users (id, firebase_uid, email, first_name, last_name, mobile_number, account_active, profile_data, language_preference, time_zone)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+      RETURNING id, firebase_uid, first_name, last_name, email, mobile_number, language_preference, time_zone, account_active, profile_data, created_at
     `;
 
-    const values = [uid, emailToInsert, firstNameVal, lastName || null, targetMobile, true];
+    const values = [
+      newId,
+      uid, 
+      emailToInsert, 
+      firstNameVal, 
+      lastName || null, 
+      targetMobile, 
+      true, 
+      userData.profileData || {}, 
+      userData.languagePreference || 'en', 
+      userData.timeZone || 'UTC'
+    ];
     const result = await query(sqlQuery, values);
 
     return result.rows[0];
@@ -169,6 +194,18 @@ class User {
     if (accountActive !== undefined) {
       fields.push(`account_active = $${idx++}`);
       values.push(accountActive);
+    }
+    if (updates.languagePreference !== undefined) {
+      fields.push(`language_preference = $${idx++}`);
+      values.push(updates.languagePreference);
+    }
+    if (updates.timeZone !== undefined) {
+      fields.push(`time_zone = $${idx++}`);
+      values.push(updates.timeZone);
+    }
+    if (updates.profileData !== undefined) {
+      fields.push(`profile_data = $${idx++}`);
+      values.push(updates.profileData);
     }
 
     if (fields.length === 0) return null;

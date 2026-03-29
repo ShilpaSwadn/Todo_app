@@ -21,20 +21,7 @@ export async function GET(request) {
     }
 
     // Call service to get user by Firebase UID
-    // We use getUserByUid because we have the firebase_uid from the token
-    const dbUser = await authService.getUserByUid(uid)
-
-    // Transform database column names to camelCase for frontend
-    const user = {
-      id: dbUser.id,
-      firebaseUid: dbUser.firebase_uid,
-      firstName: dbUser.first_name,
-      lastName: dbUser.last_name,
-      email: dbUser.email,
-      mobileNumber: dbUser.mobile_number,
-      createdAt: dbUser.created_at,
-      updatedAt: dbUser.updated_at
-    }
+    const user = await authService.getUserByUid(uid)
 
     // Return success response
     return NextResponse.json({

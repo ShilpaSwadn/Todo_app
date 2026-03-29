@@ -2,8 +2,8 @@ import './globals.css'
 import { ThemeProvider } from '@/context/ThemeContext'
 
 export const metadata = {
-  title: 'Profile App',
-  description: 'User profile management application',
+  title: 'Swadn',
+  description: 'Premium Pre-Flight Meal Booking Application',
 }
 
 export default function RootLayout({ children }) {

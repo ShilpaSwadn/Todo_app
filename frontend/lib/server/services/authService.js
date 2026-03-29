@@ -78,7 +78,7 @@ class AuthService {
 
     const user = await User.sync(userData);
 
-    return user;
+    return this.formatUser(user);
   }
 
   /**
@@ -204,6 +204,27 @@ class AuthService {
   }
 
   /**
+   * Helper to format database user to frontend user
+   */
+  formatUser(user) {
+    if (!user) return null;
+    return {
+      id: user.id || null,
+      firebaseUid: user.firebase_uid || null,
+      firstName: user.first_name || '',
+      lastName: user.last_name || '',
+      email: user.email || '',
+      mobileNumber: user.mobile_number || '',
+      languagePreference: user.language_preference || 'en',
+      timeZone: user.time_zone || 'UTC',
+      accountActive: !!user.account_active,
+      profileData: user.profile_data || {},
+      createdAt: user.created_at || null,
+      updatedAt: user.updated_at || null
+    };
+  }
+
+  /**
    * Fetches a user from PostgreSQL by Firebase UID.
    */
   async getUserByUid(uid) {
@@ -211,7 +232,7 @@ class AuthService {
     if (!user) {
       throw new Error('User not found');
     }
-    return user;
+    return this.formatUser(user);
   }
 
   async updateProfile(uid, updates) {
@@ -243,7 +264,7 @@ class AuthService {
     if (!user) {
       throw new Error('User not found');
     }
-    return user;
+    return this.formatUser(user);
   }
 
 

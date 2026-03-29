@@ -1,10 +1,10 @@
-# SkyDining - Premium Pre-Flight Meal Booking Application
+# Swadn - Premium Pre-Flight Meal Booking Application
 
 A high-end, full-stack application for pre-flight meal selection and dietary customization. Built with **Next.js 14 (App Router)**, **PostgreSQL**, and **Firebase**, it features a sophisticated multi-provider authentication system and a dynamic, interactive UI.
 
 ## 🚀 Overview
 
-SkyDining redefines the in-flight experience by allowing passengers to configure their meals with surgical precision. It's not just a profile manager; it's a complete dietary configuration engine.
+Swadn redefines the in-flight experience by allowing passengers to configure their meals with surgical precision. It's not just a profile manager; it's a complete dietary configuration engine.
 
 ### Key Features
 - **Dynamic Meal Configurator**: 3-step configuration flow (Dietary Type ➔ Dish Selection ➔ Ingredient Customization).
@@ -15,7 +15,7 @@ SkyDining redefines the in-flight experience by allowing passengers to configure
   - **Phone Auth**: Secure SMS-based OTP verification.
   - **Email Security**: Mandatory account activation via emailed verification links.
   - **Password Management**: Robust forgot-password/reset flow.
-  - **Two-Layer Storage**: "Pending" user system that promotions users only after successful verification.
+  - **OTP Security**: Stateless, hash-based OTP verification for high-entropy security.
 
 ## 🛠️ Tech Stack
 
@@ -38,15 +38,16 @@ SkyDining redefines the in-flight experience by allowing passengers to configure
 frontend/                        # Next.js Unified Application
 │   ├── app/                     # Next.js App Router (Pages & API)
 │   │   ├── api/                 # API Routes (The Backend)
-│   │   │   └── auth/            # Auth Logic (Sync, OTP, temp-users)
-│   │   ├── dashboard/           # Authenticated Dashboard (SkyDining App)
+│   │   │   └── auth/            # Auth Logic (Sync, OTP, Register, Login)
+│   │   ├── dashboard/           # Authenticated Dashboard (Swadn App)
 │   │   ├── forgot-password/     # Password Recovery
-│   │   ├── login/               # Adaptive Login (Email/Phone/Social)
+│   │   ├── login/               # Adaptive Login (Email/Phone/Social/OTP)
 │   │   ├── register/            # Registration with Activation Logic
 │   │   └── verify/              # Account Activation Entry Point
 │   │
 │   ├── components/              # React Components
-│   │   └── MealSelector.jsx     # The Core "SkyDining Configurator"
+│   │   ├── MealSelector.jsx     # The Core "Swadn Configurator"
+│   │   └── DynamicProfileForm.jsx # Unified Profile Engine
 │   │
 │   ├── lib/                     # System Core
 │   │   ├── firebase.js          # Firebase SDK Initialization
@@ -54,7 +55,7 @@ frontend/                        # Next.js Unified Application
 │   │   ├── services/            # API & Auth Services
 │   │   └── server/              # Server-side Logic (Models, Config)
 │   │       ├── config/          # Database & Pool Config
-│   │       ├── models/          # PostgreSQL User Model
+│   │       ├── models/          # PostgreSQL User & OTP Models
 │   │       └── services/        # Backend Auth & Email Services
 │   │
 │   ├── public/                  # Static Assets
@@ -64,7 +65,7 @@ frontend/                        # Next.js Unified Application
 ## 🚥 Getting Started
 
 ### 1. Environment Configuration
-Create a `.env.local` file in the `frontend/` directory.
+Create a `.env.local` file in the `frontend/` directory based on the following pattern:
 
 ```env
 # Database (Supabase Recommended)
@@ -89,7 +90,7 @@ SMTP_PASS=your_app_password
 ### 2. Installation & Development
 
 ```bash
-cd SwadnGUI/frontend
+cd Todo_app/frontend
 npm install
 npm run dev
 ```

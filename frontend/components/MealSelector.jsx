@@ -193,7 +193,7 @@ export default function MealSelector() {
                         </button>
                     )}
                     <h2 className="text-3xl font-black text-gray-900 dark:text-white uppercase tracking-tighter">
-                        SkyDining Configurator
+                        Swadn Configurator
                     </h2>
                 </div>
                 <div className="flex gap-2">
