@@ -10,6 +10,7 @@ import { ImSpinner2 } from 'react-icons/im'
 import { FcGoogle } from 'react-icons/fc'
 import { RiTwitterXFill } from 'react-icons/ri'
 import { setupRecaptcha, clearRecaptcha, sendOTP, verifyOTP, verifyMobileOTP, sendMobileOTP, loginWithPasswordDirect, loginWithGoogle, loginWithTwitter, resendVerificationEmail, sendMobileLinkingOTP, verifyMobileLinkingOTP, sanitizePhoneNumber } from '@/lib/services/auth'
+import { useAuth } from '@/context/AuthContext'
 import { validateEmail, validateIdentifier } from '@/lib/utils/validation'
 import { countries } from '@/lib/data/countries'
 import { FiChevronDown } from 'react-icons/fi'
@@ -38,7 +39,14 @@ export default function Login() {
   const [selectedCountry, setSelectedCountry] = useState(countries[0])
   const [isCountrySelectorOpen, setIsCountrySelectorOpen] = useState(false)
   const [showMobileEntry, setShowMobileEntry] = useState(false)
+  const { user: authUser, loading: authLoading } = useAuth()
   const [verificationType, setVerificationType] = useState('login') // 'login', 'social-link'
+
+  useEffect(() => {
+    if (!authLoading && authUser) {
+      router.push('/dashboard')
+    }
+  }, [authLoading, authUser, router])
 
   // Ultimate fix: Generate a unique ID for every single request
   const ensureRecaptcha = async () => {
@@ -517,6 +525,8 @@ export default function Login() {
     setCountdown(0)
   }
 
+
+  if (authLoading) return null;
 
   return (
     <main className="min-h-screen bg-gray-50 dark:bg-gray-950 flex items-center justify-center p-4">

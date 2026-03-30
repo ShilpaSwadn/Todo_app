@@ -2,8 +2,9 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { clearAuthData, isAuthenticated } from '@/lib/auth/client'
-import { getCurrentUser as getCurrentUserAPI, logout } from '@/lib/services/auth'
+import { clearAuthData } from '@/lib/auth/client'
+import { logout } from '@/lib/services/auth'
+import { useAuth } from '@/context/AuthContext'
 import { FiLogOut, FiActivity, FiUser, FiSettings, FiShoppingBag, FiCheck, FiX, FiSun, FiMoon } from 'react-icons/fi'
 import MealSelector from '@/components/MealSelector'
 import { useTheme } from '@/context/ThemeContext'
@@ -11,6 +12,7 @@ import { useTheme } from '@/context/ThemeContext'
 export default function Dashboard() {
   const router = useRouter()
   const { theme, toggleTheme } = useTheme()
+  const { user: authUser, loading: authLoading } = useAuth()
   const [user, setUser] = useState(null)
   const [loading, setLoading] = useState(true)
   const [isProfileOpen, setIsProfileOpen] = useState(false)
@@ -61,25 +63,28 @@ export default function Dashboard() {
   }, [isProfileOpen])
 
   useEffect(() => {
-    const checkAuth = async () => {
-      if (!isAuthenticated()) {
+    if (!authLoading) {
+      if (!authUser) {
         router.push('/login')
-        return
+      } else {
+        setUser(authUser)
+        setLoading(false)
+        
+        // Sync the token cookie for the backend
+        const syncCookie = async () => {
+          try {
+            const token = await authUser.token || localStorage.getItem('token');
+            if (token) {
+              document.cookie = `token=${token}; path=/; max-age=${60 * 60 * 24 * 7}; ${window.location.protocol === 'https:' ? 'secure' : ''}; samesite=lax`;
+            }
+          } catch (e) {
+            console.error("Cookie sync failed:", e);
+          }
+        }
+        syncCookie();
       }
-
-      try {
-        const userData = await getCurrentUserAPI()
-        setUser(userData)
-      } catch (error) {
-        clearAuthData()
-        router.push('/login')
-        return
-      }
-      setLoading(false)
     }
-
-    checkAuth()
-  }, [router])
+  }, [authLoading, authUser, router])
 
   const handleLogout = async () => {
     setIsLoggingOut(true)

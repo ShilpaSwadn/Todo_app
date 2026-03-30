@@ -57,7 +57,7 @@ class AuthService {
       // We don't throw here so the user can see the "Success" screen and try the resend button
     }
 
-    return user;
+    return this.formatUser(user);
   }
 
   /**
@@ -130,7 +130,7 @@ class AuthService {
       const user = await this.syncUser(decodedToken);
 
       // 3. Generate a Custom Token for the client
-      const customToken = await this.createCustomToken(user.firebase_uid);
+      const customToken = await this.createCustomToken(user.firebaseUid);
 
       return {
         user,
