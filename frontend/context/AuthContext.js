@@ -18,18 +18,25 @@ export const AuthProvider = ({ children }) => {
   useEffect(() => {
     // Listen for auth state changes
     const unsubscribe = onIdTokenChanged(auth, async (firebaseUser) => {
+      setLoading(true)
       if (firebaseUser) {
         // User is signed in or token changed (e.g. refreshed)
         const token = await firebaseUser.getIdToken()
         
-        // Fetch full profile from our DB if we don't have it or if it might have changed
+        // CRITICAL FIX: Save token before making ANY API calls
+        // This ensures the Authorization header is available in lib/api/client.js
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('token', token)
+        }
+
+        // Fetch full profile from our DB
         try {
           const userData = await getCurrentUserAPI()
           setUser(userData)
+          // Update both user and token in localStorage (ensures user object is correct too)
           saveAuthData(userData, token)
         } catch (error) {
           console.error("Failed to sync user data in AuthProvider:", error)
-          // If we can't get the user data, maybe they are deleted from our DB?
         }
       } else {
         // User is signed out

@@ -13,8 +13,8 @@ export async function getUidFromToken(request) {
         const authHeader = request.headers.get('authorization');
         if (authHeader && authHeader.startsWith('Bearer ')) {
             token = authHeader.split('Bearer ')[1];
-        } 
-        
+        }
+
         // 2. Fallback to cookie (for SSR or if header is missing)
         if (!token) {
             // Next.js standard Request has .cookies
