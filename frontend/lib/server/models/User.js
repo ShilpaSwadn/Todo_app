@@ -203,6 +203,10 @@ class User {
       fields.push(`time_zone = $${idx++}`);
       values.push(updates.timeZone);
     }
+    if (updates.currency !== undefined) {
+      fields.push(`currency = $${idx++}`);
+      values.push(updates.currency);
+    }
     if (updates.profileData !== undefined) {
       fields.push(`profile_data = $${idx++}`);
       values.push(updates.profileData);

@@ -1,0 +1,77 @@
+import { query } from '../config/database.js'
+import { v7 as uuidv7 } from 'uuid'
+
+class PaymentInfo {
+  /**
+   * Find payment info by user ID
+   */
+  static async findByUserId(userId) {
+    const sqlQuery = 'SELECT * FROM public.payment_info WHERE user_id = $1';
+    const result = await query(sqlQuery, [userId]);
+    return result.rows || [];
+  }
+
+  /**
+   * Find payment info by group ID
+   */
+  static async findByGroupId(groupId) {
+    const sqlQuery = 'SELECT * FROM public.payment_info WHERE group_id = $1';
+    const result = await query(sqlQuery, [groupId]);
+    return result.rows || [];
+  }
+
+  /**
+   * Create a new payment info record
+   */
+  static async create(paymentData) {
+    const { 
+      groupId, 
+      userId, 
+      cardholderName, 
+      cardNumber, // Previously lastFour
+      expiryDate, 
+      provider,
+      cardBrand,
+      fundingType,
+      isVerified
+    } = paymentData;
+    const sqlQuery = `
+      INSERT INTO public.payment_info (
+        group_id, 
+        user_id, 
+        cardholder_name, 
+        card_number, 
+        expiry_date, 
+        provider,
+        card_brand,
+        funding_type,
+        is_verified
+      )
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+      RETURNING *
+    `;
+    const result = await query(sqlQuery, [
+      groupId, 
+      userId, 
+      cardholderName, 
+      cardNumber, 
+      expiryDate, 
+      provider,
+      cardBrand,
+      fundingType,
+      isVerified
+    ]);
+    return result.rows[0];
+  }
+
+  /**
+   * Delete payment info
+   */
+  static async delete(paymentDetailsId) {
+    const sqlQuery = 'DELETE FROM public.payment_info WHERE payment_details_id = $1';
+    await query(sqlQuery, [paymentDetailsId]);
+    return true;
+  }
+}
+
+export default PaymentInfo

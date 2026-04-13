@@ -69,7 +69,7 @@ export default function Dashboard() {
       } else {
         setUser(authUser)
         setLoading(false)
-        
+
         // Sync the token cookie for the backend
         const syncCookie = async () => {
           try {
@@ -250,9 +250,6 @@ export default function Dashboard() {
                       {user?.firstName} {user?.lastName}
                     </p>
                     <p className="text-xs text-gray-400 font-medium mt-1">{user?.email}</p>
-                    {user?.mobileNumber && (
-                      <p className="text-xs text-indigo-500 font-bold mt-2 tracking-wider bg-indigo-50 dark:bg-indigo-900/30 px-3 py-1 rounded-full">{user.mobileNumber}</p>
-                    )}
 
                     {/* Completion Progress */}
                     <div className="w-full mt-4">
@@ -268,18 +265,30 @@ export default function Dashboard() {
                       </div>
                     </div>
                   </div>
-                  <div className="px-4 space-y-1">
+                  <div className="px-3 pb-4 pt-1 space-y-1">
                     <button
-                      onClick={() => router.push('/dashboard/profile')}
-                      className="w-full flex items-center gap-3 px-6 py-3 rounded-2xl text-sm font-bold text-gray-600 dark:text-gray-300 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 hover:text-indigo-600 transition-all"
+                      onClick={() => {
+                        setIsProfileOpen(false);
+                        router.push('/dashboard/settings');
+                      }}
+                      className="w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-[11px] font-black text-gray-600 dark:text-gray-300 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 hover:text-indigo-600 transition-all uppercase tracking-wider group whitespace-nowrap"
                     >
-                      <FiUser className="w-5 h-5 opacity-50" /> View Account
+                      <div className="w-8 h-8 rounded-xl bg-gray-50 dark:bg-gray-700 flex items-center justify-center group-hover:bg-white dark:group-hover:bg-gray-600 transition-colors shadow-sm shrink-0">
+                        <FiSettings className="w-4 h-4 opacity-70" />
+                      </div>
+                      <span>Account Settings</span>
                     </button>
-                    <button className="w-full flex items-center gap-3 px-6 py-3 rounded-2xl text-sm font-bold text-gray-600 dark:text-gray-300 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 hover:text-indigo-600 transition-all">
-                      <FiSettings className="w-5 h-5 opacity-50" /> System Settings
-                    </button>
-                    <button className="w-full flex items-center gap-3 px-6 py-3 rounded-2xl text-sm font-bold text-gray-600 dark:text-gray-300 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 hover:text-indigo-600 transition-all">
-                      <FiShoppingBag className="w-5 h-5 opacity-50" /> Order History
+                    <button
+                      onClick={() => {
+                        setIsProfileOpen(false);
+                        setShowLogoutConfirm(true);
+                      }}
+                      className="w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-[11px] font-black text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-900/20 transition-all uppercase tracking-wider group whitespace-nowrap"
+                    >
+                      <div className="w-8 h-8 rounded-xl bg-rose-50 dark:bg-rose-900/10 flex items-center justify-center group-hover:bg-white dark:group-hover:bg-rose-900/30 transition-colors shadow-sm shrink-0">
+                        <FiLogOut className="w-4 h-4 opacity-70" />
+                      </div>
+                      <span>Log Out</span>
                     </button>
                   </div>
                 </div>

@@ -7,7 +7,7 @@ export default function RedirectToProfile() {
   const router = useRouter()
   
   useEffect(() => {
-    router.replace('/dashboard/profile')
+    router.replace('/dashboard/settings')
   }, [router])
 
   return (
