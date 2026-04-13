@@ -65,12 +65,31 @@ export const formatFirebaseError = (error) => {
         return 'The verification system had trouble confirming your session. Please try clicking the button again in 2 seconds.';
     }
 
+    // --- Technical & Database Error Mapping ---
+    if (errorStr.includes('null value in column "group_id"')) {
+        return 'System Initialization Error: We had trouble setting up your workspace. Our team has been notified. Please try registering again in a few minutes.';
+    }
+
+    if (errorStr.includes('violates not-null constraint')) {
+        return 'Data validation error: Some mandatory information is missing. Please refresh and try again.';
+    }
+
+    if (errorStr.includes('violates foreign key constraint')) {
+        return 'System synchronization issue. Please try logging out and back in.';
+    }
+
+    if (errorStr.includes('relation') && errorStr.includes('does not exist')) {
+        return 'System Maintenance: A required database table is currently being updated. Please try again shortly.';
+    }
+
     // Fallback for generic Firebase messages that already contain some info
     if (errorStr.startsWith('Firebase:')) {
-        // Extract the part inside parentheses if it exists, or remove "Firebase: Error"
         const descriptive = errorStr.replace('Firebase: Error ', '').replace('Firebase:', '').trim();
         if (descriptive) return descriptive;
     }
 
-    return error.message || 'An unexpected authentication error occurred. Please try again.';
+    // If it's a descriptive string that wasn't caught above, return it
+    if (typeof error === 'string' && error.length > 0) return error;
+    
+    return (typeof error === 'object' ? error.message : error) || 'An unexpected authentication error occurred. Please try again.';
 };

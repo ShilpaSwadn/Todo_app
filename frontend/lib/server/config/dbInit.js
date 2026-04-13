@@ -74,6 +74,17 @@ const initDatabase = async () => {
         created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
       );
     `);
+    
+    // Ensure group_id has the correct default value (for schema evolution)
+    await query(`
+      DO $$ 
+      BEGIN 
+        -- Ensure group_id has the uuid_v7 default
+        ALTER TABLE public.groups ALTER COLUMN group_id SET DEFAULT public.uuid_v7();
+      EXCEPTION WHEN OTHERS THEN
+        RAISE NOTICE 'Could not set default for group_id: %', SQLERRM;
+      END $$;
+    `);
 
     // 4. Ensure payment_info table exists
     console.log('Database: Synchronizing payment_info table...');
@@ -92,6 +103,16 @@ const initDatabase = async () => {
         created_at TIMESTAMPTZ DEFAULT NOW(),
         updated_at TIMESTAMPTZ DEFAULT NOW()
       );
+    `);
+    
+    // Ensure payment_details_id has the correct default value (for schema evolution)
+    await query(`
+      DO $$ 
+      BEGIN 
+        ALTER TABLE public.payment_info ALTER COLUMN payment_details_id SET DEFAULT public.uuid_v7();
+      EXCEPTION WHEN OTHERS THEN
+        RAISE NOTICE 'Could not set default for payment_details_id: %', SQLERRM;
+      END $$;
     `);
 
     // Add missing columns if table already exists (for schema evolution)

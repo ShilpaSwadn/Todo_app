@@ -169,25 +169,12 @@ export default function Register() {
       setLoading(false)
     } catch (err) {
       console.error('Registration submit error:', err);
-      let friendlyMessage = err.message || 'We could not create your account. Please try again.';
-
-      // Map server-side errors to user-friendly messages
-      const msg = err.message || '';
-      if (msg.toLowerCase().includes('email already')) {
-        friendlyMessage = 'This email is already registered. Please use a different email or login.';
-      } else if (msg.toLowerCase().includes('mobile number already') || msg.toLowerCase().includes('phone number already')) {
-        friendlyMessage = 'mobile number linked already to an existing account. Please enter a different mobile number or Login directly using mobile number.';
-      } else if (msg.includes('already registered') || msg.includes('already in use')) {
-        friendlyMessage = 'This account is already registered. Please try logging in instead.';
-      } else if (msg.includes('weak-password')) {
-        friendlyMessage = 'Your password is too weak. Please use at least 6 characters.';
-      } else if (msg.includes('network') || msg.includes('fetch')) {
-        friendlyMessage = 'Connection issue. Please check your internet and try again.';
-      }
+      // Use the global error formatter for consistent, professional messages
+      const friendlyMessage = formatFirebaseError(err);
 
       setError(friendlyMessage);
       setLoading(false);
-      // HARD FIX: Clear successMsg to ensure we stay on the registration form
+      // Ensure we stay on the registration form
       setSuccessMsg('');
     }
   }
@@ -214,7 +201,7 @@ export default function Register() {
         });
         const status = await checkRes.json();
         if (status.success && status.exists) {
-          setError('This mobile number is already linked to another account. Please use a different number or login directly.');
+          setError('This mobile number is already registered in our local system. Please login directly using this number.');
           setSendingOTP(false);
           return;
         }

@@ -14,11 +14,22 @@ const getHeaders = (headers = {}) => {
 };
 
 const handleResponse = async (res) => {
-    const data = await res.json();
+    let data = {};
+    try {
+        data = await res.json();
+    } catch (e) {
+        // Fallback for non-JSON responses
+        if (!res.ok) {
+            throw new Error(`Server Error (${res.status}): ${res.statusText || 'Unknown Error'}`);
+        }
+    }
+
     if (!res.ok) {
-        const error = new Error(data.error || 'API Error');
+        // Prioritize descriptive messages from the backend
+        const errorMessage = data.message || data.error || (data.details ? JSON.stringify(data.details) : null) || `API Error (${res.status})`;
+        const error = new Error(errorMessage);
         error.status = res.status;
-        error.details = data.details;
+        error.details = data.details || data;
         throw error;
     }
     return data;

@@ -403,7 +403,7 @@ export const sendMobileLinkingOTP = async (phoneNumber, appVerifier) => {
     }
     console.error("Error sending linking OTP:", error);
     if (error.code === 'auth/credential-already-in-use') {
-      throw new Error("This mobile number is already linked to another account.");
+      throw new Error("Identity Provider Error: This mobile number is already linked to another account in the cloud. Please use a different number or delete the old account from the console.");
     }
     throw error;
   }
