@@ -753,6 +753,32 @@ export default function Login() {
                             </Link>
                             {error.split('Register')[1]}
                           </div>
+                        ) : error.includes('Google OAuth') ? (
+                          <div className="text-red-700 dark:text-red-400">
+                            {error.split('Google OAuth')[0]}
+                            <button
+                              type="button"
+                              onClick={handleGoogleLogin}
+                              className="text-indigo-600 dark:text-indigo-400 font-bold hover:text-indigo-800 dark:hover:text-indigo-300 transition-colors mx-1 underline decoration-2 underline-offset-2"
+                            >
+                              Google OAuth
+                            </button>
+                            {error.split('Google OAuth')[1].includes('OTP login') ? (
+                              <>
+                                {error.split('Google OAuth')[1].split('OTP login')[0]}
+                                <button
+                                  type="button"
+                                  onClick={() => { setLoginMode('otp'); setError(''); }}
+                                  className="text-indigo-600 dark:text-indigo-400 font-bold hover:text-indigo-800 dark:hover:text-indigo-300 transition-colors mx-1 underline decoration-2 underline-offset-2"
+                                >
+                                  OTP login
+                                </button>
+                                {error.split('OTP login')[1]}
+                              </>
+                            ) : (
+                              error.split('Google OAuth')[1]
+                            )}
+                          </div>
                         ) : (
                           <span className="text-red-700 dark:text-red-400">{error}</span>
                         )}

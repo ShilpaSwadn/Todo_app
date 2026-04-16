@@ -49,6 +49,10 @@ export const formatFirebaseError = (error) => {
         return 'Incorrect password. Please try again or use the "Forgot Password" option.';
     }
 
+    if (errorStr.toLowerCase().includes('password is not set')) {
+        return 'Your email is registered, but a password has not been set for this account. You can login through Google OAuth or OTP login instead.';
+    }
+
     if (errorStr.includes('auth/invalid-email')) {
         return 'The email address provided is not valid. Please check for typos.';
     }

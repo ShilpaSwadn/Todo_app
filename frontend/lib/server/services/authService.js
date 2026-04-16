@@ -87,13 +87,22 @@ class AuthService {
    */
   async loginWithEmail(email, password) {
     try {
-      // 1. Verify if the email actually exists first to provide a friendly "needs-registration" error
+      // 1. Verify if the email actually exists
+      let firebaseUser;
       try {
-        await adminAuth.getUserByEmail(email.toLowerCase().trim());
+        firebaseUser = await adminAuth.getUserByEmail(email.toLowerCase().trim());
       } catch (fbError) {
         if (fbError.code === 'auth/user-not-found') {
           throw new Error('No account found for this email address in our authentication system. Please register first.');
         }
+        throw fbError;
+      }
+
+      // Check if user has a password set (providerId: 'password')
+      const providers = firebaseUser.providerData || [];
+      const hasPassword = providers.some(p => p.providerId === 'password');
+      if (!hasPassword) {
+        throw new Error('Your email is present but the password is not set for this you can login through google oauth or otp login');
       }
 
       // 2. Authenticate with Firebase using REST API

@@ -71,9 +71,40 @@ const initDatabase = async () => {
       CREATE TABLE IF NOT EXISTS public.groups (
         group_id UUID PRIMARY KEY DEFAULT public.uuid_v7(),
         user_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+        group_name VARCHAR(255),
+        group_description TEXT,
+        group_members UUID[] DEFAULT '{}',
         created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
       );
     `);
+    
+    // Add missing columns if table already exists (for schema evolution)
+    const groupColumnsToAdd = [
+      { name: 'group_name', type: 'VARCHAR(255)' },
+      { name: 'group_description', type: 'TEXT' },
+      { name: 'group_members', type: 'UUID[] DEFAULT \'{}\'' }
+    ];
+
+    for (const col of groupColumnsToAdd) {
+      await query(`
+        DO $$ 
+        BEGIN 
+          IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='groups' AND column_name='${col.name}') THEN
+            ALTER TABLE public.groups ADD COLUMN ${col.name} ${col.type};
+            
+            -- Migration: If old column exists, move data
+            IF '${col.name}' = 'group_name' AND EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='groups' AND column_name='name') THEN
+              UPDATE public.groups SET group_name = name WHERE group_name IS NULL;
+            ELSIF '${col.name}' = 'group_description' AND EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='groups' AND column_name='description') THEN
+              UPDATE public.groups SET group_description = description WHERE group_description IS NULL;
+            ELSIF '${col.name}' = 'group_members' AND EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='groups' AND column_name='members') THEN
+              UPDATE public.groups SET group_members = members WHERE group_members IS NULL;
+            END IF;
+          END IF;
+        END $$;
+      `);
+    }
+
     
     // Ensure group_id has the correct default value (for schema evolution)
     await query(`
@@ -150,33 +181,16 @@ const initDatabase = async () => {
       `);
     }
 
-    // 5. Create trigger to automatically create a group record for new users
-    console.log('Database: Synchronizing user registration triggers...');
-    await query(`
-      CREATE OR REPLACE FUNCTION public.on_user_created_create_group()
-      RETURNS TRIGGER AS $$
-      BEGIN
-        INSERT INTO public.groups (user_id)
-        VALUES (NEW.id);
-        RETURN NEW;
-      END;
-      $$ LANGUAGE plpgsql;
-
-      DO $$
-      BEGIN
-        IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'trg_create_group_on_user_insert') THEN
-          CREATE TRIGGER trg_create_group_on_user_insert
-          AFTER INSERT ON public.users
-          FOR EACH ROW
-          EXECUTE FUNCTION public.on_user_created_create_group();
-        END IF;
-      END $$;
-    `);
-
-    // 6. Cleanup: If legacy temp_tables exist, drop them
+    // 5. Cleanup: If legacy temp_tables exist, drop them
     console.log('Database: Cleaning up legacy tables...');
     await query(`
       DROP TABLE IF EXISTS public.temp_users CASCADE;
+    `);
+
+    // Drop legacy trigger if exists
+    await query(`
+      DROP TRIGGER IF EXISTS trg_create_group_on_user_insert ON public.users;
+      DROP FUNCTION IF EXISTS public.on_user_created_create_group();
     `);
 
     console.log('Database: Schema initialization completed successfully.');

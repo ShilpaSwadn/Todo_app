@@ -155,6 +155,65 @@ class User {
     return result.rows[0] || null;
   }
 
+  /**
+   * Find multiple active users by their IDs
+   */
+  static async findActiveByIds(ids) {
+    if (!ids || ids.length === 0) return [];
+    const sqlQuery = 'SELECT id, email, first_name, last_name FROM public.users WHERE id = ANY($1) AND account_active = true';
+    const result = await query(sqlQuery, [ids]);
+    return result.rows;
+  }
+
+  /**
+   * Search for an active user by email (for UI selection)
+   */
+  static async findActiveByEmail(email) {
+    if (!email) return null;
+    const sqlQuery = 'SELECT id, email, first_name, last_name FROM public.users WHERE email = $1 AND account_active = true';
+    const result = await query(sqlQuery, [email.toLowerCase().trim()]);
+    return result.rows[0] || null;
+  }
+
+  /**
+   * Fetch all active users (limited, excluding specific ID)
+   */
+  static async findAllActive(limit = 20, excludeId = null) {
+    let sqlQuery = 'SELECT id, email, first_name, last_name FROM public.users WHERE account_active = true';
+    const params = [limit];
+    
+    if (excludeId) {
+      sqlQuery += ' AND id != $2';
+      params.push(excludeId);
+    }
+    
+    sqlQuery += ' ORDER BY first_name ASC LIMIT $1';
+    const result = await query(sqlQuery, params);
+    return result.rows;
+  }
+
+  /**
+   * Search active users by name or email (excluding specific ID)
+   */
+  static async searchActive(term, excludeId = null) {
+    const pattern = `%${term}%`;
+    let sqlQuery = `
+      SELECT id, email, first_name, last_name 
+      FROM public.users 
+      WHERE account_active = true 
+      AND (email ILIKE $1 OR first_name ILIKE $1 OR last_name ILIKE $1)
+    `;
+    const params = [pattern];
+
+    if (excludeId) {
+      sqlQuery += ' AND id != $2';
+      params.push(excludeId);
+    }
+
+    sqlQuery += ' ORDER BY first_name ASC LIMIT 10';
+    const result = await query(sqlQuery, params);
+    return result.rows;
+  }
   static async updateAccountActive(id, active) {
     const sqlQuery = 'UPDATE public.users SET account_active = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2';
     await query(sqlQuery, [active, id]);

@@ -8,7 +8,7 @@ const LocaleContext = createContext({
   country: null,
   countries: [],
   loading: true,
-  setLocale: () => {},
+  setLocale: () => { },
   formatDate: (date) => date.toString(),
 })
 
@@ -26,21 +26,21 @@ export const LocaleProvider = ({ children }) => {
         // 1. Fetch all countries dynamically from REST Countries
         const countriesRes = await fetch('https://restcountries.com/v3.1/all?fields=name,cca2,idd,flags')
         const rawCountries = await countriesRes.json()
-        
+
         const processedCountries = rawCountries.map(c => ({
           name: c.name.common,
           code: c.cca2,
           flag: c.flags.svg || c.flags.png,
           dialCode: c.idd.root + (c.idd.suffixes?.[0] || '')
         })).sort((a, b) => a.name.localeCompare(b.name))
-        
+
         setCountries(processedCountries)
 
         // 2. Detect User Location and timezone from IP
         try {
           const geoRes = await fetch('https://ipapi.co/json/')
           const geoData = await geoRes.json()
-          
+
           if (geoData && !geoData.error) {
             if (geoData.timezone) setTimezone(geoData.timezone)
             if (geoData.country_code) {
