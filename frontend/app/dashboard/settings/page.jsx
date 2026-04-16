@@ -884,7 +884,7 @@ export default function SettingsPage() {
                                       </div>
                                     </td>
                                     <td className="px-6 py-4 text-right">
-                                      {group.ownerId === user?.id && (
+                                      {group.ownerId === user?.id && member.id !== group.ownerId && (
                                         <button onClick={() => removeMemberFromGroup(group.id, member.id)} className="p-2 text-gray-400 hover:text-rose-600 transition-colors">
                                           <FiTrash2 className="w-4 h-4" />
                                         </button>
