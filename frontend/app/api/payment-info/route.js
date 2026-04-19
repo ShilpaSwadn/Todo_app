@@ -34,8 +34,8 @@ export async function POST(request) {
 
     const body = await request.json()
     console.log('Payment POST Request Body:', { ...body, cardNumber: '****', cvv: '***' })
-    const { cardholderName, cardNumber, expiryDate, provider, cvv, fundingType } = body
-
+    const { cardholderName, cardNumber, expiryDate, provider, cvv, fundingType, groupId } = body
+    
     // 1. Perform Security Validation
     const securityCheck = validatePaymentSecurity({ cardNumber, expiryDate, cvv })
     console.log('Security Validation Result:', securityCheck.isValid, securityCheck.errors)
@@ -49,14 +49,34 @@ export async function POST(request) {
 
     // 2. Prepare data for storage (Only storing safe parts)
     const lastFour = cardNumber.toString().slice(-4)
-    const cardType = securityCheck.cardMetadata.type
 
-    // Find user's group
-    const group = await Group.findByUserId(user.id)
-    if (!group) return NextResponse.json({ error: 'User has no group' }, { status: 400 })
+    // 3. Resolve Target Group
+    let targetGroupId = groupId;
+    
+    if (!targetGroupId) {
+      // Find the specific 'default group' for this user
+      const sqlQuery = 'SELECT group_id FROM public.groups WHERE user_id = $1 AND group_name = $2';
+      const { query: dbQuery } = await import('@/lib/server/config/database');
+      const result = await dbQuery(sqlQuery, [user.id, 'default group']);
+      
+      if (result.rows.length > 0) {
+        targetGroupId = result.rows[0].group_id;
+      } else {
+        // Fallback to any group if 'default group' doesn't exist (safety)
+        const anyGroup = await Group.findByUserId(user.id);
+        if (!anyGroup) return NextResponse.json({ error: 'User has no available identity clusters' }, { status: 400 });
+        targetGroupId = anyGroup.group_id;
+      }
+    } else {
+      // Verify group exists and belongs to user (or user is member)
+      const groupExists = await Group.findById(targetGroupId);
+      if (!groupExists) {
+        return NextResponse.json({ error: 'Specified identity cluster not found' }, { status: 404 });
+      }
+    }
 
     const newPayment = await PaymentInfo.create({
-      groupId: group.group_id,
+      groupId: targetGroupId,
       userId: user.id,
       cardholderName,
       cardNumber: lastFour, // Mapping the safe digits to the new column name

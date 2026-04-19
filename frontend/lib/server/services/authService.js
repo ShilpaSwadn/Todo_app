@@ -1,4 +1,5 @@
 import User from '../models/User.js';
+import Group from '../models/Group.js';
 import { adminAuth } from '../config/firebase-admin.js';
 // Service for handling authentication logic with Firebase and PostgreSQL
 
@@ -47,7 +48,17 @@ class AuthService {
       firebaseUid: firebaseUser.uid
     });
 
-    // 4. Send Verification Email (Magic Link)
+    // 4. Create Default Group
+    try {
+      await Group.create(user.id, {
+        name: 'default group',
+        description: 'default group details'
+      });
+    } catch (groupError) {
+      console.warn('User created but default group creation failed:', groupError);
+    }
+
+    // 5. Send Verification Email (Magic Link)
     try {
       const { sendVerificationEmail } = await import('../services/emailService.js');
       const link = await adminAuth.generateEmailVerificationLink(email);
@@ -77,6 +88,20 @@ class AuthService {
     };
 
     const user = await User.sync(userData);
+
+    // If this is a new user (created_at is very recent or we check if group exists)
+    // To be safe and meet the requirement "if user is created", we check if they have any group.
+    try {
+      const existingGroup = await Group.findByUserId(user.id);
+      if (!existingGroup) {
+        await Group.create(user.id, {
+          name: 'default group',
+          description: 'default group details'
+        });
+      }
+    } catch (groupError) {
+      console.warn('Error ensuring default group for synced user:', groupError);
+    }
 
     return this.formatUser(user);
   }

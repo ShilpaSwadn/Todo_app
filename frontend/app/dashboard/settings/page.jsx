@@ -101,7 +101,8 @@ export default function SettingsPage() {
     expiryDate: '',
     cvv: '',
     provider: 'Stripe',
-    fundingType: 'credit card'
+    fundingType: 'credit card',
+    groupId: ''
   })
 
   // Fetch user data & payments
@@ -166,6 +167,16 @@ export default function SettingsPage() {
     fetchData()
   }, [router])
 
+  // Auto-select 'default group' for payment form whenever groups are loaded or form is reset
+  useEffect(() => {
+    if (groups.length > 0 && !paymentFormData.groupId) {
+      const defaultGroup = groups.find(g => g.name === 'default group');
+      if (defaultGroup) {
+        setPaymentFormData(prev => ({ ...prev, groupId: defaultGroup.id }));
+      }
+    }
+  }, [groups, paymentFormData.groupId])
+
   // Clear messages when switching sections
   useEffect(() => {
     setError('')
@@ -177,7 +188,14 @@ export default function SettingsPage() {
       setGroupsLoading(true)
       const response = await api.get('/groups')
       if (response.success) {
-        setGroups(response.groups || [])
+        const fetchedGroups = response.groups || []
+        setGroups(fetchedGroups)
+
+        // Auto-select 'default group' for payment form
+        const defaultGroup = fetchedGroups.find(g => g.name === 'default group');
+        if (defaultGroup && !paymentFormData.groupId) {
+          setPaymentFormData(prev => ({ ...prev, groupId: defaultGroup.id }));
+        }
       }
     } catch (err) {
       console.error("Failed to fetch groups:", err)
@@ -215,9 +233,13 @@ export default function SettingsPage() {
       setPayments([...payments, response])
       setShowPaymentForm(false)
       setPaymentFormData({
+        cardholderName: '',
+        cardNumber: '',
+        expiryDate: '',
         cvv: '',
         provider: 'Stripe',
-        fundingType: 'credit card'
+        fundingType: 'credit card',
+        groupId: '' // Will be auto-selected by useEffect
       })
     } catch (err) {
       console.error("Failed to add payment:", err)
@@ -316,7 +338,7 @@ export default function SettingsPage() {
 
   const handleMemberSearch = async (val) => {
     setMemberSearch(val);
-    
+
     // We remove the length requirement so empty query shows available users
     setIsSearching(true);
     try {
@@ -613,8 +635,8 @@ export default function SettingsPage() {
                     </div>
                   </div>
                   {!showCreateInline && (
-                    <button 
-                      onClick={() => setShowCreateInline(true)} 
+                    <button
+                      onClick={() => setShowCreateInline(true)}
                       disabled={groups.length >= 5}
                       className={`p-4 rounded-2xl transition-all shadow-xl active:scale-95 flex items-center gap-2 ${groups.length >= 5 ? 'bg-gray-100 text-gray-400 cursor-not-allowed shadow-none' : 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-indigo-100 dark:shadow-none'}`}
                     >
@@ -638,10 +660,10 @@ export default function SettingsPage() {
                         <HiX className="w-5 h-5" />
                       </button>
                     </div>
-                    
+
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                       <div className="space-y-3">
-                        <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest px-2">Group Designation</label>
+                        <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest px-2">Group Name</label>
                         <input
                           type="text"
                           placeholder="e.g. FAMILY HUB"
@@ -651,7 +673,7 @@ export default function SettingsPage() {
                         />
                       </div>
                       <div className="space-y-3">
-                        <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest px-2">System Description</label>
+                        <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest px-2">Group Description</label>
                         <input
                           type="text"
                           placeholder="Purpose of this group..."
@@ -663,7 +685,7 @@ export default function SettingsPage() {
                     </div>
 
                     <div className="space-y-4">
-                      <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest px-2">Add Initial Membership (Mandatory)</label>
+                      <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest px-2">Add Members</label>
                       <div className="relative">
                         <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
                           {isSearching ? <ImSpinner2 className="w-4 h-4 text-indigo-600 animate-spin" /> : <FiSearch className="w-4 h-4 text-gray-400" />}
@@ -772,7 +794,7 @@ export default function SettingsPage() {
                           </div>
                           <div className="flex items-center gap-3">
                             <span className="hidden sm:inline-block text-[9px] font-black text-indigo-600 bg-indigo-50 dark:bg-indigo-900/20 px-3 py-1 rounded-full uppercase tracking-widest leading-none">{group.members.length} Identifiers</span>
-                            
+
                             {group.ownerId === user?.id ? (
                               editingGroupId === group.id ? (
                                 <div className="flex items-center gap-2">
@@ -824,11 +846,11 @@ export default function SettingsPage() {
                         {group.ownerId === user?.id && (
                           <div className="relative">
                             <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">{isSearching ? <ImSpinner2 className="w-4 h-4 text-indigo-600 animate-spin" /> : <FiSearch className="w-4 h-4 text-gray-400" />}</div>
-                            <input 
-                              type="text" 
-                              placeholder="Search database identities by Email or Name..." 
-                              className="w-full pl-12 pr-4 py-3 bg-gray-50 dark:bg-gray-800/50 border border-gray-100 dark:border-gray-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 dark:text-white text-sm" 
-                              value={memberSearch} 
+                            <input
+                              type="text"
+                              placeholder="Search database identities by Email or Name..."
+                              className="w-full pl-12 pr-4 py-3 bg-gray-50 dark:bg-gray-800/50 border border-gray-100 dark:border-gray-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 dark:text-white text-sm"
+                              value={memberSearch}
                               onChange={(e) => handleMemberSearch(e.target.value)}
                               onFocus={() => handleMemberSearch(memberSearch)}
                               onBlur={() => setTimeout(() => setSearchResults([]), 200)}
@@ -836,13 +858,13 @@ export default function SettingsPage() {
                             {searchResults.length > 0 && (
                               <div className="absolute z-10 w-full mt-2 bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-2xl shadow-2xl overflow-hidden">
                                 {searchResults.map((result) => (
-                                  <button 
-                                    key={result.id} 
+                                  <button
+                                    key={result.id}
                                     type="button"
                                     onMouseDown={(e) => {
                                       e.preventDefault();
                                       addMemberToGroup(group.id, result);
-                                    }} 
+                                    }}
                                     className="w-full px-6 py-4 flex items-center justify-between hover:bg-indigo-50 dark:hover:bg-indigo-900/20 text-left transition-colors"
                                   >
                                     <div><p className="text-sm font-bold text-gray-900 dark:text-white">{result.name}</p><p className="text-[10px] text-gray-400 uppercase tracking-widest">{result.email}</p></div><FiPlus className="w-4 h-4 text-indigo-600" />
@@ -1111,6 +1133,28 @@ export default function SettingsPage() {
                           </div>
                         </div>
                       </div>
+
+                      <div className="space-y-3 md:col-span-2">
+                        <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest px-2">Link this payment to group</label>
+                        <div className="relative">
+                          <select
+                            required
+                            value={paymentFormData.groupId}
+                            onChange={(e) => setPaymentFormData({ ...paymentFormData, groupId: e.target.value })}
+                            className="w-full h-14 px-6 bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-2xl text-xs font-black uppercase tracking-[0.1em] focus:ring-4 focus:ring-indigo-500/10 outline-none transition-all appearance-none cursor-pointer"
+                          >
+                            {!paymentFormData.groupId && <option value="">Select a Group</option>}
+                            {groups.map(group => (
+                              <option key={group.id} value={group.id}>
+                                {group.name} {group.name === 'default group' ? '(SYSTEM DEFAULT)' : ''}
+                              </option>
+                            ))}
+                          </select>
+                          <div className="absolute right-6 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
+                            <FiChevronRight className="rotate-90" />
+                          </div>
+                        </div>
+                      </div>
                     </div>
 
                     <button
@@ -1158,10 +1202,14 @@ export default function SettingsPage() {
                               <p className="text-sm font-black text-gray-900 dark:text-white mt-1 uppercase tracking-tight">
                                 •••• •••• •••• {payment.card_number}
                               </p>
-                              <div className="flex items-center gap-4 mt-1">
+                              <div className="flex items-center gap-4 mt-2">
                                 <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest">{payment.cardholder_name}</p>
                                 <div className="w-1 h-1 bg-gray-300 rounded-full" />
                                 <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest">{payment.expiry_date}</p>
+                                <div className="w-1 h-1 bg-gray-300 rounded-full" />
+                                <p className="text-[8px] font-black text-indigo-400 bg-indigo-50/50 dark:bg-indigo-900/20 px-2 py-0.5 rounded uppercase tracking-[0.1em]">
+                                  Cluster: {groups.find(g => g.id === payment.group_id)?.name || 'Unknown Cluster'}
+                                </p>
                               </div>
                             </div>
                           </div>

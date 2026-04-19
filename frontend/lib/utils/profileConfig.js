@@ -11,11 +11,11 @@ export const profileConfig = {
         { id: 'lastName', label: 'Last Name', type: 'text', placeholder: 'Enter last name' },
         { id: 'email', label: 'Email', type: 'email', isReadOnly: true },
         { id: 'mobileNumber', label: 'Phone Number', type: 'tel', isReadOnly: true },
-        { 
-          id: 'languagePreference', 
-          label: 'Language Preference', 
-          type: 'select', 
-          options: ['English', 'Hindi', 'Tamil', 'Telugu', 'Kannada', 'Malayalam', 'Bengali', 'Marathi', 'Gujarati', 'Punjabi', 'Spanish', 'French'] 
+        {
+          id: 'languagePreference',
+          label: 'Language Preference',
+          type: 'select',
+          options: ['English', 'Hindi', 'Tamil', 'Telugu', 'Kannada', 'Malayalam', 'Bengali', 'Marathi', 'Gujarati', 'Punjabi', 'Spanish', 'French']
         },
         { id: 'timeZone', label: 'Time Zone', type: 'select', options: ['UTC', 'IST (GMT+5:30)', 'EST (GMT-5)', 'CST (GMT-6)', 'PST (GMT-8)', 'GST (GMT+4)'] },
       ]
@@ -32,29 +32,29 @@ export const profileConfig = {
       id: 'dietary_religious',
       title: 'Dietary & Religious',
       fields: [
-        { 
-          id: 'dietType', 
-          label: 'Primary Diet', 
-          type: 'select', 
-          options: ['Vegetarian', 'Vegan', 'Eggetarian', 'Non-Vegetarian', 'Jain'] 
+        {
+          id: 'dietType',
+          label: 'Primary Diet',
+          type: 'select',
+          options: ['Vegetarian', 'Vegan', 'Eggetarian', 'Non-Vegetarian', 'Jain']
         },
-        { 
-          id: 'religiousRestrictions', 
-          label: 'Religious Restrictions', 
-          type: 'select', 
-          options: ['None', 'Hindu', 'Jain', 'Halal', 'Kosher'] 
+        {
+          id: 'religiousRestrictions',
+          label: 'Religious Restrictions',
+          type: 'select',
+          options: ['None', 'Hindu', 'Jain', 'Halal', 'Kosher']
         },
-        { 
-          id: 'allowedMeats', 
-          label: 'Allowed Meats', 
-          type: 'multi-select', 
+        {
+          id: 'allowedMeats',
+          label: 'Allowed Meats',
+          type: 'multi-select',
           options: ['Chicken', 'Mutton', 'Fish', 'Beef', 'Pork', 'None'],
-          dependsOn: { field: 'dietType', values: ['Non-Vegetarian', 'Eggetarian'] } 
+          dependsOn: { field: 'dietType', values: ['Non-Vegetarian', 'Eggetarian'] }
         },
-        { 
-          id: 'eggsAllowed', 
-          label: 'Eggs Allowed', 
-          type: 'radio', 
+        {
+          id: 'eggsAllowed',
+          label: 'Eggs Allowed',
+          type: 'radio',
           options: ['Yes', 'No'],
           dependsOn: { field: 'dietType', values: ['Vegetarian', 'Eggetarian', 'Non-Vegetarian'] }
         },
@@ -91,10 +91,10 @@ export const profileConfig = {
       title: 'Taste Preferences',
       fields: [
         { id: 'favoriteCuisines', label: 'Fav Cuisines', type: 'multi-select', options: ['South Indian', 'North Indian', 'Chinese', 'Italian', 'Continental'] },
-        { 
-          id: 'dislikedIngredients', 
-          label: 'Disliked Ingredients', 
-          type: 'multi-select', 
+        {
+          id: 'dislikedIngredients',
+          label: 'Disliked Ingredients',
+          type: 'multi-select',
           options: ['Onion', 'Garlic', 'Mushroom', 'None']
         },
         { id: 'spiceLevel', label: 'Spice Level', type: 'radio', options: ['Low', 'Medium', 'High'] },

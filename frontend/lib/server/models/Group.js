@@ -32,6 +32,7 @@ class Group {
       RETURNING *
     `;
     const result = await query(sqlQuery, [newId, userId, name, description, members]);
+    return result.rows[0] || null;
   }
   static async update(groupId, userId, data) {
     const { name, description } = data;
