@@ -64,14 +64,14 @@ export async function POST(request) {
       } else {
         // Fallback to any group if 'default group' doesn't exist (safety)
         const anyGroup = await Group.findByUserId(user.id);
-        if (!anyGroup) return NextResponse.json({ error: 'User has no available identity clusters' }, { status: 400 });
+        if (!anyGroup) return NextResponse.json({ error: 'User has no available groups' }, { status: 400 });
         targetGroupId = anyGroup.group_id;
       }
     } else {
       // Verify group exists and belongs to user (or user is member)
       const groupExists = await Group.findById(targetGroupId);
       if (!groupExists) {
-        return NextResponse.json({ error: 'Specified identity cluster not found' }, { status: 404 });
+        return NextResponse.json({ error: 'Specified group not found' }, { status: 404 });
       }
     }
 

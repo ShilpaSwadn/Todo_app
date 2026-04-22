@@ -1,7 +1,10 @@
 /**
- * Master Profile Configuration with Advanced Dependencies
+ * Personal & Account Configuration
  */
-export const profileConfig = {
+export const personalConfig = {
+  id: 'personal',
+  title: 'Personal Information',
+  description: 'Manage your profile information',
   categories: [
     {
       id: 'personal_account',
@@ -11,18 +14,11 @@ export const profileConfig = {
         { id: 'lastName', label: 'Last Name', type: 'text', placeholder: 'Enter last name' },
         { id: 'email', label: 'Email', type: 'email', isReadOnly: true },
         { id: 'mobileNumber', label: 'Phone Number', type: 'tel', isReadOnly: true },
-        {
-          id: 'languagePreference',
-          label: 'Language Preference',
-          type: 'select',
-          options: ['English', 'Hindi', 'Tamil', 'Telugu', 'Kannada', 'Malayalam', 'Bengali', 'Marathi', 'Gujarati', 'Punjabi', 'Spanish', 'French']
-        },
-        { id: 'timeZone', label: 'Time Zone', type: 'select', options: ['UTC', 'IST (GMT+5:30)', 'EST (GMT-5)', 'CST (GMT-6)', 'PST (GMT-8)', 'GST (GMT+4)'] },
       ]
     },
     {
       id: 'household_family',
-      title: 'Living Structure',
+      title: 'Household Details',
       fields: [
         { id: 'householdRole', label: 'Your Role', type: 'select', options: ['Head', 'Member', 'Child', 'Guest'] },
         { id: 'householdSize', label: 'Household Size', type: 'number', min: 1, placeholder: 'Enter number of members' },
@@ -134,14 +130,6 @@ export const profileConfig = {
       ]
     },
     {
-      id: 'integrations',
-      title: 'Integrations',
-      fields: [
-        { id: 'wearableIntegration', label: 'Wearables', type: 'select', options: ['None', 'Fitbit', 'Apple Watch'] },
-        { id: 'storeLoyaltyId', label: 'Store Loyalty ID', type: 'text', placeholder: 'Enter ID' },
-      ]
-    },
-    {
       id: 'accessibility_ui',
       title: 'Accessibility & UI',
       fields: [
@@ -151,7 +139,7 @@ export const profileConfig = {
     },
     {
       id: 'behavioral_data',
-      title: 'Behavioral Data',
+      title: 'Cooking Preferences',
       fields: [
         { id: 'recipeFeedback', label: 'Feedback Mode', type: 'radio', options: ['Like', 'Dislike'] },
         { id: 'cookingSkillLevel', label: 'Skill Level', type: 'select', options: ['Beginner', 'Intermediate', 'Advanced'] },
@@ -167,7 +155,7 @@ export const profileConfig = {
     },
     {
       id: 'business_kiosk',
-      title: 'Business & Kiosk',
+      title: 'Account Type',
       fields: [
         { id: 'accountType', label: 'Account Type', type: 'select', options: ['Individual', 'Family', 'Business', 'Kiosk'] },
         { id: 'kioskSessionMode', label: 'Kiosk Mode', type: 'radio', options: ['Anonymous', 'Logged In'] },
