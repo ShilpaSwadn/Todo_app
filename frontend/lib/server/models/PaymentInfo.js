@@ -65,11 +65,20 @@ class PaymentInfo {
   }
 
   /**
-   * Delete payment info
+   * Disable payment info (soft delete)
    */
-  static async delete(paymentDetailsId) {
-    const sqlQuery = 'DELETE FROM public.payment_info WHERE payment_details_id = $1';
-    await query(sqlQuery, [paymentDetailsId]);
+  static async disable(paymentDetailsId, userId) {
+    const sqlQuery = 'UPDATE public.payment_info SET is_active = false, updated_at = NOW() WHERE payment_details_id = $1 AND user_id = $2';
+    await query(sqlQuery, [paymentDetailsId, userId]);
+    return true;
+  }
+
+  /**
+   * Enable payment info (restore)
+   */
+  static async enable(paymentDetailsId, userId) {
+    const sqlQuery = 'UPDATE public.payment_info SET is_active = true, updated_at = NOW() WHERE payment_details_id = $1 AND user_id = $2';
+    await query(sqlQuery, [paymentDetailsId, userId]);
     return true;
   }
 }

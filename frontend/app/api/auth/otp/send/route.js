@@ -30,7 +30,7 @@ export async function POST(request) {
       if (error.code === 'auth/user-not-found') {
         return NextResponse.json({
           success: false,
-          message: 'No account found for this registered identifier in our authentication system. Please register first.'
+          message: 'We couldn\'t find an account for this identifier. Would you like to Register?'
         }, { status: 404 });
       }
       throw error;

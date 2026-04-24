@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { FiMail, FiKey, FiArrowLeft, FiEye, FiEyeOff, FiLock, FiUser, FiPhone, FiSun, FiMoon } from 'react-icons/fi'
+import { FiMail, FiKey, FiArrowLeft, FiEye, FiEyeOff, FiLock, FiUser, FiPhone, FiSun, FiMoon, FiAlertCircle } from 'react-icons/fi'
 import { useTheme } from '@/context/ThemeContext'
 import { HiX } from 'react-icons/hi'
 import { ImSpinner2 } from 'react-icons/im'
@@ -67,7 +67,7 @@ export default function Login() {
       return await setupRecaptcha(uniqueId);
     } catch (err) {
       console.error("Recaptcha initialization failed:", err);
-      setError(err.message || "Security check failed. Please refresh the page.");
+      setError("Security check failed. Please refresh the page.");
       return null;
     }
   };
@@ -81,6 +81,16 @@ export default function Login() {
     }
     return () => clearInterval(timer);
   }, [countdown]);
+
+  // Auto-clear error message
+  useEffect(() => {
+    if (error) {
+      const timer = setTimeout(() => {
+        setError('')
+      }, 7000)
+      return () => clearTimeout(timer)
+    }
+  }, [error])
 
 
 
@@ -453,12 +463,7 @@ export default function Login() {
         setError(response.message || 'Failed to resend verification link.')
       }
     } catch (err) {
-      const msg = err.message || '';
-      if (msg.includes('TOO_MANY_ATTEMPTS')) {
-        setError('Too many attempts. Please wait a few minutes before trying again.');
-      } else {
-        setError(msg || 'Failed to resend verification link. Please try again.');
-      }
+      setError(formatFirebaseError(err));
     } finally {
       setResendingVerification(false)
     }
@@ -734,32 +739,32 @@ export default function Login() {
               </div>
 
               {error && (
-                <div className="mb-6 p-4 bg-red-50 dark:bg-red-900/20 border-l-4 border-red-500 rounded-r-lg">
-                  <div className="flex flex-col gap-3">
-                    <div className="flex items-start">
-                      <HiX
-                        className="h-5 w-5 text-red-500 mr-2 mt-0.5 shrink-0 cursor-pointer hover:text-red-700 transition-colors"
-                        onClick={() => setError('')}
-                      />
-                      <div className="text-sm font-medium leading-relaxed">
+                <div className="mb-6 p-5 bg-rose-500/10 dark:bg-rose-500/5 backdrop-blur-xl border border-rose-500/20 text-rose-600 dark:text-rose-400 rounded-2xl flex items-center justify-between gap-4 animate-shake shadow-lg shadow-rose-500/5 relative overflow-hidden">
+                  <div className="absolute left-0 top-0 bottom-0 w-1 bg-rose-500" />
+                  <div className="flex-1 flex flex-col gap-3">
+                    <div className="flex items-start gap-4">
+                      <div className="p-2 bg-rose-500/20 rounded-xl shrink-0 mt-0.5">
+                        <FiAlertCircle className="w-5 h-5" />
+                      </div>
+                      <div className="text-sm font-bold leading-relaxed tracking-tight flex-1">
                         {error.includes('Register') ? (
-                          <div className="text-red-700 dark:text-red-400">
+                          <div>
                             {error.split('Register')[0]}
                             <Link
                               href="/register"
-                              className="text-indigo-600 dark:text-indigo-400 font-bold hover:text-indigo-800 dark:hover:text-indigo-300 transition-colors mx-1 underline decoration-2 underline-offset-2"
+                              className="text-indigo-600 dark:text-indigo-400 font-black hover:text-indigo-800 dark:hover:text-indigo-300 transition-colors mx-1 underline decoration-2 underline-offset-4"
                             >
                               Register
                             </Link>
                             {error.split('Register')[1]}
                           </div>
                         ) : error.includes('Google OAuth') ? (
-                          <div className="text-red-700 dark:text-red-400">
+                          <div>
                             {error.split('Google OAuth')[0]}
                             <button
                               type="button"
                               onClick={handleGoogleLogin}
-                              className="text-indigo-600 dark:text-indigo-400 font-bold hover:text-indigo-800 dark:hover:text-indigo-300 transition-colors mx-1 underline decoration-2 underline-offset-2"
+                              className="text-indigo-600 dark:text-indigo-400 font-black hover:text-indigo-800 dark:hover:text-indigo-300 transition-colors mx-1 underline decoration-2 underline-offset-4"
                             >
                               Google OAuth
                             </button>
@@ -769,7 +774,7 @@ export default function Login() {
                                 <button
                                   type="button"
                                   onClick={() => { setLoginMode('otp'); setError(''); }}
-                                  className="text-indigo-600 dark:text-indigo-400 font-bold hover:text-indigo-800 dark:hover:text-indigo-300 transition-colors mx-1 underline decoration-2 underline-offset-2"
+                                  className="text-indigo-600 dark:text-indigo-400 font-black hover:text-indigo-800 dark:hover:text-indigo-300 transition-colors mx-1 underline decoration-2 underline-offset-4"
                                 >
                                   OTP login
                                 </button>
@@ -780,16 +785,16 @@ export default function Login() {
                             )}
                           </div>
                         ) : (
-                          <span className="text-red-700 dark:text-red-400">{error}</span>
+                          <span>{error}</span>
                         )}
                       </div>
                     </div>
-
-                    {(error.toLowerCase().includes('not verified') || error.toLowerCase().includes('verification link')) && identifier.includes('@') && (
+                    
+                    {(error.toLowerCase().includes('not verified') || error.toLowerCase().includes('verification link') || error.toLowerCase().includes('activate it')) && identifier.includes('@') && (
                       <button
                         onClick={handleResendVerification}
                         disabled={resendingVerification || resendCountdown > 0}
-                        className="text-xs font-bold text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 flex items-center gap-1 w-fit transition-all hover:translate-x-1 disabled:opacity-50 disabled:translate-x-0"
+                        className="ml-14 text-xs font-black text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 flex items-center gap-2 w-fit transition-all hover:translate-x-1 disabled:opacity-50 disabled:translate-x-0"
                       >
                         {resendingVerification ? (
                           <ImSpinner2 className="animate-spin h-3 w-3" />
@@ -802,6 +807,9 @@ export default function Login() {
                       </button>
                     )}
                   </div>
+                  <button onClick={() => setError('')} className="p-2 hover:bg-rose-500/10 rounded-lg transition-colors shrink-0">
+                    <HiX className="w-4 h-4" />
+                  </button>
                 </div>
               )}
 

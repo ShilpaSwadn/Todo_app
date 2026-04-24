@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { FiLock, FiUser, FiMail, FiPhone, FiChevronDown, FiArrowLeft, FiKey } from 'react-icons/fi'
+import { FiLock, FiUser, FiMail, FiPhone, FiChevronDown, FiArrowLeft, FiKey, FiAlertCircle } from 'react-icons/fi'
 import { HiX } from 'react-icons/hi'
 import { ImSpinner2 } from 'react-icons/im'
 import { FcGoogle } from 'react-icons/fc'
@@ -55,7 +55,7 @@ export default function Register() {
       return await setupRecaptcha(uniqueId);
     } catch (err) {
       console.error("Recaptcha initialization failed:", err);
-      setError(err.message || "Security check failed. Please refresh the page.");
+      setError("Security check failed. Please refresh the page.");
       return null;
     }
   };
@@ -69,6 +69,16 @@ export default function Register() {
     }
     return () => clearInterval(timer);
   }, [countdown]);
+
+  // Auto-clear error message
+  useEffect(() => {
+    if (error) {
+      const timer = setTimeout(() => {
+        setError('')
+      }, 7000)
+      return () => clearTimeout(timer)
+    }
+  }, [error])
 
 
 
@@ -505,29 +515,32 @@ export default function Register() {
               </div>
 
               {error && (
-                <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/20 border-l-4 border-red-500 text-red-700 dark:text-red-400 rounded-r-lg">
-                  <div className="flex items-start">
-                    <HiX
-                      className="w-4 h-4 mr-2 mt-0.5 shrink-0 cursor-pointer hover:text-red-700 transition-colors"
-                      onClick={() => setError('')}
-                    />
-                    <div className="text-xs font-medium leading-relaxed">
+                <div className="mb-6 p-5 bg-rose-500/10 dark:bg-rose-500/5 backdrop-blur-xl border border-rose-500/20 text-rose-600 dark:text-rose-400 rounded-2xl flex items-center justify-between gap-4 animate-shake shadow-lg shadow-rose-500/5 relative overflow-hidden">
+                  <div className="absolute left-0 top-0 bottom-0 w-1 bg-rose-500" />
+                  <div className="flex items-start gap-4 flex-1">
+                    <div className="p-2 bg-rose-500/20 rounded-xl shrink-0 mt-0.5">
+                      <FiAlertCircle className="w-5 h-5" />
+                    </div>
+                    <div className="text-xs font-bold leading-relaxed tracking-tight">
                       {error.includes('Login directly using mobile number') ? (
-                        <>
+                        <div>
                           {error.split('Login')[0]}
                           <Link
                             href="/login"
-                            className="text-indigo-600 dark:text-indigo-400 font-bold hover:text-indigo-800 dark:hover:text-indigo-300 transition-colors mx-1 underline decoration-2 underline-offset-2"
+                            className="text-indigo-600 dark:text-indigo-400 font-black hover:text-indigo-800 dark:hover:text-indigo-300 transition-colors mx-1 underline decoration-2 underline-offset-4"
                           >
                             Login
                           </Link>
                           {error.split('Login')[1]}
-                        </>
+                        </div>
                       ) : (
-                        error
+                        <span>{error}</span>
                       )}
                     </div>
                   </div>
+                  <button onClick={() => setError('')} className="p-2 hover:bg-rose-500/10 rounded-lg transition-colors shrink-0">
+                    <HiX className="w-4 h-4" />
+                  </button>
                 </div>
               )}
 

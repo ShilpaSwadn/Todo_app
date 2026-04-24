@@ -17,9 +17,9 @@ export const validatePaymentSecurity = (paymentData) => {
   const cvvValidation = cvv ? cardValidator.cvv(cvv, numberValidation.card?.code.size) : { isValid: true };
 
   const errors = [];
-  if (!numberValidation.isValid) errors.push('The card number provided is invalid. Please check the digits and try again.');
-  if (!expirationValidation.isValid) errors.push('The expiration date is invalid or the card has expired.');
-  if (cvv && !cvvValidation.isValid) errors.push('the security code (CVV) provided is incorrect.');
+  if (!numberValidation.isValid) errors.push('Please check your card number for typos.');
+  if (!expirationValidation.isValid) errors.push('The expiry date is invalid or has already passed.');
+  if (cvv && !cvvValidation.isValid) errors.push('The security code (CVV) is incorrect.');
 
   return {
     isValid: errors.length === 0,

@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { query } from '@/lib/server/config/database.js'
 import Group from '@/lib/server/models/Group.js'
 import { ensureDbInitialized } from '@/lib/server/middleware/dbInit.js'
 import { getUidFromToken } from '@/lib/server/middleware/authMiddleware.js'
@@ -54,21 +55,18 @@ export async function DELETE(request, { params }) {
     }
 
     const currentUser = await authService.getUserByUid(uid)
+    const result = await Group.disable(id, currentUser.id)
 
-    // Only owner can delete group
-    const sqlQuery = 'DELETE FROM public.groups WHERE group_id = $1 AND user_id = $2 RETURNING *'
-    const result = await query(sqlQuery, [id, currentUser.id])
-
-    if (result.rowCount === 0) {
+    if (!result) {
       return NextResponse.json({ success: false, message: 'Group not found or unauthorized' }, { status: 404 })
     }
 
     return NextResponse.json({
       success: true,
-      message: 'Group deleted successfully'
+      message: 'Group disabled successfully'
     })
   } catch (error) {
-    console.error('Delete group error:', error)
+    console.error('Disable group error:', error)
     return NextResponse.json({ success: false, message: 'Internal server error' }, { status: 500 })
   }
 }

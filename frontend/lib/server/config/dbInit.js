@@ -74,6 +74,7 @@ const initDatabase = async () => {
         group_name VARCHAR(255),
         group_description TEXT,
         group_members UUID[] DEFAULT '{}',
+        is_active BOOLEAN DEFAULT true,
         created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
       );
     `);
@@ -82,7 +83,8 @@ const initDatabase = async () => {
     const groupColumnsToAdd = [
       { name: 'group_name', type: 'VARCHAR(255)' },
       { name: 'group_description', type: 'TEXT' },
-      { name: 'group_members', type: 'UUID[] DEFAULT \'{}\'' }
+      { name: 'group_members', type: 'UUID[] DEFAULT \'{}\'' },
+      { name: 'is_active', type: 'BOOLEAN DEFAULT true' }
     ];
 
     for (const col of groupColumnsToAdd) {
@@ -131,6 +133,7 @@ const initDatabase = async () => {
         card_brand VARCHAR(50),
         funding_type VARCHAR(20),
         is_verified BOOLEAN DEFAULT false,
+        is_active BOOLEAN DEFAULT true,
         created_at TIMESTAMPTZ DEFAULT NOW(),
         updated_at TIMESTAMPTZ DEFAULT NOW()
       );
@@ -154,7 +157,8 @@ const initDatabase = async () => {
       { name: 'provider', type: 'VARCHAR(50)' },
       { name: 'card_brand', type: 'VARCHAR(50)' },
       { name: 'funding_type', type: 'VARCHAR(20)' },
-      { name: 'is_verified', type: 'BOOLEAN DEFAULT false' }
+      { name: 'is_verified', type: 'BOOLEAN DEFAULT false' },
+      { name: 'is_active', type: 'BOOLEAN DEFAULT true' }
     ];
 
     for (const col of paymentColumnsToAdd) {

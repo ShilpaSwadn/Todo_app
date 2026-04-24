@@ -45,6 +45,26 @@ class Group {
     const result = await query(sqlQuery, [name, description, groupId, userId]);
     return result.rows[0] || null;
   }
+  static async disable(groupId, userId) {
+    const sqlQuery = `
+      UPDATE public.groups 
+      SET is_active = false
+      WHERE group_id = $1 AND user_id = $2
+      RETURNING *
+    `;
+    const result = await query(sqlQuery, [groupId, userId]);
+    return result.rows[0] || null;
+  }
+  static async enable(groupId, userId) {
+    const sqlQuery = `
+      UPDATE public.groups 
+      SET is_active = true
+      WHERE group_id = $1 AND user_id = $2
+      RETURNING *
+    `;
+    const result = await query(sqlQuery, [groupId, userId]);
+    return result.rows[0] || null;
+  }
 }
 
 export default Group

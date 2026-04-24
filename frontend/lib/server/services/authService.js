@@ -112,22 +112,27 @@ class AuthService {
    */
   async loginWithEmail(email, password) {
     try {
-      // 1. Verify if the email actually exists
+      // 1. Verify if the user exists
       let firebaseUser;
       try {
         firebaseUser = await adminAuth.getUserByEmail(email.toLowerCase().trim());
       } catch (fbError) {
         if (fbError.code === 'auth/user-not-found') {
-          throw new Error('No account found for this email address in our authentication system. Please register first.');
+          throw new Error('We couldn\'t find an account with this email. Would you like to Register?');
         }
         throw fbError;
       }
 
-      // Check if user has a password set (providerId: 'password')
+      // 2. Check activation status IMMEDIATELY to help users who registered but didn't click the link
+      if (!firebaseUser.emailVerified) {
+        throw new Error('Your account is almost ready! Please check your email to activate it.');
+      }
+
+      // 3. User exists and is verified, now check password setup
       const providers = firebaseUser.providerData || [];
       const hasPassword = providers.some(p => p.providerId === 'password');
       if (!hasPassword) {
-        throw new Error('Your email is present but the password is not set for this you can login through google oauth or otp login');
+        throw new Error('This account doesn\'t have a password yet. Please login using Google OAuth or an OTP login.');
       }
 
       // 2. Authenticate with Firebase using REST API
@@ -158,7 +163,7 @@ class AuthService {
 
       // Enforce email verification for password login
       if (!decodedToken.email_verified) {
-        throw new Error('Please verify your email address to continue. Check your inbox for the magic link.');
+        throw new Error('Your account is almost ready! Please check your email to activate it.');
       }
 
       const user = await this.syncUser(decodedToken);
@@ -190,7 +195,7 @@ class AuthService {
         firebaseUser = await adminAuth.getUserByPhoneNumber(cleanedMobile);
       } catch (fbError) {
         if (fbError.code === 'auth/user-not-found') {
-          throw new Error('No account found for this mobile number in our authentication system. Please register first.');
+          throw new Error('This mobile number is not connected to an account. Please sign up first.');
         }
         throw fbError;
       }
@@ -215,7 +220,7 @@ class AuthService {
     if (email) {
       try {
         await adminAuth.getUserByEmail(email.toLowerCase().trim());
-        throw new Error('Email already registered in our authentication system.');
+        throw new Error('This email is already connected to an account.');
       } catch (error) {
         if (error.code !== 'auth/user-not-found') throw error;
       }
@@ -226,7 +231,7 @@ class AuthService {
       try {
         const cleanedMobile = (mobileNumber.startsWith('+') ? mobileNumber : (mobileNumber.length === 10 ? `+91${mobileNumber}` : `+${mobileNumber}`)).replace(/\s/g, '');
         await adminAuth.getUserByPhoneNumber(cleanedMobile);
-        throw new Error('Mobile number already registered in our authentication system.');
+        throw new Error('This mobile number is already connected to an account.');
       } catch (error) {
         if (error.code !== 'auth/user-not-found' && error.code !== 'auth/invalid-phone-number') throw error;
       }

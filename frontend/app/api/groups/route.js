@@ -98,7 +98,8 @@ export async function GET(request) {
         g.group_description as description, 
         g.user_id as "ownerId", 
         g.group_members as "memberIds",
-        g.created_at as "createdAt"
+        g.created_at as "createdAt",
+        g.is_active as "is_active"
       FROM public.groups g
       WHERE (g.user_id = $1 OR $1 = ANY(g.group_members))
       AND g.group_name != 'Personal Hub'

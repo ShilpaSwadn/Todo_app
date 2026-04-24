@@ -1,4 +1,5 @@
 import { adminAuth } from '../config/firebase-admin.js';
+import User from '../models/User.js';
 
 /**
  * Extracts and verifies Firebase UID from the Authorization header or token cookie
@@ -36,4 +37,25 @@ export async function getUidFromToken(request) {
         console.error('getUidFromToken Error:', error.message);
         return null;
     }
+}
+
+/**
+ * Higher level helper that returns both the UID and the DB user ID
+ * @param {Request} request 
+ */
+export async function verifyAuth(request) {
+    const uid = await getUidFromToken(request);
+    if (!uid) return { success: false, error: 'No token' };
+
+    const dbUser = await User.findByFirebaseUid(uid);
+    if (!dbUser) return { success: false, error: 'User not synced' };
+
+    return {
+        success: true,
+        user: {
+            id: dbUser.id,
+            uid: uid,
+            email: dbUser.email
+        }
+    };
 }

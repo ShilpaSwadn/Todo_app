@@ -14,8 +14,10 @@ import {
   FiGlobe,
   FiCreditCard,
   FiActivity,
-  FiUsers
+  FiUsers,
+  FiX
 } from 'react-icons/fi'
+import { HiX } from 'react-icons/hi'
 import Link from 'next/link'
 import PersonalSection from '@/components/settings/PersonalSection'
 import GroupSection from '@/components/settings/GroupSection'
@@ -124,6 +126,17 @@ export default function SettingsPage() {
     setError('')
     setSuccess(false)
   }, [activeSection])
+
+  // Auto-clear messages after 5 seconds
+  useEffect(() => {
+    if (error || success) {
+      const timer = setTimeout(() => {
+        setError('')
+        setSuccess(false)
+      }, 5000)
+      return () => clearTimeout(timer)
+    }
+  }, [error, success])
 
   const handlePersonalChange = (name, value) => {
     const isCore = ['firstName', 'lastName', 'languagePreference', 'timeZone', 'currency'].includes(name);
@@ -317,18 +330,38 @@ export default function SettingsPage() {
             </div>
 
             {/* Messages */}
-            <div className="w-full">
+            <div className="w-full relative z-[100]">
               {success && (
-                <div className="mb-8 p-6 bg-emerald-50 dark:bg-emerald-900/10 border border-emerald-100 dark:border-emerald-800 text-emerald-600 rounded-[2rem] flex items-center gap-4 animate-in slide-in-from-top-4">
-                  <FiCheck className="w-6 h-6" />
-                  <span className="text-[10px] font-black uppercase tracking-widest">Settings saved successfully</span>
+                <div className="mb-8 p-6 bg-emerald-500/10 dark:bg-emerald-500/5 backdrop-blur-xl border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 rounded-3xl flex items-center justify-between gap-4 animate-in slide-in-from-top-4 duration-500 shadow-lg shadow-emerald-500/5">
+                  <div className="flex items-center gap-4">
+                    <div className="p-2 bg-emerald-500/20 rounded-xl">
+                      <FiCheck className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <p className="text-[11px] font-black uppercase tracking-[0.2em] leading-none">Changes Saved</p>
+                      <p className="text-[9px] font-bold opacity-70 uppercase tracking-widest mt-1">Your settings have been successfully updated.</p>
+                    </div>
+                  </div>
+                  <button onClick={() => setSuccess(false)} className="p-2 hover:bg-emerald-500/10 rounded-lg transition-colors">
+                    <HiX className="w-4 h-4" />
+                  </button>
                 </div>
               )}
 
               {error && (
-                <div className="mb-8 p-6 bg-rose-50 dark:bg-rose-900/10 border border-rose-100 dark:border-rose-800 text-rose-600 rounded-[2rem] flex items-center gap-4 animate-shake">
-                  <FiAlertCircle className="w-6 h-6" />
-                  <span className="text-[10px] font-black uppercase tracking-widest">{error}</span>
+                <div className="mb-8 p-6 bg-rose-500/10 dark:bg-rose-500/5 backdrop-blur-xl border border-rose-500/20 text-rose-600 dark:text-rose-400 rounded-3xl flex items-center justify-between gap-4 animate-shake shadow-lg shadow-rose-500/5">
+                  <div className="flex items-center gap-4">
+                    <div className="p-2 bg-rose-500/20 rounded-xl">
+                      <FiAlertCircle className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <p className="text-[11px] font-black uppercase tracking-[0.2em] leading-none">Oops! Something went wrong</p>
+                      <p className="text-[9px] font-bold opacity-70 uppercase tracking-widest mt-1">{error}</p>
+                    </div>
+                  </div>
+                  <button onClick={() => setError('')} className="p-2 hover:bg-rose-500/10 rounded-lg transition-colors">
+                    <HiX className="w-4 h-4" />
+                  </button>
                 </div>
               )}
             </div>

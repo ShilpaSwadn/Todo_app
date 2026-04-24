@@ -39,7 +39,7 @@ export async function POST(request) {
       firebaseUser = await adminAuth.getUserByEmail(cleanIdentifier);
     } catch (error) {
       if (error.code === 'auth/user-not-found') {
-        return NextResponse.json({ success: false, message: 'No registered account found in our authentication system. Please register first.' }, { status: 404 });
+        return NextResponse.json({ success: false, message: 'We couldn\'t find an account with this email. Would you like to Register?' }, { status: 404 });
       }
       throw error;
     }
