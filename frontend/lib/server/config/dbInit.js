@@ -75,6 +75,7 @@ const initDatabase = async () => {
         group_description TEXT,
         group_members UUID[] DEFAULT '{}',
         is_active BOOLEAN DEFAULT true,
+        is_default BOOLEAN DEFAULT false,
         created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
       );
     `);
@@ -84,7 +85,8 @@ const initDatabase = async () => {
       { name: 'group_name', type: 'VARCHAR(255)' },
       { name: 'group_description', type: 'TEXT' },
       { name: 'group_members', type: 'UUID[] DEFAULT \'{}\'' },
-      { name: 'is_active', type: 'BOOLEAN DEFAULT true' }
+      { name: 'is_active', type: 'BOOLEAN DEFAULT true' },
+      { name: 'is_default', type: 'BOOLEAN DEFAULT false' }
     ];
 
     for (const col of groupColumnsToAdd) {
@@ -101,6 +103,9 @@ const initDatabase = async () => {
               UPDATE public.groups SET group_description = description WHERE group_description IS NULL;
             ELSIF '${col.name}' = 'group_members' AND EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='groups' AND column_name='members') THEN
               UPDATE public.groups SET group_members = members WHERE group_members IS NULL;
+            ELSIF '${col.name}' = 'is_default' THEN
+              -- Mark the 'Personal Hub' or 'default group' as default if they exist
+              UPDATE public.groups SET is_default = true WHERE group_name IN ('Personal Hub', 'default group');
             END IF;
           END IF;
         END $$;
@@ -185,17 +190,57 @@ const initDatabase = async () => {
       `);
     }
 
-    // 5. Cleanup: If legacy temp_tables exist, drop them
-    console.log('Database: Cleaning up legacy tables...');
+    // 6. Ensure user_roles table exists
+    console.log('Database: Synchronizing user_roles table...');
     await query(`
-      DROP TABLE IF EXISTS public.temp_users CASCADE;
+      CREATE TABLE IF NOT EXISTS public.user_roles (
+        user_id UUID REFERENCES public.users(id) ON DELETE CASCADE,
+        group_id UUID REFERENCES public.groups(group_id) ON DELETE CASCADE,
+        user_roles VARCHAR(50)[] DEFAULT '{GROUP_MEMBER}',
+        PRIMARY KEY (user_id, group_id)
+      );
     `);
 
-    // Drop legacy trigger if exists
+    // Migration: Handle transition from single user_role to multiple user_roles array
     await query(`
-      DROP TRIGGER IF EXISTS trg_create_group_on_user_insert ON public.users;
-      DROP FUNCTION IF EXISTS public.on_user_created_create_group();
+      DO $$ 
+      BEGIN 
+        IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='user_roles' AND column_name='user_role') THEN
+          -- Add the new column if it doesn't exist
+          IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='user_roles' AND column_name='user_roles') THEN
+            ALTER TABLE public.user_roles ADD COLUMN user_roles VARCHAR(50)[] DEFAULT '{GROUP_MEMBER}';
+          END IF;
+          
+          -- Migrate data: Wrap existing role into an array
+          UPDATE public.user_roles SET user_roles = ARRAY[user_role] WHERE user_roles IS NULL OR array_length(user_roles, 1) IS NULL;
+          
+          -- Remove old column
+          ALTER TABLE public.user_roles DROP COLUMN user_role;
+        END IF;
+      END $$;
     `);
+
+    // Migration: Populate user_roles from groups table if empty
+    const roleCount = await query('SELECT count(*) FROM public.user_roles');
+    if (parseInt(roleCount.rows[0].count) === 0) {
+      console.log('Database: Migrating existing group members to user_roles...');
+      
+      // First, add owners as GROUP_ADMIN (and implicit member)
+      await query(`
+        INSERT INTO public.user_roles (user_id, group_id, user_roles)
+        SELECT user_id, group_id, ARRAY['GROUP_ADMIN', 'GROUP_MEMBER']
+        FROM public.groups
+        ON CONFLICT (user_id, group_id) DO UPDATE SET user_roles = ARRAY['GROUP_ADMIN', 'GROUP_MEMBER']
+      `);
+
+      // Then, add members as GROUP_MEMBER (using unnest to expand array)
+      await query(`
+        INSERT INTO public.user_roles (user_id, group_id, user_roles)
+        SELECT unnest(group_members), group_id, ARRAY['GROUP_MEMBER']
+        FROM public.groups
+        ON CONFLICT (user_id, group_id) DO NOTHING
+      `);
+    }
 
     console.log('Database: Schema initialization completed successfully.');
   } catch (error) {

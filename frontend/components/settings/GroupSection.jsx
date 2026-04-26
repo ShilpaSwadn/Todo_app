@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { FiPlus, FiSearch, FiEdit2, FiMinusCircle, FiCheck, FiUsers } from 'react-icons/fi'
+import { FiPlus, FiSearch, FiEdit2, FiTrash2, FiCheck, FiUsers } from 'react-icons/fi'
 import { HiX } from 'react-icons/hi'
 import { ImSpinner2 } from 'react-icons/im'
 import api from '@/lib/api/client'
@@ -12,7 +12,6 @@ export default function GroupSection({ user, config, setError, setSuccess }) {
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [savingLabel, setSavingLabel] = useState('Saving...')
-  const [showDisabled, setShowDisabled] = useState(false) // Toggle to see disabled groups
   
   // Create form state
   const [showCreateInline, setShowCreateInline] = useState(false)
@@ -131,12 +130,12 @@ export default function GroupSection({ user, config, setError, setSuccess }) {
 
   const deleteGroup = async (groupId) => {
     try {
-      setSavingLabel('Disabling group...')
+      setSavingLabel('Deleting group...')
       setSaving(true)
       const response = await api.delete(`/groups/${groupId}`)
 
       if (response.success) {
-        setGroups(groups.map(g => g.id === groupId ? { ...g, is_active: false } : g))
+        setGroups(groups.filter(g => g.id !== groupId))
         setSuccess(true)
         setTimeout(() => setSuccess(false), 3000)
       }
@@ -145,24 +144,6 @@ export default function GroupSection({ user, config, setError, setSuccess }) {
     }
   }
 
-  const enableGroup = async (groupId) => {
-    try {
-      setSavingLabel('Enabling group...')
-      setSaving(true)
-      const response = await api.post(`/groups/${groupId}/enable`)
-
-      if (response.success) {
-        setGroups(groups.map(g => g.id === groupId ? { ...g, is_active: true } : g))
-        setSuccess(true)
-        setTimeout(() => setSuccess(false), 3000)
-      }
-    } catch (err) {
-      console.error("Failed to enable group:", err)
-      setError("We couldn't re-enable this group.")
-    } finally {
-      setSaving(false)
-    }
-  }
 
   const addMemberToGroup = async (groupId, member) => {
     try {
@@ -335,13 +316,13 @@ export default function GroupSection({ user, config, setError, setSuccess }) {
             <ImSpinner2 className="w-8 h-8 text-indigo-500 animate-spin mb-4" />
             <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Loading groups...</p>
           </div>
-        ) : groups.filter(g => g.is_active !== false).length === 0 ? (
+        ) : groups.length === 0 ? (
           <div className="p-20 text-center border-2 border-dashed border-gray-100 dark:border-gray-800 rounded-[3rem]">
             <FiUsers className="w-12 h-12 text-gray-200 dark:text-gray-700 mx-auto mb-6" />
-            <p className="text-[11px] font-bold text-gray-400 uppercase tracking-widest italic opacity-40">No active groups found</p>
+            <p className="text-[11px] font-bold text-gray-400 uppercase tracking-widest italic opacity-40">No groups found</p>
           </div>
         ) : (
-          groups.filter(g => g.is_active !== false).map((group) => (
+          groups.map((group) => (
             <div key={group.id} className="p-8 bg-white dark:bg-gray-900/50 rounded-[2.5rem] border border-gray-100 dark:border-gray-800 shadow-sm space-y-8">
               <div className="flex items-center justify-between">
                 <div className="flex-1 mr-6">
@@ -393,24 +374,32 @@ export default function GroupSection({ user, config, setError, setSuccess }) {
                       </div>
                     ) : (
                       <div className="flex items-center gap-2">
-                        <button
-                          onClick={() => {
-                            setEditingGroupId(group.id);
-                            setEditGroupName(group.name);
-                            setEditGroupDesc(group.description || '');
-                          }}
-                          className="p-3 bg-indigo-50 dark:bg-indigo-900/10 text-indigo-600 rounded-xl hover:bg-indigo-600 hover:text-white transition-all transform active:scale-95"
-                          title="Edit Group"
-                        >
-                          <FiEdit2 className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => deleteGroup(group.id)}
-                          className="p-3 bg-rose-50 dark:bg-rose-900/10 text-rose-600 rounded-xl hover:bg-rose-600 hover:text-white transition-all transform active:scale-95"
-                          title="Disable Group"
-                        >
-                          <FiMinusCircle className="w-4 h-4" />
-                        </button>
+                        {!group.is_default ? (
+                          <>
+                            <button
+                              onClick={() => {
+                                setEditingGroupId(group.id);
+                                setEditGroupName(group.name);
+                                setEditGroupDesc(group.description || '');
+                              }}
+                              className="p-3 bg-indigo-50 dark:bg-indigo-900/10 text-indigo-600 rounded-xl hover:bg-indigo-600 hover:text-white transition-all transform active:scale-95"
+                              title="Edit Group"
+                            >
+                              <FiEdit2 className="w-4 h-4" />
+                            </button>
+                          <button
+                            onClick={() => deleteGroup(group.id)}
+                            className="p-3 bg-rose-50 dark:bg-rose-900/10 text-rose-600 rounded-xl hover:bg-rose-600 hover:text-white transition-all transform active:scale-95"
+                            title="Delete Group"
+                          >
+                            <FiTrash2 className="w-4 h-4" />
+                          </button>
+                          </>
+                        ) : (
+                          <div className="px-4 py-2 bg-gray-50 dark:bg-gray-800/50 rounded-xl">
+                            <span className="text-[8px] font-black text-gray-400 uppercase tracking-[0.2em]">Default Workspace</span>
+                          </div>
+                        )}
                       </div>
                     )
                   ) : (
@@ -484,7 +473,7 @@ export default function GroupSection({ user, config, setError, setSuccess }) {
                           <td className="px-6 py-4 text-right">
                             {group.ownerId === user?.id && member.id !== group.ownerId && (
                               <button onClick={() => removeMemberFromGroup(group.id, member.id)} className="p-2 text-gray-400 hover:text-rose-600 transition-colors">
-                                <FiMinusCircle className="w-4 h-4" />
+                                <FiTrash2 className="w-4 h-4" />
                               </button>
                             )}
                           </td>
@@ -498,40 +487,6 @@ export default function GroupSection({ user, config, setError, setSuccess }) {
           ))
         )}
 
-        {groups.some(g => g.is_active === false) && (
-          <div className="pt-10 border-t border-gray-100 dark:border-gray-800">
-            <button
-              onClick={() => setShowDisabled(!showDisabled)}
-              className="w-full py-4 text-[9px] font-black text-gray-400 uppercase tracking-[0.4em] hover:text-indigo-600 transition-colors"
-            >
-              {showDisabled ? 'Hide Inactive Groups' : 'View Inactive Groups'}
-            </button>
-            
-            {showDisabled && (
-              <div className="mt-8 space-y-6 opacity-60">
-                {groups.filter(g => g.is_active === false).map(group => (
-                  <div key={group.id} className="p-8 bg-gray-50/50 dark:bg-gray-900/30 rounded-[2rem] border border-gray-100 dark:border-gray-800 flex items-center justify-between grayscale">
-                    <div>
-                      <h4 className="text-sm font-black text-gray-400 uppercase tracking-wider">{group.name}</h4>
-                      <p className="text-[9px] text-gray-400 font-bold uppercase mt-1">Inactive Group Instance</p>
-                    </div>
-                    <div className="flex items-center gap-4">
-                      <button 
-                        onClick={() => enableGroup(group.id)}
-                        className="px-4 py-2 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-indigo-600 hover:text-white transition-all"
-                      >
-                        Enable
-                      </button>
-                      <div className="px-4 py-2 bg-gray-100 dark:bg-gray-800 rounded-xl">
-                        <span className="text-[8px] font-black text-gray-300 uppercase tracking-widest">Disabled</span>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
       </div>
     </div>
   )

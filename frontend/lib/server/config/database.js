@@ -91,6 +91,20 @@ if (!process.env.VERCEL) {
 
 // Handle pool errors (don't exit in serverless)
 pool.on('error', (err) => {
+  // Silence expected errors on idle clients (common with connection poolers like Supabase)
+  const isIdleError = 
+    err.message.includes('Connection terminated unexpectedly') || 
+    err.code === 'ECONNRESET' ||
+    err.code === '57P01'; // admin_shutdown
+
+  if (isIdleError) {
+    // Log as a subtle warning rather than a noisy error if it's likely just an idle timeout
+    if (process.env.NODE_ENV === 'development') {
+      console.debug('Database: Idle client connection closed by server (Expected)');
+    }
+    return;
+  }
+
   console.error('Unexpected error on idle client', err)
   // Don't exit in serverless/Vercel environment
   if (!process.env.VERCEL && !process.env.NEXT_RUNTIME) {

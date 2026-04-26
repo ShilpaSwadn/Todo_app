@@ -65,10 +65,10 @@ class PaymentInfo {
   }
 
   /**
-   * Disable payment info (soft delete)
+   * Hard delete payment info
    */
-  static async disable(paymentDetailsId, userId) {
-    const sqlQuery = 'UPDATE public.payment_info SET is_active = false, updated_at = NOW() WHERE payment_details_id = $1 AND user_id = $2';
+  static async delete(paymentDetailsId, userId) {
+    const sqlQuery = 'DELETE FROM public.payment_info WHERE payment_details_id = $1 AND user_id = $2';
     await query(sqlQuery, [paymentDetailsId, userId]);
     return true;
   }

@@ -90,7 +90,7 @@ export async function GET(request) {
 
     const currentUser = await authService.getUserByUid(uid)
     
-    // Find groups where user is owner or member, excluding the default 'Personal Hub'
+    // Find groups where user is owner or member
     const sqlQuery = `
       SELECT 
         g.group_id as id, 
@@ -99,11 +99,11 @@ export async function GET(request) {
         g.user_id as "ownerId", 
         g.group_members as "memberIds",
         g.created_at as "createdAt",
-        g.is_active as "is_active"
+        g.is_active as "is_active",
+        g.is_default as "is_default"
       FROM public.groups g
       WHERE (g.user_id = $1 OR $1 = ANY(g.group_members))
-      AND g.group_name != 'Personal Hub'
-      ORDER BY g.created_at DESC
+      ORDER BY g.is_default DESC, g.created_at DESC
     `
     const { query } = await import('@/lib/server/config/database.js')
     const result = await query(sqlQuery, [currentUser.id])

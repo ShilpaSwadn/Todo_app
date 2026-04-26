@@ -24,14 +24,24 @@ class Group {
    * Manual creation (fallback or direct use)
    */
   static async create(userId, data = {}) {
-    const { name, description, members = [] } = data;
+    const { name, description, members = [], isDefault = false } = data;
     const newId = uuidv7();
     const sqlQuery = `
-      INSERT INTO public.groups (group_id, user_id, group_name, group_description, group_members)
-      VALUES ($1, $2, $3, $4, $5)
+      INSERT INTO public.groups (group_id, user_id, group_name, group_description, group_members, is_default)
+      VALUES ($1, $2, $3, $4, $5, $6)
       RETURNING *
     `;
-    const result = await query(sqlQuery, [newId, userId, name, description, members]);
+    const result = await query(sqlQuery, [newId, userId, name, description, members, isDefault]);
+    
+    // Automatically assign GROUP_ADMIN and GROUP_MEMBER roles to the creator
+    if (result.rows[0]) {
+      await query(`
+        INSERT INTO public.user_roles (user_id, group_id, user_roles)
+        VALUES ($1, $2, $3)
+        ON CONFLICT (user_id, group_id) DO UPDATE SET user_roles = EXCLUDED.user_roles
+      `, [userId, newId, ['GROUP_ADMIN', 'GROUP_MEMBER']]);
+    }
+
     return result.rows[0] || null;
   }
   static async update(groupId, userId, data) {
@@ -45,10 +55,9 @@ class Group {
     const result = await query(sqlQuery, [name, description, groupId, userId]);
     return result.rows[0] || null;
   }
-  static async disable(groupId, userId) {
+  static async delete(groupId, userId) {
     const sqlQuery = `
-      UPDATE public.groups 
-      SET is_active = false
+      DELETE FROM public.groups 
       WHERE group_id = $1 AND user_id = $2
       RETURNING *
     `;

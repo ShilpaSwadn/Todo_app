@@ -12,10 +12,10 @@ export async function DELETE(request) {
     const id = request.nextUrl.searchParams.get('id')
     if (!id) return NextResponse.json({ error: 'Missing ID' }, { status: 400 })
 
-    await PaymentInfo.disable(id, auth.user.id)
-    return NextResponse.json({ success: true, message: 'Payment method disabled successfully' })
+    await PaymentInfo.delete(id, auth.user.id)
+    return NextResponse.json({ success: true, message: 'Payment method deleted successfully' })
   } catch (error) {
-    console.error('Payment info disable error:', error)
+    console.error('Payment info delete error:', error)
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })
   }
 }

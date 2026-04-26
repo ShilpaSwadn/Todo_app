@@ -55,7 +55,7 @@ export async function DELETE(request, { params }) {
     }
 
     const currentUser = await authService.getUserByUid(uid)
-    const result = await Group.disable(id, currentUser.id)
+    const result = await Group.delete(id, currentUser.id)
 
     if (!result) {
       return NextResponse.json({ success: false, message: 'Group not found or unauthorized' }, { status: 404 })
@@ -63,10 +63,10 @@ export async function DELETE(request, { params }) {
 
     return NextResponse.json({
       success: true,
-      message: 'Group disabled successfully'
+      message: 'Group deleted successfully'
     })
   } catch (error) {
-    console.error('Disable group error:', error)
+    console.error('Delete group error:', error)
     return NextResponse.json({ success: false, message: 'Internal server error' }, { status: 500 })
   }
 }

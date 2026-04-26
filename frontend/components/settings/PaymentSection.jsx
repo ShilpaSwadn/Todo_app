@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { FiPlus, FiCreditCard, FiMinusCircle, FiChevronRight } from 'react-icons/fi'
+import { FiPlus, FiCreditCard, FiTrash2, FiChevronRight } from 'react-icons/fi'
 import { FaCcVisa, FaCcMastercard, FaCcAmex, FaCcDiscover, FaCcDinersClub, FaCreditCard as FaDefaultCard } from 'react-icons/fa'
 import api from '@/lib/api/client'
 import { LoadingOverlay } from '@/components/ui/LoadingSpinner'
@@ -11,9 +11,7 @@ export default function PaymentSection({ config, setError, setSuccess }) {
   const [groups, setGroups] = useState([])
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
-  const [savingLabel, setSavingLabel] = useState('Saving...')
   const [showForm, setShowForm] = useState(false)
-  const [showDisabled, setShowDisabled] = useState(false) // Track if we want to see disabled ones
   
   const [formData, setFormData] = useState({
     cardholderName: '',
@@ -104,38 +102,22 @@ export default function PaymentSection({ config, setError, setSuccess }) {
 
   const removePayment = async (id) => {
     try {
-      setSavingLabel('Disabling card...')
+      setSavingLabel('Deleting card...')
       setSaving(true)
-      await api.delete(`/payment-info/delete?id=${id}`)
-      setPayments(payments.map(p => p.payment_details_id === id ? { ...p, is_active: false } : p))
-      setSuccess(true)
-      setTimeout(() => setSuccess(false), 5000);
-    } catch (err) {
-      console.error("Failed to disable payment:", err)
-      setError("We couldn't disable this payment method right now. Please try again in a moment.")
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  const enablePayment = async (paymentId) => {
-    try {
-      setSavingLabel('Enabling method...')
-      setSaving(true)
-      const response = await api.post('/payment-info/enable', { id: paymentId })
-
+      const response = await api.delete(`/payment-info/delete?id=${id}`)
       if (response.success) {
-        setPayments(payments.map(p => p.payment_details_id === paymentId ? { ...p, is_active: true } : p))
+        setPayments(payments.filter(p => p.payment_details_id !== id))
         setSuccess(true)
-        setTimeout(() => setSuccess(false), 3000)
+        setTimeout(() => setSuccess(false), 5000);
       }
     } catch (err) {
-      console.error("Failed to enable payment:", err)
-      setError("We couldn't restore this payment method.")
+      console.error("Failed to delete payment:", err)
+      setError("We couldn't delete this payment method right now. Please try again in a moment.")
     } finally {
       setSaving(false)
     }
   }
+
 
   const handleInputChange = (id, val) => {
     let finalVal = val;
@@ -270,13 +252,13 @@ export default function PaymentSection({ config, setError, setSuccess }) {
             <div className="flex flex-col items-center py-20 animate-pulse">
               <LoadingOverlay active={true} label="Loading methods..." />
             </div>
-          ) : payments.filter(p => p.is_active !== false).length === 0 ? (
+          ) : payments.length === 0 ? (
             <div className="p-20 text-center border-2 border-dashed border-gray-100 dark:border-gray-800 rounded-[3rem]">
               <FiCreditCard className="w-12 h-12 text-gray-200 dark:text-gray-700 mx-auto mb-6" />
-              <p className="text-[11px] font-bold text-gray-400 uppercase tracking-widest">No Active Payment Methods</p>
+              <p className="text-[11px] font-bold text-gray-400 uppercase tracking-widest">No Payment Methods</p>
             </div>
           ) : (
-            payments.filter(p => p.is_active !== false).map(payment => (
+            payments.map(payment => (
               <div
                 key={payment.payment_details_id}
                 className="p-8 bg-gray-50 dark:bg-gray-900 rounded-[2.5rem] border border-gray-100 dark:border-gray-800 flex items-center justify-between group hover:border-indigo-200 dark:hover:border-indigo-900/40 transition-all"
@@ -319,48 +301,12 @@ export default function PaymentSection({ config, setError, setSuccess }) {
                 <button
                   onClick={() => removePayment(payment.payment_details_id)}
                   className="p-4 bg-white dark:bg-rose-900/20 text-rose-500 rounded-2xl opacity-0 group-hover:opacity-100 transition-all hover:bg-rose-500 hover:text-white shadow-xl"
+                  title="Delete Card"
                 >
-                  <FiMinusCircle className="w-5 h-5" />
+                  <FiTrash2 className="w-5 h-5" />
                 </button>
               </div>
             ))
-          )}
-          {payments.some(p => p.is_active === false) && (
-            <button
-              onClick={() => setShowDisabled(!showDisabled)}
-              className="w-full py-4 text-[9px] font-black text-gray-400 uppercase tracking-[0.3em] hover:text-indigo-500 transition-colors"
-            >
-              {showDisabled ? 'Hide Inactive Methods' : 'View Inactive Methods'}
-            </button>
-          )}
-          {showDisabled && payments.filter(p => p.is_active === false).length > 0 && (
-            <div className="space-y-4 pt-4 border-t border-gray-100 dark:border-gray-800">
-              <h5 className="text-[9px] font-black text-gray-300 dark:text-gray-600 uppercase tracking-[0.4em] px-8">Inactive Identities</h5>
-              {payments.filter(p => p.is_active === false).map(payment => (
-                <div
-                  key={payment.payment_details_id}
-                  className="p-8 bg-gray-50/50 dark:bg-gray-900/50 rounded-[2.5rem] border border-gray-100 dark:border-gray-800 flex items-center justify-between opacity-60 grayscale"
-                >
-                   <div className="flex items-center gap-6">
-                    <div className="w-16 h-16 bg-white dark:bg-gray-800 rounded-2xl flex items-center justify-center text-gray-400">
-                      <FaDefaultCard className="w-8 h-8 opacity-40" />
-                    </div>
-                    <div>
-                      <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Disabled Method</p>
-                      <p className="text-sm font-black text-gray-400 mt-1 uppercase tracking-tight">
-                        •••• •••• •••• {payment.card_number}
-                      </p>
-                    </div>
-                    <button 
-                      onClick={() => enablePayment(payment.payment_details_id)}
-                      className="px-6 py-3 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 rounded-[1.5rem] text-[10px] font-black uppercase tracking-widest hover:bg-indigo-600 hover:text-white transition-all shadow-sm"
-                    >
-                      Enable
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
           )}
         </div>
       )}

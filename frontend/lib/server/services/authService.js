@@ -52,7 +52,8 @@ class AuthService {
     try {
       await Group.create(user.id, {
         name: 'default group',
-        description: 'default group details'
+        description: 'default group details',
+        isDefault: true
       });
     } catch (groupError) {
       console.warn('User created but default group creation failed:', groupError);
@@ -96,7 +97,8 @@ class AuthService {
       if (!existingGroup) {
         await Group.create(user.id, {
           name: 'default group',
-          description: 'default group details'
+          description: 'default group details',
+          isDefault: true
         });
       }
     } catch (groupError) {

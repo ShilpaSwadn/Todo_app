@@ -29,6 +29,10 @@ import { languageConfig } from '@/lib/utils/languageConfig'
 import { paymentConfig } from '@/lib/utils/paymentConfig'
 import { formatFirebaseError } from '@/lib/utils/error-handler'
 import { LoadingOverlay } from '@/components/ui/LoadingSpinner'
+import { accessConfig } from '@/lib/utils/accessConfig'
+import AccessSection from '@/components/settings/AccessSection'
+import { FiShield } from 'react-icons/fi'
+
 
 export default function SettingsPage() {
   const router = useRouter()
@@ -189,6 +193,7 @@ export default function SettingsPage() {
   const sections = [
     { ...personalConfig, icon: <FiUser /> },
     { ...groupsConfig, icon: <FiUsers /> },
+    { ...accessConfig, icon: <FiShield /> },
     { ...languageConfig, icon: <FiGlobe /> },
     { ...paymentConfig, icon: <FiCreditCard /> },
   ]
@@ -314,6 +319,7 @@ export default function SettingsPage() {
                   activeSection === 'personal' ? 'bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600' :
                   activeSection === 'language' ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600' :
                   activeSection === 'groups' ? 'bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600' :
+                  activeSection === 'access' ? 'bg-rose-50 dark:bg-rose-900/20 text-rose-600' :
                   'bg-purple-50 dark:bg-purple-900/20 text-purple-600'
                 }`}>
                   {sections.find(s => s.id === activeSection)?.icon}
@@ -396,6 +402,14 @@ export default function SettingsPage() {
               {activeSection === 'payment' && (
                 <PaymentSection 
                   config={paymentConfig} 
+                  setError={setError} 
+                  setSuccess={setSuccess} 
+                />
+              )}
+
+              {activeSection === 'access' && (
+                <AccessSection 
+                  config={accessConfig} 
                   setError={setError} 
                   setSuccess={setSuccess} 
                 />
