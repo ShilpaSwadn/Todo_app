@@ -1,10 +1,10 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { FiShield, FiSave, FiCheck, FiUsers, FiActivity, FiSearch, FiMoreVertical, FiUser, FiInfo, FiChevronDown } from 'react-icons/fi'
+import { FiShield, FiSave, FiCheck, FiUsers, FiActivity, FiSearch, FiMoreVertical, FiUser, FiInfo, FiChevronDown, FiTrash2 } from 'react-icons/fi'
 import api from '@/lib/api/client'
 
-export default function AccessSection({ config, setError, setSuccess }) {
+export default function AccessSection({ user, config, setError, setSuccess }) {
   const [groups, setGroups] = useState([])
   const [selectedGroupId, setSelectedGroupId] = useState('')
   const [members, setMembers] = useState([])
@@ -12,6 +12,7 @@ export default function AccessSection({ config, setError, setSuccess }) {
   const [selectedBulkRole, setSelectedBulkRole] = useState([]) // Changed to array
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [pendingRoles, setPendingRoles] = useState({}) // { userId: roles[] }
   const [searchTerm, setSearchTerm] = useState('')
 
   // Fetch groups on mount
@@ -88,8 +89,9 @@ export default function AccessSection({ config, setError, setSuccess }) {
 
       if (response.success) {
         setSuccess(true)
+        const savedRoles = response.updatedRoles || selectedBulkRole;
         setMembers(prev => prev.map(m => 
-          selectedUserIds.includes(m.user_id) ? { ...m, user_roles: rolesToSet } : m
+          selectedUserIds.includes(m.user_id) ? { ...m, user_roles: savedRoles } : m
         ))
         setSelectedUserIds([])
         setSelectedBulkRole([]) // Reset to empty array
@@ -115,9 +117,16 @@ export default function AccessSection({ config, setError, setSuccess }) {
 
       if (response.success) {
         setSuccess(true)
+        const savedRoles = response.updatedRoles || role;
         setMembers(prev => prev.map(m => 
-          m.user_id === userId ? { ...m, user_roles: role } : m
+          m.user_id === userId ? { ...m, user_roles: savedRoles } : m
         ))
+        // Clear pending roles for this user after successful save
+        setPendingRoles(prev => {
+          const next = { ...prev };
+          delete next[userId];
+          return next;
+        });
       } else {
         setError(response.message || 'Update failed')
       }
@@ -128,11 +137,37 @@ export default function AccessSection({ config, setError, setSuccess }) {
     }
   }
 
+  const handleRemoveMember = async (userId) => {
+    if (!window.confirm('Are you sure you want to remove this member from the group? All their assigned roles will also be removed.')) return;
+    
+    try {
+      setSaving(true)
+      const response = await api.delete(`/groups/${selectedGroupId}/members?userId=${userId}`)
+      if (response.success) {
+        setSuccess(true)
+        setMembers(prev => prev.filter(m => m.user_id !== userId))
+      } else {
+        setError(response.message || 'Failed to remove member')
+      }
+    } catch (err) {
+      setError(err.message || 'Failed to remove member')
+    } finally {
+      setSaving(false)
+    }
+  }
+
   const filteredMembers = members.filter(m => 
     m.first_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     m.last_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     m.email.toLowerCase().includes(searchTerm.toLowerCase())
   )
+
+  const selectedGroup = groups.find(g => g.id === selectedGroupId)
+  const userId = user?.id || user?.uid
+  const isOwner = selectedGroup?.ownerId === userId
+  const currentUserMember = members.find(m => m.user_id === userId)
+  const isAdmin = currentUserMember?.user_roles?.includes('GROUP_ADMIN')
+  const isAuthorized = isOwner || isAdmin
 
   const getRoleBadgeColor = (role) => {
     switch (role) {
@@ -198,32 +233,34 @@ export default function AccessSection({ config, setError, setSuccess }) {
       ) : (
         <>
           {/* Members Management Table/List */}
-          <div className="bg-white dark:bg-gray-900/40 border border-gray-100 dark:border-gray-800 rounded-[3rem] overflow-hidden shadow-sm relative min-h-[400px] animate-in fade-in slide-in-from-bottom-4 duration-500">
+          <div className="bg-white dark:bg-gray-900/40 border border-gray-100 dark:border-gray-800 rounded-[3rem] shadow-sm relative min-h-[600px] animate-in fade-in slide-in-from-bottom-4 duration-500">
             {loading && (
               <div className="absolute inset-0 bg-white/50 dark:bg-gray-900/50 backdrop-blur-sm z-50 flex items-center justify-center">
                 <div className="animate-spin rounded-full h-10 w-10 border-2 border-indigo-600 border-t-transparent"></div>
               </div>
             )}
 
-        <div className="overflow-x-auto custom-scrollbar">
+        <div className="overflow-x-auto custom-scrollbar rounded-[3rem] pb-60">
           <table className="w-full text-left border-collapse table-auto">
             <thead>
               <tr className="border-b border-gray-100 dark:border-gray-800">
-                <th className="p-5 w-16">
-                  <button 
-                    onClick={toggleAll}
-                    className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all ${
-                      selectedUserIds.length === filteredMembers.length && filteredMembers.length > 0
-                        ? 'bg-indigo-600 border-indigo-600 text-white'
-                        : 'border-gray-200 dark:border-gray-700 hover:border-indigo-500'
-                    }`}
-                  >
-                    {selectedUserIds.length === filteredMembers.length && filteredMembers.length > 0 && <FiCheck className="w-3 h-3" />}
-                  </button>
-                </th>
+                {isAuthorized && (
+                  <th className="p-5 w-16">
+                    <button 
+                      onClick={toggleAll}
+                      className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all ${
+                        selectedUserIds.length === filteredMembers.length && filteredMembers.length > 0
+                          ? 'bg-indigo-600 border-indigo-600 text-white'
+                          : 'border-gray-200 dark:border-gray-700 hover:border-indigo-500'
+                      }`}
+                    >
+                      {selectedUserIds.length === filteredMembers.length && filteredMembers.length > 0 && <FiCheck className="w-3 h-3" />}
+                    </button>
+                  </th>
+                )}
                 <th className="text-[9px] font-black text-gray-400 uppercase tracking-[0.3em] p-5">Member</th>
                 <th className="text-[9px] font-black text-gray-400 uppercase tracking-[0.3em] p-5 w-[180px]">Role</th>
-                <th className="text-[9px] font-black text-gray-400 uppercase tracking-[0.3em] p-5 text-right w-[180px]">Manage</th>
+                {isAuthorized && <th className="text-[9px] font-black text-gray-400 uppercase tracking-[0.3em] p-5 text-right w-[180px]">Manage</th>}
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50 dark:divide-gray-800/50">
@@ -236,18 +273,20 @@ export default function AccessSection({ config, setError, setSuccess }) {
               ) : (
                 filteredMembers.map(member => (
                   <tr key={member.user_id} className="group hover:bg-gray-50/50 dark:hover:bg-gray-800/20 transition-colors">
-                    <td className="py-6 px-5">
-                      <button 
-                        onClick={() => toggleUser(member.user_id)}
-                        className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all ${
-                          selectedUserIds.includes(member.user_id)
-                            ? 'bg-indigo-600 border-indigo-600 text-white'
-                            : 'border-gray-200 dark:border-gray-700 hover:border-indigo-500'
-                        }`}
-                      >
-                        {selectedUserIds.includes(member.user_id) && <FiCheck className="w-3 h-3" />}
-                      </button>
-                    </td>
+                    {isAuthorized && (
+                      <td className="py-6 px-5">
+                        <button 
+                          onClick={() => toggleUser(member.user_id)}
+                          className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all ${
+                            selectedUserIds.includes(member.user_id)
+                              ? 'bg-indigo-600 border-indigo-600 text-white'
+                              : 'border-gray-200 dark:border-gray-700 hover:border-indigo-500'
+                          }`}
+                        >
+                          {selectedUserIds.includes(member.user_id) && <FiCheck className="w-3 h-3" />}
+                        </button>
+                      </td>
+                    )}
                     <td className="py-6 px-5">
                       <div className="flex items-center gap-4">
                         <div className="w-11 h-11 rounded-xl bg-indigo-50 dark:bg-indigo-900/20 flex items-center justify-center text-[11px] font-black text-indigo-600 shrink-0 border border-indigo-100 dark:border-indigo-900/30 shadow-sm">
@@ -275,44 +314,102 @@ export default function AccessSection({ config, setError, setSuccess }) {
                         ))}
                       </div>
                     </td>
-                    <td className="py-6 px-5 text-right">
-                      <div className="relative inline-block text-left group/menu">
-                        <button className="bg-gray-50 dark:bg-gray-800 border border-transparent hover:border-indigo-500 rounded-xl px-5 py-3 text-[9px] font-black uppercase tracking-widest text-gray-700 dark:text-gray-300 outline-none transition-all cursor-pointer flex items-center gap-3 shadow-sm active:scale-95">
-                          Manage Roles
-                          <FiChevronDown className="w-3.5 h-3.5 text-gray-400 group-hover/menu:text-indigo-500 transition-colors" />
-                        </button>
-                        
-                        {/* Custom Multi-select Dropdown */}
-                        <div className="absolute right-0 top-full mt-2 w-[220px] bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-[1.5rem] shadow-2xl p-4 z-50 opacity-0 invisible group-hover/menu:opacity-100 group-hover/menu:visible transition-all scale-95 group-hover/menu:scale-100 origin-top-right">
-                          <div className="space-y-3">
-                            {config.roles.map(role => {
-                              const isSelected = (member.user_roles || []).includes(role.id);
-                              const isDefault = role.id === 'GROUP_MEMBER';
-                              return (
-                                <label key={role.id} className={`flex items-center gap-3 p-2 rounded-xl transition-colors cursor-pointer ${isDefault ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-50 dark:hover:bg-gray-800/50'}`}>
-                                  <input 
-                                    type="checkbox"
-                                    disabled={isDefault}
-                                    checked={isSelected || isDefault}
-                                    onChange={(e) => {
-                                      if (isDefault) return;
-                                      const newRoles = e.target.checked 
-                                        ? [...(member.user_roles || []), role.id]
-                                        : (member.user_roles || []).filter(id => id !== role.id);
-                                      handleIndividualUpdate(member.user_id, newRoles);
-                                    }}
-                                    className="w-4 h-4 rounded-md border-gray-200 dark:border-gray-700 text-indigo-600 focus:ring-indigo-500 transition-all cursor-pointer"
-                                  />
-                                  <span className="text-[10px] font-black uppercase tracking-widest text-gray-700 dark:text-gray-300">
-                                    {role.label}
-                                  </span>
-                                </label>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      </div>
-                    </td>
+                    {isAuthorized && (
+                      <td className="py-6 px-5 text-right relative">
+                        {(() => {
+                          const isCurrentUserOwner = selectedGroup?.ownerId === userId;
+                          const isTargetOwner = selectedGroup?.ownerId === member.user_id;
+                          const isTargetAdmin = (member.user_roles || []).includes('GROUP_ADMIN');
+                          
+                          // Owner can manage everyone except themselves
+                          // Admins can manage everyone except Owner and other Admins
+                          const canManageTarget = isCurrentUserOwner ? !isTargetOwner : (!isTargetOwner && !isTargetAdmin);
+                          
+                          if (!canManageTarget) return null;
+
+                          return (
+                            <div className="flex items-center justify-end gap-3">
+                              {/* Manage Roles Dropdown */}
+                              <div className="relative inline-block text-left group/menu hover:z-[100] focus-within:z-[100]">
+                                <button className="bg-gray-50 dark:bg-gray-800 border border-transparent hover:border-indigo-500 rounded-xl px-5 py-3 text-[9px] font-black uppercase tracking-widest text-gray-700 dark:text-gray-300 outline-none transition-all cursor-pointer flex items-center gap-3 shadow-sm active:scale-95">
+                                  Manage Roles
+                                  <FiChevronDown className="w-3.5 h-3.5 text-gray-400 group-hover/menu:text-indigo-500 transition-colors" />
+                                </button>
+                                
+                                <div className="absolute right-0 top-full mt-2 w-[240px] bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-[2rem] shadow-2xl p-5 z-[100] opacity-0 invisible group-hover/menu:opacity-100 group-hover/menu:visible transition-all scale-95 group-hover/menu:scale-100 origin-top-right overflow-y-auto max-h-[400px] custom-scrollbar">
+                                  <div className="space-y-4">
+                                    <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest px-1">Select Roles</p>
+                                    <div className="space-y-2">
+                                      {config.roles.map(role => {
+                                        const currentRoles = pendingRoles[member.user_id] || member.user_roles || ['GROUP_MEMBER'];
+                                        const isSelected = currentRoles.includes(role.id);
+                                        const isDefault = role.id === 'GROUP_MEMBER';
+                                        return (
+                                          <label key={role.id} className={`flex items-center gap-3 p-2.5 rounded-xl transition-colors cursor-pointer ${isDefault ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-50 dark:hover:bg-gray-800/50'}`}>
+                                            <input 
+                                              type="checkbox"
+                                              disabled={isDefault}
+                                              checked={isSelected || isDefault}
+                                              onChange={(e) => {
+                                                if (isDefault) return;
+                                                const newRoles = e.target.checked 
+                                                  ? [...currentRoles, role.id]
+                                                  : currentRoles.filter(id => id !== role.id);
+                                                setPendingRoles(prev => ({ ...prev, [member.user_id]: newRoles }));
+                                              }}
+                                              className="w-4 h-4 rounded-md border-gray-200 dark:border-gray-700 text-indigo-600 focus:ring-indigo-500 transition-all cursor-pointer"
+                                            />
+                                            <span className="text-[10px] font-black uppercase tracking-widest text-gray-700 dark:text-gray-300">
+                                              {role.label}
+                                            </span>
+                                          </label>
+                                        );
+                                      })}
+                                    </div>
+                                    
+                                    <div className="pt-2 border-t border-gray-50 dark:border-gray-800">
+                                      <button
+                                        onClick={() => {
+                                          const rolesToSave = pendingRoles[member.user_id] || member.user_roles;
+                                          handleIndividualUpdate(member.user_id, rolesToSave);
+                                        }}
+                                        disabled={saving || !pendingRoles[member.user_id]}
+                                        className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-[9px] font-black uppercase tracking-widest transition-all shadow-lg shadow-indigo-100 dark:shadow-none disabled:opacity-50 flex items-center justify-center gap-2"
+                                      >
+                                        {saving ? (
+                                          <>
+                                            <div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                                            Saving...
+                                          </>
+                                        ) : (
+                                          <>
+                                            <FiCheck className="w-3.5 h-3.5" />
+                                            Apply Changes
+                                          </>
+                                        )}
+                                      </button>
+                                      {pendingRoles[member.user_id] && !saving && (
+                                        <button 
+                                          onClick={() => setPendingRoles(prev => {
+                                            const next = { ...prev };
+                                            delete next[member.user_id];
+                                            return next;
+                                          })}
+                                          className="w-full mt-2 py-2 text-[8px] font-black text-gray-400 hover:text-rose-500 uppercase tracking-widest transition-colors"
+                                        >
+                                          Discard Changes
+                                        </button>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+
+                            </div>
+                          );
+                        })()}
+                      </td>
+                    )}
                   </tr>
                 ))
               )}
@@ -322,7 +419,7 @@ export default function AccessSection({ config, setError, setSuccess }) {
       </div>
 
       {/* Bulk Actions Floating Bar */}
-      {selectedUserIds.length > 0 && (
+      {isAuthorized && selectedUserIds.length > 0 && (
         <div className="fixed bottom-12 left-1/2 -translate-x-1/2 z-[1000] w-[90%] max-w-[800px] animate-in slide-in-from-bottom-10 duration-500">
           <div className="bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-[2.5rem] p-4 pl-10 shadow-2xl flex items-center justify-between gap-6 ring-4 ring-indigo-600/5 backdrop-blur-xl">
             <div className="flex items-center gap-6">
@@ -356,7 +453,7 @@ export default function AccessSection({ config, setError, setSuccess }) {
                 </button>
                 
                 {/* Bulk Multi-select Dropdown */}
-                <div className="absolute bottom-full right-0 mb-4 w-[240px] bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-[2rem] shadow-2xl p-5 z-[1001] opacity-0 invisible group-hover/bulk:opacity-100 group-hover/bulk:visible transition-all transform translate-y-4 group-hover/bulk:translate-y-0">
+                <div className="absolute bottom-full right-0 mb-4 w-[240px] bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-[2rem] shadow-2xl p-5 z-[1001] opacity-0 invisible group-hover/bulk:opacity-100 group-hover/bulk:visible transition-all transform translate-y-4 group-hover/bulk:translate-y-0 overflow-y-auto max-h-[350px] custom-scrollbar">
                   <div className="space-y-4">
                     {config.roles.map(role => {
                       const isDefault = role.id === 'GROUP_MEMBER';

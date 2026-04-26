@@ -6,10 +6,20 @@ class UserRole {
    */
   static async getRolesByGroup(groupId) {
     const sqlQuery = `
-      SELECT ur.user_id, ur.user_roles, u.first_name, u.last_name, u.email
-      FROM public.user_roles ur
-      JOIN public.users u ON ur.user_id = u.id
-      WHERE ur.group_id = $1
+      SELECT 
+        u.id as user_id, 
+        u.first_name, 
+        u.last_name, 
+        u.email,
+        CASE 
+          WHEN u.id = g.user_id THEN COALESCE(ur.user_roles, ARRAY['GROUP_ADMIN', 'GROUP_MEMBER'])
+          ELSE COALESCE(ur.user_roles, ARRAY['GROUP_MEMBER'])
+        END as user_roles
+      FROM public.groups g
+      JOIN public.users u ON u.id = ANY(array_append(g.group_members, g.user_id))
+      LEFT JOIN public.user_roles ur ON ur.user_id = u.id AND ur.group_id = g.group_id
+      WHERE g.group_id = $1
+      ORDER BY (u.id = g.user_id) DESC, u.first_name ASC
     `;
     const result = await query(sqlQuery, [groupId]);
     return result.rows;
@@ -42,19 +52,61 @@ class UserRole {
       RETURNING *
     `;
     const result = await query(sqlQuery, [userId, groupId, rolesToSet]);
-    return result.rows[0];
+    return result.rows[0]?.user_roles;
   }
 
   /**
    * Set roles for multiple users at once
    */
   static async setBulkRoles(userIds, groupId, roles) {
-    const results = [];
+    let lastRoles = roles;
     for (const userId of userIds) {
-      const res = await this.setRoles(userId, groupId, roles);
-      results.push(res);
+      lastRoles = await this.setRoles(userId, groupId, roles);
     }
-    return results;
+    return lastRoles;
+  }
+
+  /**
+   * Check if a user has a specific role in a group
+   */
+  static async hasRole(userId, groupId, role) {
+    const roles = await this.getUserRoles(userId, groupId);
+    return roles.includes(role);
+  }
+
+  /**
+   * Check if a user is an admin or owner of a group
+   */
+  static async isAuthorized(userId, groupId) {
+    const [roles, group] = await Promise.all([
+      this.getUserRoles(userId, groupId),
+      query('SELECT user_id FROM public.groups WHERE group_id = $1', [groupId])
+    ]);
+    const isOwner = group.rows[0]?.user_id === userId;
+    const isAdmin = roles.includes('GROUP_ADMIN');
+    return isOwner || isAdmin;
+  }
+
+  /**
+   * Check if a user can manage payments in a group
+   */
+  static async canManagePayments(userId, groupId) {
+    const [roles, group] = await Promise.all([
+      this.getUserRoles(userId, groupId),
+      query('SELECT user_id FROM public.groups WHERE group_id = $1', [groupId])
+    ]);
+    const isOwner = group.rows[0]?.user_id === userId;
+    const isGroupAdmin = roles.includes('GROUP_ADMIN');
+    const isPaymentAdmin = roles.includes('PAYMENT_ADMIN');
+    return isOwner || isGroupAdmin || isPaymentAdmin;
+  }
+
+  /**
+   * Check if a user can view payments in a group
+   */
+  static async canViewPayments(userId, groupId) {
+    const roles = await this.getUserRoles(userId, groupId);
+    return roles.some(r => ['GROUP_ADMIN', 'PAYMENT_ADMIN', 'PAYMENT_USER'].includes(r));
   }
 
   /**

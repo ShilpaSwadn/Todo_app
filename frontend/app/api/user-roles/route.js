@@ -38,7 +38,12 @@ export async function POST(request) {
     const currentUser = await authService.getUserByUid(uid)
     const body = await request.json()
     const { userIds, groupId, role, roles } = body
-    const rolesToSet = roles || (role ? [role] : null)
+    
+    // Normalize roles to a flat array of strings
+    let rolesToSet = roles || role;
+    if (rolesToSet && !Array.isArray(rolesToSet)) {
+      rolesToSet = [rolesToSet];
+    }
 
     if (!userIds || !Array.isArray(userIds) || userIds.length === 0 || !groupId || !rolesToSet) {
       return NextResponse.json({ success: false, message: 'Missing required fields' }, { status: 400 })
@@ -53,14 +58,6 @@ export async function POST(request) {
     const isOwner = group && group.user_id === currentUser.id
     const isAdmin = currentRoles.includes('GROUP_ADMIN')
 
-    console.log('User Access Check:', {
-      userId: currentUser.id,
-      groupId: groupId,
-      userRoles: currentRoles,
-      isOwner,
-      isAdmin,
-      groupOwner: group?.user_id
-    })
 
     if (!isAdmin && !isOwner) {
       return NextResponse.json({ 
@@ -70,11 +67,12 @@ export async function POST(request) {
       }, { status: 403 })
     }
 
-    await UserRole.setBulkRoles(userIds, groupId, rolesToSet)
+    const updatedRoles = await UserRole.setBulkRoles(userIds, groupId, rolesToSet)
 
     return NextResponse.json({
       success: true,
-      message: `${userIds.length} user role(s) updated successfully`
+      message: `${userIds.length} user role(s) updated successfully`,
+      updatedRoles: updatedRoles
     })
   } catch (error) {
     console.error('User roles POST error:', error)

@@ -105,6 +105,7 @@ export default function DynamicProfileForm({ data, onChange, categories }) {
             key={category.id}
             id={category.id}
             className="bg-white dark:bg-gray-800 rounded-[3rem] p-8 sm:p-14 shadow-[0_30px_70px_rgba(0,0,0,0.03)] dark:shadow-none border border-gray-100 dark:border-gray-800/50 scroll-mt-32 transition-all hover:translate-y-[-4px] hover:shadow-xl relative"
+            style={{ zIndex: hasOpenSelect ? 50 : 1 }}
           >
             <div className="flex items-center gap-6 mb-12 sm:mb-16">
               <div className="w-2.5 h-14 bg-gradient-to-b from-indigo-500 to-indigo-700 rounded-full" />

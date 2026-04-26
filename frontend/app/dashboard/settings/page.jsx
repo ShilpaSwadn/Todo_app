@@ -58,6 +58,7 @@ export default function SettingsPage() {
     mobileNumber: ''
   })
   const [profileData, setProfileData] = useState({})
+  const [userGroups, setUserGroups] = useState([])
 
   // Change detection
   const hasChanges = useMemo(() => {
@@ -113,6 +114,12 @@ export default function SettingsPage() {
           });
           setProfileData(normalizedProfileData);
           setInitialProfileData(normalizedProfileData);
+        }
+
+        // Fetch groups to determine section visibility
+        const groupsResponse = await api.get('/groups');
+        if (groupsResponse.success) {
+          setUserGroups(groupsResponse.groups || []);
         }
       } catch (error) {
         console.error("Fetch data error:", error)
@@ -190,13 +197,50 @@ export default function SettingsPage() {
     }
   };
 
-  const sections = [
-    { ...personalConfig, icon: <FiUser /> },
-    { ...groupsConfig, icon: <FiUsers /> },
-    { ...accessConfig, icon: <FiShield /> },
-    { ...languageConfig, icon: <FiGlobe /> },
-    { ...paymentConfig, icon: <FiCreditCard /> },
-  ]
+  const availableSections = useMemo(() => {
+    const allSections = [
+      { ...personalConfig, icon: <FiUser /> },
+      { ...groupsConfig, icon: <FiUsers /> },
+      { ...accessConfig, icon: <FiShield /> },
+      { ...languageConfig, icon: <FiGlobe /> },
+      { ...paymentConfig, icon: <FiCreditCard /> },
+    ];
+
+    return allSections.filter(section => {
+      const userId = user?.id || user?.uid;
+      // Core sections are always visible
+      if (['personal', 'language'].includes(section.id)) return true;
+
+      // Group section visible if member of any group
+      if (section.id === 'groups') return userGroups.length > 0;
+
+      // Access section visible if Owner or GROUP_ADMIN in any group
+      if (section.id === 'access') {
+        return userGroups.some(g => 
+          g.ownerId === userId || 
+          (g.userRoles || []).includes('GROUP_ADMIN')
+        );
+      }
+
+      // Payment section visible if Owner, GROUP_ADMIN, PAYMENT_ADMIN, or PAYMENT_USER in any group
+      if (section.id === 'payment') {
+        return userGroups.some(g => 
+          g.ownerId === userId || 
+          (g.userRoles || []).some(role => ['GROUP_ADMIN', 'PAYMENT_ADMIN', 'PAYMENT_USER'].includes(role))
+        );
+      }
+
+      return true;
+    });
+  }, [userGroups, user]);
+
+  // Ensure active section is valid
+  useEffect(() => {
+    if (!loading && user && availableSections.length > 0) {
+      const isValid = availableSections.some(s => s.id === activeSection);
+      if (!isValid) setActiveSection('personal');
+    }
+  }, [availableSections, activeSection, loading, user]);
 
   if (loading || !user) {
     return (
@@ -262,7 +306,7 @@ export default function SettingsPage() {
               Settings Menu
             </h4>
             <div className="space-y-3">
-              {sections.map(section => (
+              {availableSections.map(section => (
                 <button
                   key={section.id}
                   onClick={() => setActiveSection(section.id)}
@@ -311,7 +355,7 @@ export default function SettingsPage() {
 
         {/* Main Section Content */}
         <div className="flex-1 min-w-0 font-sans">
-          <div className="bg-white dark:bg-gray-800/40 border border-gray-100 dark:border-gray-800 rounded-[4rem] p-8 sm:p-14 shadow-sm min-h-[600px] relative overflow-hidden">
+          <div className="bg-white dark:bg-gray-800/40 border border-gray-100 dark:border-gray-800 rounded-[4rem] p-8 sm:p-14 shadow-sm min-h-[600px] relative">
             {/* Header for Active Section */}
             <div className="flex items-center justify-between mb-12">
               <div className="flex items-center gap-6">
@@ -322,14 +366,14 @@ export default function SettingsPage() {
                   activeSection === 'access' ? 'bg-rose-50 dark:bg-rose-900/20 text-rose-600' :
                   'bg-purple-50 dark:bg-purple-900/20 text-purple-600'
                 }`}>
-                  {sections.find(s => s.id === activeSection)?.icon}
+                  {availableSections.find(s => s.id === activeSection)?.icon || <FiShield />}
                 </div>
                 <div>
                   <h2 className="text-2xl font-black text-gray-900 dark:text-white uppercase tracking-tighter">
-                    {sections.find(s => s.id === activeSection)?.title}
+                    {availableSections.find(s => s.id === activeSection)?.title || 'Settings'}
                   </h2>
                   <p className="text-[11px] font-bold text-gray-400 uppercase tracking-widest mt-1">
-                    {sections.find(s => s.id === activeSection)?.description}
+                    {availableSections.find(s => s.id === activeSection)?.description || 'Configure your preferences'}
                   </p>
                 </div>
               </div>
@@ -401,6 +445,7 @@ export default function SettingsPage() {
 
               {activeSection === 'payment' && (
                 <PaymentSection 
+                  user={user}
                   config={paymentConfig} 
                   setError={setError} 
                   setSuccess={setSuccess} 
@@ -409,6 +454,7 @@ export default function SettingsPage() {
 
               {activeSection === 'access' && (
                 <AccessSection 
+                  user={user}
                   config={accessConfig} 
                   setError={setError} 
                   setSuccess={setSuccess} 

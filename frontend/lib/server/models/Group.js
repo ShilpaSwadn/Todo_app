@@ -12,6 +12,15 @@ class Group {
   }
 
   /**
+   * Find all groups a user is a member of (or owns)
+   */
+  static async findByMemberId(userId) {
+    const sqlQuery = 'SELECT * FROM public.groups WHERE user_id = $1 OR $1 = ANY(group_members)';
+    const result = await query(sqlQuery, [userId]);
+    return result.rows;
+  }
+
+  /**
    * Find a group by group ID
    */
   static async findById(groupId) {

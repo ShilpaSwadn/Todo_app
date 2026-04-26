@@ -65,6 +65,24 @@ class PaymentInfo {
   }
 
   /**
+   * Update payment info
+   */
+  static async update(paymentDetailsId, userId, paymentData) {
+    const { cardholderName, expiryDate } = paymentData;
+    const sqlQuery = `
+      UPDATE public.payment_info 
+      SET 
+        cardholder_name = COALESCE($1, cardholder_name), 
+        expiry_date = COALESCE($2, expiry_date), 
+        updated_at = NOW() 
+      WHERE payment_details_id = $3 AND user_id = $4
+      RETURNING *
+    `;
+    const result = await query(sqlQuery, [cardholderName, expiryDate, paymentDetailsId, userId]);
+    return result.rows[0];
+  }
+
+  /**
    * Hard delete payment info
    */
   static async delete(paymentDetailsId, userId) {

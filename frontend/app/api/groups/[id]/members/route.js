@@ -91,7 +91,7 @@ export async function DELETE(request, { params }) {
     const currentUser = await authService.getUserByUid(uid)
 
     // Remove user from members array
-    // Only owner can remove members (or someone can remove themselves - but let's stick to owner for now)
+    // Only owner can remove members
     const sqlQuery = `
       UPDATE public.groups 
       SET group_members = array_remove(group_members, $1) 
@@ -103,6 +103,9 @@ export async function DELETE(request, { params }) {
     if (result.rowCount === 0) {
       return NextResponse.json({ success: false, message: 'Group not found or unauthorized' }, { status: 404 })
     }
+
+    // Clean up user_roles table for this user-group pair
+    await query('DELETE FROM public.user_roles WHERE user_id = $1 AND group_id = $2', [userId, id]);
 
     const memberDetails = await User.findActiveByIds(result.rows[0].group_members)
     return NextResponse.json({

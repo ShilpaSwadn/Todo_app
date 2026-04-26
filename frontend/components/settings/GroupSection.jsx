@@ -260,7 +260,7 @@ export default function GroupSection({ user, config, setError, setSuccess }) {
                 onChange={(e) => handleMemberSearch(e.target.value)}
               />
               {searchResults.length > 0 && (
-                <div className="absolute z-50 w-full mt-2 bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-2xl shadow-2xl overflow-hidden">
+                <div className="absolute z-50 w-full mt-2 bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-2xl shadow-2xl overflow-y-auto max-h-[300px] custom-scrollbar">
                   {searchResults.map((result) => (
                     <button
                       key={result.id}
@@ -354,64 +354,79 @@ export default function GroupSection({ user, config, setError, setSuccess }) {
                 <div className="flex items-center gap-3">
                   <span className="hidden sm:inline-block text-[9px] font-black text-indigo-600 bg-indigo-50 dark:bg-indigo-900/20 px-3 py-1 rounded-full uppercase tracking-widest leading-none">{group.members.length} Members</span>
 
-                  {group.ownerId === user?.id ? (
-                    editingGroupId === group.id ? (
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={() => updateGroup(group.id)}
-                          className="p-3 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 dark:shadow-none"
-                          title="Save Changes"
-                        >
-                          <FiCheck className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => setEditingGroupId(null)}
-                          className="p-3 bg-gray-100 dark:bg-gray-800 text-gray-400 rounded-xl hover:bg-rose-500 hover:text-white transition-all shadow-sm"
-                          title="Cancel"
-                        >
-                          <HiX className="w-4 h-4" />
-                        </button>
-                      </div>
-                    ) : (
-                      <div className="flex items-center gap-2">
-                        {!group.is_default ? (
-                          <>
+                  {(() => {
+                    const userId = user?.id || user?.uid;
+                    const isOwner = group.ownerId === userId;
+                    const isGroupAdmin = (group.userRoles || []).includes('GROUP_ADMIN');
+                    
+                    if (isOwner || isGroupAdmin) {
+                      return (
+                        editingGroupId === group.id ? (
+                          <div className="flex items-center gap-2">
                             <button
-                              onClick={() => {
-                                setEditingGroupId(group.id);
-                                setEditGroupName(group.name);
-                                setEditGroupDesc(group.description || '');
-                              }}
-                              className="p-3 bg-indigo-50 dark:bg-indigo-900/10 text-indigo-600 rounded-xl hover:bg-indigo-600 hover:text-white transition-all transform active:scale-95"
-                              title="Edit Group"
+                              onClick={() => updateGroup(group.id)}
+                              className="p-3 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 dark:shadow-none"
+                              title="Save Changes"
                             >
-                              <FiEdit2 className="w-4 h-4" />
+                              <FiCheck className="w-4 h-4" />
                             </button>
-                          <button
-                            onClick={() => deleteGroup(group.id)}
-                            className="p-3 bg-rose-50 dark:bg-rose-900/10 text-rose-600 rounded-xl hover:bg-rose-600 hover:text-white transition-all transform active:scale-95"
-                            title="Delete Group"
-                          >
-                            <FiTrash2 className="w-4 h-4" />
-                          </button>
-                          </>
-                        ) : (
-                          <div className="px-4 py-2 bg-gray-50 dark:bg-gray-800/50 rounded-xl">
-                            <span className="text-[8px] font-black text-gray-400 uppercase tracking-[0.2em]">Default Workspace</span>
+                            <button
+                              onClick={() => setEditingGroupId(null)}
+                              className="p-3 bg-gray-100 dark:bg-gray-800 text-gray-400 rounded-xl hover:bg-rose-500 hover:text-white transition-all shadow-sm"
+                              title="Cancel"
+                            >
+                              <HiX className="w-4 h-4" />
+                            </button>
                           </div>
-                        )}
-                      </div>
-                    )
-                  ) : (
-                    <div className="px-4 py-2 bg-gray-50 dark:bg-gray-800/50 rounded-xl">
-                      <span className="text-[8px] font-black text-gray-400 uppercase tracking-[0.2em]">Member Access Only</span>
-                    </div>
-                  )}
+                        ) : (
+                          <div className="flex items-center gap-2">
+                            {!group.is_default ? (
+                              <>
+                                <button
+                                  onClick={() => {
+                                    setEditingGroupId(group.id);
+                                    setEditGroupName(group.name);
+                                    setEditGroupDesc(group.description || '');
+                                  }}
+                                  className="p-3 bg-indigo-50 dark:bg-indigo-900/10 text-indigo-600 rounded-xl hover:bg-indigo-600 hover:text-white transition-all transform active:scale-95"
+                                  title="Edit Group"
+                                >
+                                  <FiEdit2 className="w-4 h-4" />
+                                </button>
+                                <button
+                                  onClick={() => deleteGroup(group.id)}
+                                  className="p-3 bg-rose-50 dark:bg-rose-900/10 text-rose-600 rounded-xl hover:bg-rose-600 hover:text-white transition-all transform active:scale-95"
+                                  title="Delete Group"
+                                >
+                                  <FiTrash2 className="w-4 h-4" />
+                                </button>
+                              </>
+                            ) : (
+                              <div className="px-4 py-2 bg-gray-50 dark:bg-gray-800/50 rounded-xl">
+                                <span className="text-[8px] font-black text-gray-400 uppercase tracking-[0.2em]">Default Workspace</span>
+                              </div>
+                            )}
+                          </div>
+                        )
+                      );
+                    } else {
+                      return (
+                        <div className="px-4 py-2 bg-gray-50 dark:bg-gray-800/50 rounded-xl">
+                          <span className="text-[8px] font-black text-gray-400 uppercase tracking-[0.2em]">Member Access Only</span>
+                        </div>
+                      );
+                    }
+                  })()}
                 </div>
               </div>
 
-              {group.ownerId === user?.id && (
-                <div className="relative">
+              {(() => {
+                const userId = user?.id || user?.uid;
+                const isOwner = group.ownerId === userId;
+                const isGroupAdmin = (group.userRoles || []).includes('GROUP_ADMIN');
+                
+                return (isOwner || isGroupAdmin) && (
+                <div className="relative focus-within:z-[100]">
                   <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">{isSearching ? <ImSpinner2 className="w-4 h-4 text-indigo-600 animate-spin" /> : <FiSearch className="w-4 h-4 text-gray-400" />}</div>
                   <input
                     type="text"
@@ -421,7 +436,7 @@ export default function GroupSection({ user, config, setError, setSuccess }) {
                     onChange={(e) => handleMemberSearch(e.target.value)}
                   />
                   {searchResults.length > 0 && (
-                    <div className="absolute z-10 w-full mt-2 bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-2xl shadow-2xl overflow-hidden">
+                    <div className="absolute z-10 w-full mt-2 bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-2xl shadow-2xl overflow-y-auto max-h-[300px] custom-scrollbar">
                       {searchResults.map((result) => (
                         <button
                           key={result.id}
@@ -438,7 +453,7 @@ export default function GroupSection({ user, config, setError, setSuccess }) {
                     </div>
                   )}
                 </div>
-              )}
+              )})()}
 
               <div className="overflow-hidden border border-gray-100 dark:border-gray-800 rounded-2xl">
                 <table className="w-full text-left border-collapse">
@@ -471,11 +486,25 @@ export default function GroupSection({ user, config, setError, setSuccess }) {
                             </div>
                           </td>
                           <td className="px-6 py-4 text-right">
-                            {group.ownerId === user?.id && member.id !== group.ownerId && (
-                              <button onClick={() => removeMemberFromGroup(group.id, member.id)} className="p-2 text-gray-400 hover:text-rose-600 transition-colors">
-                                <FiTrash2 className="w-4 h-4" />
-                              </button>
-                            )}
+                            {(() => {
+                              const userId = user?.id || user?.uid;
+                              const isCurrentUserOwner = group.ownerId === userId;
+                              const isTargetOwner = member.id === group.ownerId;
+                              const isTargetAdmin = (member.roles || []).includes('GROUP_ADMIN');
+                              
+                              // Owner can manage everyone except themselves
+                              // Admins can manage everyone except Owner and other Admins
+                              const canManageTarget = isCurrentUserOwner ? !isTargetOwner : (!isTargetOwner && !isTargetAdmin);
+
+                              if (canManageTarget) {
+                                return (
+                                  <button onClick={() => removeMemberFromGroup(group.id, member.id)} className="p-2 text-gray-400 hover:text-rose-600 transition-colors" title="Remove Member">
+                                    <FiTrash2 className="w-4 h-4" />
+                                  </button>
+                                );
+                              }
+                              return null;
+                            })()}
                           </td>
                         </tr>
                       ))

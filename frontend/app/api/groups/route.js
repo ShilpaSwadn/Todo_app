@@ -100,8 +100,10 @@ export async function GET(request) {
         g.group_members as "memberIds",
         g.created_at as "createdAt",
         g.is_active as "is_active",
-        g.is_default as "is_default"
+        g.is_default as "is_default",
+        COALESCE(ur.user_roles, ARRAY['GROUP_MEMBER']) as "userRoles"
       FROM public.groups g
+      LEFT JOIN public.user_roles ur ON g.group_id = ur.group_id AND ur.user_id = $1
       WHERE (g.user_id = $1 OR $1 = ANY(g.group_members))
       ORDER BY g.is_default DESC, g.created_at DESC
     `
@@ -115,12 +117,17 @@ export async function GET(request) {
       const allMemberIds = [...new Set([...(group.memberIds || []), group.ownerId])]
       const memberDetails = await User.findActiveByIds(allMemberIds)
       
+      const rolesResult = await query('SELECT user_id, user_roles FROM public.user_roles WHERE group_id = $1', [group.id])
+      const rolesMap = {}
+      rolesResult.rows.forEach(r => { rolesMap[r.user_id] = r.user_roles })
+
       return {
         ...group,
         members: memberDetails.map(m => ({
           id: m.id,
           name: `${m.first_name} ${m.last_name || ''}`.trim(),
-          email: m.email
+          email: m.email,
+          roles: m.id === group.ownerId ? ['GROUP_ADMIN', 'GROUP_MEMBER'] : (rolesMap[m.id] || ['GROUP_MEMBER'])
         }))
       }
     }))

@@ -1,18 +1,22 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { FiPlus, FiCreditCard, FiTrash2, FiChevronRight } from 'react-icons/fi'
+import { FiPlus, FiCreditCard, FiTrash2, FiChevronRight, FiEdit2, FiCheck, FiX } from 'react-icons/fi'
 import { FaCcVisa, FaCcMastercard, FaCcAmex, FaCcDiscover, FaCcDinersClub, FaCreditCard as FaDefaultCard } from 'react-icons/fa'
 import api from '@/lib/api/client'
 import { LoadingOverlay } from '@/components/ui/LoadingSpinner'
 
-export default function PaymentSection({ config, setError, setSuccess }) {
+export default function PaymentSection({ user, config, setError, setSuccess }) {
   const [payments, setPayments] = useState([])
   const [groups, setGroups] = useState([])
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [savingLabel, setSavingLabel] = useState('')
   const [showForm, setShowForm] = useState(false)
   
+  const [editingPaymentId, setEditingPaymentId] = useState(null)
+  const [editPaymentData, setEditPaymentData] = useState({ cardholderName: '', expiryDate: '' })
+
   const [formData, setFormData] = useState({
     cardholderName: '',
     cardNumber: '',
@@ -28,15 +32,26 @@ export default function PaymentSection({ config, setError, setSuccess }) {
     fetchGroups()
   }, [])
 
-  // Auto-select 'default group' for payment form whenever groups are loaded
+  // Filter groups where user can manage payments
+  const authorizedGroups = groups.filter(g => {
+    const userId = user?.id || user?.uid;
+    const isOwner = g.ownerId === userId;
+    const hasManageRole = (g.userRoles || []).some(r => ['GROUP_ADMIN', 'PAYMENT_ADMIN'].includes(r));
+    return isOwner || hasManageRole;
+  });
+
+  // Auto-select first authorized group for payment form
   useEffect(() => {
-    if (groups.length > 0 && !formData.groupId) {
-      const defaultGroup = groups.find(g => g.name === 'default group');
+    if (authorizedGroups.length > 0 && !formData.groupId) {
+      // Prioritize default group if authorized
+      const defaultGroup = authorizedGroups.find(g => g.is_default);
       if (defaultGroup) {
         setFormData(prev => ({ ...prev, groupId: defaultGroup.id }));
+      } else {
+        setFormData(prev => ({ ...prev, groupId: authorizedGroups[0].id }));
       }
     }
-  }, [groups, formData.groupId])
+  }, [authorizedGroups, formData.groupId])
 
   const fetchPayments = async () => {
     try {
@@ -119,6 +134,30 @@ export default function PaymentSection({ config, setError, setSuccess }) {
   }
 
 
+  const handleEditPayment = async (paymentDetailsId, groupId) => {
+    try {
+      setSavingLabel('Updating card...')
+      setSaving(true)
+      const response = await api.put('/payment-info', {
+        paymentDetailsId,
+        groupId,
+        cardholderName: editPaymentData.cardholderName,
+        expiryDate: editPaymentData.expiryDate
+      })
+      if (response.success) {
+        setPayments(payments.map(p => p.payment_details_id === paymentDetailsId ? response.payment : p))
+        setEditingPaymentId(null)
+        setSuccess(true)
+        setTimeout(() => setSuccess(false), 5000);
+      }
+    } catch (err) {
+      console.error("Failed to update payment:", err)
+      setError("We couldn't update this payment method right now. Please try again in a moment.")
+    } finally {
+      setSaving(false)
+    }
+  }
+
   const handleInputChange = (id, val) => {
     let finalVal = val;
     if (id === 'cardNumber') finalVal = val.replace(/\D/g, '');
@@ -135,7 +174,7 @@ export default function PaymentSection({ config, setError, setSuccess }) {
       <LoadingOverlay active={saving} label={savingLabel} />
 
       {/* Header Add Button */}
-      {!showForm && (
+      {!showForm && authorizedGroups.length > 0 && (
         <div className="flex justify-end -mt-20 mb-8 relative z-10">
           <button
             onClick={() => setShowForm(true)}
@@ -181,9 +220,9 @@ export default function PaymentSection({ config, setError, setSuccess }) {
                         className="w-full h-14 px-6 bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-2xl text-xs font-black uppercase tracking-[0.1em] focus:ring-4 focus:ring-indigo-500/10 outline-none transition-all appearance-none cursor-pointer"
                       >
                         {!formData.groupId && <option value="">{field.placeholder}</option>}
-                        {groups.map(group => (
+                        {authorizedGroups.map(group => (
                           <option key={group.id} value={group.id}>
-                            {group.name} {group.name === 'default group' ? '(SYSTEM DEFAULT)' : ''}
+                            {group.name} {group.is_default ? '(SYSTEM DEFAULT)' : ''}
                           </option>
                         ))}
                       </select>
@@ -288,9 +327,34 @@ export default function PaymentSection({ config, setError, setSuccess }) {
                       •••• •••• •••• {payment.card_number}
                     </p>
                     <div className="flex items-center gap-4 mt-2">
-                      <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest">{payment.cardholder_name}</p>
-                      <div className="w-1 h-1 bg-gray-300 rounded-full" />
-                      <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest">{payment.expiry_date}</p>
+                      {editingPaymentId === payment.payment_details_id ? (
+                        <>
+                          <input 
+                            type="text"
+                            value={editPaymentData.cardholderName}
+                            onChange={(e) => setEditPaymentData({...editPaymentData, cardholderName: e.target.value.toUpperCase()})}
+                            className="text-[9px] font-bold text-gray-900 dark:text-white uppercase tracking-widest bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded w-32 border border-indigo-200 dark:border-indigo-900 outline-none"
+                          />
+                          <div className="w-1 h-1 bg-gray-300 rounded-full" />
+                          <input 
+                            type="text"
+                            value={editPaymentData.expiryDate}
+                            onChange={(e) => {
+                              let val = e.target.value.replace(/\D/g, '');
+                              if (val.length > 2) val = val.slice(0, 2) + '/' + val.slice(2, 4);
+                              setEditPaymentData({...editPaymentData, expiryDate: val});
+                            }}
+                            className="text-[9px] font-bold text-gray-900 dark:text-white uppercase tracking-widest bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded w-16 border border-indigo-200 dark:border-indigo-900 outline-none text-center"
+                            maxLength="5"
+                          />
+                        </>
+                      ) : (
+                        <>
+                          <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest">{payment.cardholder_name}</p>
+                          <div className="w-1 h-1 bg-gray-300 rounded-full" />
+                          <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest">{payment.expiry_date}</p>
+                        </>
+                      )}
                       <div className="w-1 h-1 bg-gray-300 rounded-full" />
                       <p className="text-[8px] font-black text-indigo-400 bg-indigo-50/50 dark:bg-indigo-900/20 px-2 py-0.5 rounded uppercase tracking-[0.1em]">
                         Group: {groups.find(g => g.id === payment.group_id)?.name || 'Unknown Group'}
@@ -298,13 +362,60 @@ export default function PaymentSection({ config, setError, setSuccess }) {
                     </div>
                   </div>
                 </div>
-                <button
-                  onClick={() => removePayment(payment.payment_details_id)}
-                  className="p-4 bg-white dark:bg-rose-900/20 text-rose-500 rounded-2xl opacity-0 group-hover:opacity-100 transition-all hover:bg-rose-500 hover:text-white shadow-xl"
-                  title="Delete Card"
-                >
-                  <FiTrash2 className="w-5 h-5" />
-                </button>
+                {(() => {
+                  const group = groups.find(g => g.id === payment.group_id);
+                  const isOwner = group?.ownerId === user?.id;
+                  const hasManageRole = (group?.userRoles || []).some(r => ['GROUP_ADMIN', 'PAYMENT_ADMIN'].includes(r));
+                  
+                  if (isOwner || hasManageRole) {
+                    if (editingPaymentId === payment.payment_details_id) {
+                      return (
+                        <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-all">
+                          <button
+                            onClick={() => handleEditPayment(payment.payment_details_id, payment.group_id)}
+                            className="p-3 bg-indigo-100 dark:bg-indigo-900/20 text-indigo-600 rounded-2xl hover:bg-indigo-600 hover:text-white shadow-xl transition-all"
+                            title="Save Changes"
+                          >
+                            <FiCheck className="w-5 h-5" />
+                          </button>
+                          <button
+                            onClick={() => setEditingPaymentId(null)}
+                            className="p-3 bg-gray-100 dark:bg-gray-800 text-gray-500 rounded-2xl hover:bg-rose-500 hover:text-white shadow-xl transition-all"
+                            title="Cancel Edit"
+                          >
+                            <FiX className="w-5 h-5" />
+                          </button>
+                        </div>
+                      );
+                    }
+                    
+                    return (
+                      <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-all">
+                        <button
+                          onClick={() => {
+                            setEditingPaymentId(payment.payment_details_id);
+                            setEditPaymentData({
+                              cardholderName: payment.cardholder_name,
+                              expiryDate: payment.expiry_date
+                            });
+                          }}
+                          className="p-4 bg-white dark:bg-indigo-900/20 text-indigo-500 rounded-2xl hover:bg-indigo-500 hover:text-white shadow-xl transition-all"
+                          title="Edit Card"
+                        >
+                          <FiEdit2 className="w-5 h-5" />
+                        </button>
+                        <button
+                          onClick={() => removePayment(payment.payment_details_id)}
+                          className="p-4 bg-white dark:bg-rose-900/20 text-rose-500 rounded-2xl hover:bg-rose-500 hover:text-white shadow-xl transition-all"
+                          title="Delete Card"
+                        >
+                          <FiTrash2 className="w-5 h-5" />
+                        </button>
+                      </div>
+                    );
+                  }
+                  return null;
+                })()}
               </div>
             ))
           )}
