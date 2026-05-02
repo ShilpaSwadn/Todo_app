@@ -53,15 +53,15 @@ class Group {
 
     return result.rows[0] || null;
   }
-  static async update(groupId, userId, data) {
+  static async update(groupId, data) {
     const { name, description } = data;
     const sqlQuery = `
       UPDATE public.groups 
       SET group_name = $1, group_description = $2, created_at = created_at
-      WHERE group_id = $3 AND user_id = $4
+      WHERE group_id = $3
       RETURNING *
     `;
-    const result = await query(sqlQuery, [name, description, groupId, userId]);
+    const result = await query(sqlQuery, [name, description, groupId]);
     return result.rows[0] || null;
   }
   static async delete(groupId, userId) {

@@ -4,6 +4,7 @@ import User from '@/lib/server/models/User.js'
 import { ensureDbInitialized } from '@/lib/server/middleware/dbInit.js'
 import { getUidFromToken } from '@/lib/server/middleware/authMiddleware.js'
 import authService from '@/lib/server/services/authService.js'
+import UserRole from '@/lib/server/models/UserRole.js'
 
 export async function POST(request, { params }) {
   try {
@@ -25,27 +26,28 @@ export async function POST(request, { params }) {
       return NextResponse.json({ success: false, message: 'Valid active member is required' }, { status: 400 })
     }
 
+    // Verify user authorization
+    const isAuthorized = await UserRole.isAuthorized(currentUser.id, id);
+    if (!isAuthorized) {
+      return NextResponse.json({ success: false, message: 'Unauthorized' }, { status: 403 });
+    }
+
     // Add user to members array if not already present
-    // Only owner can add members
     const sqlQuery = `
       UPDATE public.groups 
       SET group_members = array_append(group_members, $1) 
-      WHERE group_id = $2 AND user_id = $3 AND NOT ($1 = ANY(group_members))
+      WHERE group_id = $2 AND NOT ($1 = ANY(group_members))
       RETURNING group_members
     `
-    const result = await query(sqlQuery, [userId, id, currentUser.id])
+    const result = await query(sqlQuery, [userId, id])
 
     if (result.rowCount === 0) {
-      // Check if it failed because user is already a member or not owner
-      const checkQuery = 'SELECT group_members as members, user_id FROM public.groups WHERE group_id = $1'
+      // Check if it failed because user is already a member
+      const checkQuery = 'SELECT group_members as members FROM public.groups WHERE group_id = $1'
       const checkResult = await query(checkQuery, [id])
       
       if (checkResult.rowCount === 0) {
         return NextResponse.json({ success: false, message: 'Group not found' }, { status: 404 })
-      }
-      
-      if (checkResult.rows[0].user_id !== currentUser.id) {
-        return NextResponse.json({ success: false, message: 'Unauthorized' }, { status: 403 })
       }
 
       // If already a member, return the current members
@@ -90,18 +92,23 @@ export async function DELETE(request, { params }) {
 
     const currentUser = await authService.getUserByUid(uid)
 
+    // Verify user authorization
+    const isAuthorized = await UserRole.isAuthorized(currentUser.id, id);
+    if (!isAuthorized) {
+      return NextResponse.json({ success: false, message: 'Unauthorized' }, { status: 403 });
+    }
+
     // Remove user from members array
-    // Only owner can remove members
     const sqlQuery = `
       UPDATE public.groups 
       SET group_members = array_remove(group_members, $1) 
-      WHERE group_id = $2 AND user_id = $3
+      WHERE group_id = $2
       RETURNING group_members
     `
-    const result = await query(sqlQuery, [userId, id, currentUser.id])
+    const result = await query(sqlQuery, [userId, id])
 
     if (result.rowCount === 0) {
-      return NextResponse.json({ success: false, message: 'Group not found or unauthorized' }, { status: 404 })
+      return NextResponse.json({ success: false, message: 'Group not found' }, { status: 404 })
     }
 
     // Clean up user_roles table for this user-group pair

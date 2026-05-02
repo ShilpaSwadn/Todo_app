@@ -4,6 +4,7 @@ import Group from '@/lib/server/models/Group.js'
 import { ensureDbInitialized } from '@/lib/server/middleware/dbInit.js'
 import { getUidFromToken } from '@/lib/server/middleware/authMiddleware.js'
 import authService from '@/lib/server/services/authService.js'
+import UserRole from '@/lib/server/models/UserRole.js'
 
 export async function PUT(request, { params }) {
   try {
@@ -23,7 +24,12 @@ export async function PUT(request, { params }) {
       return NextResponse.json({ success: false, message: 'Group name is required' }, { status: 400 })
     }
 
-    const group = await Group.update(id, currentUser.id, { name, description })
+    const isAuthorized = await UserRole.isAuthorized(currentUser.id, id);
+    if (!isAuthorized) {
+      return NextResponse.json({ success: false, message: 'Group not found or unauthorized' }, { status: 404 })
+    }
+
+    const group = await Group.update(id, { name, description })
 
     if (!group) {
       return NextResponse.json({ success: false, message: 'Group not found or unauthorized' }, { status: 404 })

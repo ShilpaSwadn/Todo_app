@@ -67,18 +67,21 @@ class PaymentInfo {
   /**
    * Update payment info
    */
-  static async update(paymentDetailsId, userId, paymentData) {
-    const { cardholderName, expiryDate } = paymentData;
+  static async update(paymentDetailsId, paymentData) {
+    const { cardholderName, expiryDate, provider, fundingType, groupId } = paymentData;
     const sqlQuery = `
       UPDATE public.payment_info 
       SET 
         cardholder_name = COALESCE($1, cardholder_name), 
-        expiry_date = COALESCE($2, expiry_date), 
+        expiry_date = COALESCE($2, expiry_date),
+        provider = COALESCE($3, provider),
+        funding_type = COALESCE($4, funding_type),
+        group_id = COALESCE($5, group_id),
         updated_at = NOW() 
-      WHERE payment_details_id = $3 AND user_id = $4
+      WHERE payment_details_id = $6
       RETURNING *
     `;
-    const result = await query(sqlQuery, [cardholderName, expiryDate, paymentDetailsId, userId]);
+    const result = await query(sqlQuery, [cardholderName, expiryDate, provider, fundingType, groupId, paymentDetailsId]);
     return result.rows[0];
   }
 

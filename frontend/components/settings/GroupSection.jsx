@@ -17,7 +17,8 @@ export default function GroupSection({ user, config, setError, setSuccess }) {
   const [showCreateInline, setShowCreateInline] = useState(false)
   const [newGroupData, setNewGroupData] = useState({ name: '', description: '' })
   const [selectedInitialMembers, setSelectedInitialMembers] = useState([])
-  const [memberSearch, setMemberSearch] = useState('')
+  const [searchQueries, setSearchQueries] = useState({})
+  const [activeSearchId, setActiveSearchId] = useState(null)
   const [searchResults, setSearchResults] = useState([])
   const [isSearching, setIsSearching] = useState(false)
 
@@ -45,8 +46,9 @@ export default function GroupSection({ user, config, setError, setSuccess }) {
     }
   }
 
-  const handleMemberSearch = async (val) => {
-    setMemberSearch(val);
+  const handleMemberSearch = async (val, searchId) => {
+    setSearchQueries(prev => ({ ...prev, [searchId]: val }));
+    setActiveSearchId(searchId);
     if (!val.trim()) {
       setSearchResults([]);
       return;
@@ -170,7 +172,8 @@ export default function GroupSection({ user, config, setError, setSuccess }) {
     } finally {
       setSaving(false)
       setSearchResults([]);
-      setMemberSearch('');
+      setSearchQueries(prev => ({ ...prev, [groupId]: '' }));
+      setActiveSearchId(null);
     }
   }
 
@@ -225,7 +228,9 @@ export default function GroupSection({ user, config, setError, setSuccess }) {
             <button onClick={() => {
               setShowCreateInline(false);
               setSelectedInitialMembers([]);
-              setMemberSearch('');
+              setSearchQueries(prev => ({ ...prev, create: '' }));
+              setSearchResults([]);
+              setActiveSearchId(null);
             }} className="text-gray-400 hover:text-rose-500 transition-colors">
               <HiX className="w-5 h-5" />
             </button>
@@ -250,16 +255,16 @@ export default function GroupSection({ user, config, setError, setSuccess }) {
             <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest px-2">Add Members (Required)</label>
             <div className="relative">
               <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                {isSearching ? <ImSpinner2 className="w-4 h-4 text-indigo-600 animate-spin" /> : <FiSearch className="w-4 h-4 text-gray-400" />}
+                {isSearching && activeSearchId === 'create' ? <ImSpinner2 className="w-4 h-4 text-indigo-600 animate-spin" /> : <FiSearch className="w-4 h-4 text-gray-400" />}
               </div>
               <input
                 type="text"
                 placeholder="Search people to add..."
                 className="w-full pl-12 pr-4 py-3 bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 dark:text-white text-sm"
-                value={memberSearch}
-                onChange={(e) => handleMemberSearch(e.target.value)}
+                value={searchQueries['create'] || ''}
+                onChange={(e) => handleMemberSearch(e.target.value, 'create')}
               />
-              {searchResults.length > 0 && (
+              {activeSearchId === 'create' && searchResults.length > 0 && (
                 <div className="absolute z-50 w-full mt-2 bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-2xl shadow-2xl overflow-y-auto max-h-[300px] custom-scrollbar">
                   {searchResults.map((result) => (
                     <button
@@ -271,7 +276,8 @@ export default function GroupSection({ user, config, setError, setSuccess }) {
                           setSelectedInitialMembers([...selectedInitialMembers, result]);
                         }
                         setSearchResults([]);
-                        setMemberSearch('');
+                        setSearchQueries(prev => ({ ...prev, create: '' }));
+                        setActiveSearchId(null);
                       }}
                       className="w-full px-6 py-4 flex items-center justify-between hover:bg-indigo-50 dark:hover:bg-indigo-900/20 text-left transition-colors"
                     >
@@ -427,15 +433,15 @@ export default function GroupSection({ user, config, setError, setSuccess }) {
                 
                 return (isOwner || isGroupAdmin) && (
                 <div className="relative focus-within:z-[100]">
-                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">{isSearching ? <ImSpinner2 className="w-4 h-4 text-indigo-600 animate-spin" /> : <FiSearch className="w-4 h-4 text-gray-400" />}</div>
+                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">{isSearching && activeSearchId === group.id ? <ImSpinner2 className="w-4 h-4 text-indigo-600 animate-spin" /> : <FiSearch className="w-4 h-4 text-gray-400" />}</div>
                   <input
                     type="text"
                     placeholder="Search people by Email or Name..."
                     className="w-full pl-12 pr-4 py-3 bg-gray-50 dark:bg-gray-800/50 border border-gray-100 dark:border-gray-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 dark:text-white text-sm"
-                    value={memberSearch}
-                    onChange={(e) => handleMemberSearch(e.target.value)}
+                    value={searchQueries[group.id] || ''}
+                    onChange={(e) => handleMemberSearch(e.target.value, group.id)}
                   />
-                  {searchResults.length > 0 && (
+                  {activeSearchId === group.id && searchResults.length > 0 && (
                     <div className="absolute z-10 w-full mt-2 bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-2xl shadow-2xl overflow-y-auto max-h-[300px] custom-scrollbar">
                       {searchResults.map((result) => (
                         <button
@@ -489,12 +495,16 @@ export default function GroupSection({ user, config, setError, setSuccess }) {
                             {(() => {
                               const userId = user?.id || user?.uid;
                               const isCurrentUserOwner = group.ownerId === userId;
+                              const isCurrentUserAdmin = (group.userRoles || []).includes('GROUP_ADMIN');
                               const isTargetOwner = member.id === group.ownerId;
                               const isTargetAdmin = (member.roles || []).includes('GROUP_ADMIN');
                               
-                              // Owner can manage everyone except themselves
-                              // Admins can manage everyone except Owner and other Admins
-                              const canManageTarget = isCurrentUserOwner ? !isTargetOwner : (!isTargetOwner && !isTargetAdmin);
+                              let canManageTarget = false;
+                              if (isCurrentUserOwner) {
+                                canManageTarget = !isTargetOwner;
+                              } else if (isCurrentUserAdmin) {
+                                canManageTarget = !isTargetOwner && !isTargetAdmin;
+                              }
 
                               if (canManageTarget) {
                                 return (

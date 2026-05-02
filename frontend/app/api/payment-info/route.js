@@ -108,17 +108,27 @@ export async function PUT(request) {
     if (!user) return NextResponse.json({ error: 'User not found' }, { status: 404 })
 
     const body = await request.json()
-    const { paymentDetailsId, cardholderName, expiryDate, groupId } = body
+    const { paymentDetailsId, cardholderName, expiryDate, provider, fundingType, groupId, currentGroupId } = body
     
     // Check Permissions
-    const canManage = await UserRole.canManagePayments(user.id, groupId)
+    const canManage = await UserRole.canManagePayments(user.id, currentGroupId || groupId)
     if (!canManage) {
       return NextResponse.json({ error: 'Permission denied.' }, { status: 403 })
     }
 
-    const updatedPayment = await PaymentInfo.update(paymentDetailsId, user.id, {
+    if (groupId && currentGroupId && groupId !== currentGroupId) {
+      const canManageTarget = await UserRole.canManagePayments(user.id, groupId)
+      if (!canManageTarget) {
+        return NextResponse.json({ error: 'Permission denied for target group.' }, { status: 403 })
+      }
+    }
+
+    const updatedPayment = await PaymentInfo.update(paymentDetailsId, {
       cardholderName,
-      expiryDate
+      expiryDate,
+      provider,
+      fundingType,
+      groupId
     })
 
     return NextResponse.json({ success: true, payment: updatedPayment })
