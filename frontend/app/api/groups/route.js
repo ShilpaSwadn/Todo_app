@@ -101,6 +101,7 @@ export async function GET(request) {
         g.created_at as "createdAt",
         g.is_active as "is_active",
         g.is_default as "is_default",
+        g.address as "address",
         COALESCE(ur.user_roles, ARRAY['GROUP_MEMBER']) as "userRoles"
       FROM public.groups g
       LEFT JOIN public.user_roles ur ON g.group_id = ur.group_id AND ur.user_id = $1

@@ -15,7 +15,8 @@ import {
   FiCreditCard,
   FiActivity,
   FiUsers,
-  FiX
+  FiX,
+  FiMap
 } from 'react-icons/fi'
 import { HiX } from 'react-icons/hi'
 import Link from 'next/link'
@@ -23,10 +24,12 @@ import PersonalSection from '@/components/settings/PersonalSection'
 import GroupSection from '@/components/settings/GroupSection'
 import LanguageSection from '@/components/settings/LanguageSection'
 import PaymentSection from '@/components/settings/PaymentSection'
+import GroupAddressSection from '@/components/settings/GroupAddressSection'
 import { personalConfig } from '@/lib/utils/personalConfig'
 import { groupsConfig } from '@/lib/utils/groupsConfig'
 import { languageConfig } from '@/lib/utils/languageConfig'
 import { paymentConfig } from '@/lib/utils/paymentConfig'
+import { groupAddressConfig } from '@/lib/utils/groupAddressConfig'
 import { formatFirebaseError } from '@/lib/utils/error-handler'
 import { LoadingOverlay } from '@/components/ui/LoadingSpinner'
 import { accessConfig } from '@/lib/utils/accessConfig'
@@ -201,6 +204,7 @@ export default function SettingsPage() {
     const allSections = [
       { ...personalConfig, icon: <FiUser /> },
       { ...groupsConfig, icon: <FiUsers /> },
+      { ...groupAddressConfig, icon: <FiMap /> },
       { ...accessConfig, icon: <FiShield /> },
       { ...languageConfig, icon: <FiGlobe /> },
       { ...paymentConfig, icon: <FiCreditCard /> },
@@ -219,6 +223,14 @@ export default function SettingsPage() {
         return userGroups.some(g => 
           g.ownerId === userId || 
           (g.userRoles || []).includes('GROUP_ADMIN')
+        );
+      }
+
+      // Group Address section visible if Owner, GROUP_ADMIN, GROUP_ADDRESS_ADMIN, or GROUP_ADDRESS_MEMBER
+      if (section.id === 'group_address') {
+        return userGroups.some(g => 
+          g.ownerId === userId || 
+          (g.userRoles || []).some(role => ['GROUP_ADMIN', 'GROUP_ADDRESS_ADMIN', 'GROUP_ADDRESS_MEMBER'].includes(role))
         );
       }
 
@@ -300,42 +312,67 @@ export default function SettingsPage() {
 
       <div className="flex-1 flex flex-col lg:flex-row max-w-[1600px] mx-auto w-full p-6 sm:p-12 gap-10">
         {/* Settings Navigation */}
-        <aside className="lg:w-[380px] shrink-0 space-y-8">
+        <aside className="lg:w-[380px] shrink-0 space-y-8 lg:sticky lg:top-32 lg:self-start lg:h-[calc(100vh-160px)] overflow-y-auto custom-scrollbar pr-2 pb-10">
           <div className="p-8 bg-white dark:bg-gray-800/50 border border-gray-100 dark:border-gray-800 rounded-[3rem] shadow-sm">
             <h4 className="text-[10px] font-black text-gray-300 dark:text-gray-600 uppercase tracking-[0.4em] mb-8 px-2">
               Settings Menu
             </h4>
             <div className="space-y-3">
               {availableSections.map(section => (
-                <button
-                  key={section.id}
-                  onClick={() => setActiveSection(section.id)}
-                  className={`w-full group text-left p-6 rounded-[2.5rem] transition-all duration-500 relative overflow-hidden ${activeSection === section.id
-                    ? 'bg-indigo-600 text-white shadow-2xl shadow-indigo-200 dark:shadow-none'
-                    : 'hover:bg-gray-50 dark:hover:bg-gray-800 border border-transparent hover:border-gray-100'
-                    }`}
-                >
-                  <div className="flex items-center gap-5 relative z-10">
-                    <div className={`p-3 rounded-2xl transition-colors ${activeSection === section.id
-                      ? 'bg-white/20'
-                      : 'bg-gray-50 dark:bg-gray-700'
-                      }`}>
-                      <span className={`text-xl ${activeSection === section.id ? 'text-white' : 'text-indigo-600'}`}>
-                        {section.icon}
-                      </span>
-                    </div>
-                    <div>
-                      <p className={`text-[11px] font-black uppercase tracking-widest ${activeSection === section.id ? 'text-white' : 'text-gray-900 dark:text-white'
+                <div key={section.id} className="space-y-2">
+                  <button
+                    onClick={() => {
+                      setActiveSection(section.id);
+                      window.scrollTo({ top: 0, behavior: 'smooth' });
+                    }}
+                    className={`w-full group text-left p-6 rounded-[2.5rem] transition-all duration-500 relative overflow-hidden ${activeSection === section.id
+                      ? 'bg-indigo-600 text-white shadow-2xl shadow-indigo-200 dark:shadow-none'
+                      : 'hover:bg-gray-50 dark:hover:bg-gray-800 border border-transparent hover:border-gray-100'
+                      }`}
+                  >
+                    <div className="flex items-center gap-5 relative z-10">
+                      <div className={`p-3 rounded-2xl transition-colors ${activeSection === section.id
+                        ? 'bg-white/20'
+                        : 'bg-gray-50 dark:bg-gray-700'
                         }`}>
-                        {section.title}
-                      </p>
-                      <p className={`text-[9px] font-bold mt-1 uppercase ${activeSection === section.id ? 'text-white/60' : 'text-gray-400 dark:text-gray-600'
-                        }`}>
-                        {section.description}
-                      </p>
+                        <span className={`text-xl ${activeSection === section.id ? 'text-white' : 'text-indigo-600'}`}>
+                          {section.icon}
+                        </span>
+                      </div>
+                      <div>
+                        <p className={`text-[11px] font-black uppercase tracking-widest ${activeSection === section.id ? 'text-white' : 'text-gray-900 dark:text-white'
+                          }`}>
+                          {section.title}
+                        </p>
+                        <p className={`text-[9px] font-bold mt-1 uppercase ${activeSection === section.id ? 'text-white/60' : 'text-gray-400 dark:text-gray-600'
+                          }`}>
+                          {section.description}
+                        </p>
+                      </div>
                     </div>
-                  </div>
-                </button>
+                  </button>
+
+                  {/* Nested Subnav for Personal Information */}
+                  {activeSection === 'personal' && section.id === 'personal' && (
+                    <div className="pl-6 pr-2 py-2 space-y-1 border-l-2 border-indigo-100 dark:border-indigo-900/50 ml-8 animate-in slide-in-from-top-2 duration-300">
+                      {personalConfig.categories.map(cat => (
+                        <button
+                          key={cat.id}
+                          onClick={() => {
+                            const el = document.getElementById(cat.id);
+                            if (el) {
+                              const y = el.getBoundingClientRect().top + window.scrollY - 100;
+                              window.scrollTo({ top: y, behavior: 'smooth' });
+                            }
+                          }}
+                          className="block w-full text-left px-4 py-2.5 text-[10px] font-black uppercase tracking-widest text-gray-500 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 rounded-xl transition-all"
+                        >
+                          {cat.title}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
               ))}
             </div>
           </div>
@@ -363,6 +400,7 @@ export default function SettingsPage() {
                   activeSection === 'personal' ? 'bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600' :
                   activeSection === 'language' ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600' :
                   activeSection === 'groups' ? 'bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600' :
+                  activeSection === 'group_address' ? 'bg-amber-50 dark:bg-amber-900/20 text-amber-600' :
                   activeSection === 'access' ? 'bg-rose-50 dark:bg-rose-900/20 text-rose-600' :
                   'bg-purple-50 dark:bg-purple-900/20 text-purple-600'
                 }`}>
@@ -438,6 +476,15 @@ export default function SettingsPage() {
                 <GroupSection 
                   user={user} 
                   config={groupsConfig} 
+                  setError={setError} 
+                  setSuccess={setSuccess} 
+                />
+              )}
+
+              {activeSection === 'group_address' && (
+                <GroupAddressSection 
+                  user={user} 
+                  config={groupAddressConfig} 
                   setError={setError} 
                   setSuccess={setSuccess} 
                 />

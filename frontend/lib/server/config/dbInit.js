@@ -76,6 +76,7 @@ const initDatabase = async () => {
         group_members UUID[] DEFAULT '{}',
         is_active BOOLEAN DEFAULT true,
         is_default BOOLEAN DEFAULT false,
+        address JSONB DEFAULT '{}',
         created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
       );
     `);
@@ -86,7 +87,8 @@ const initDatabase = async () => {
       { name: 'group_description', type: 'TEXT' },
       { name: 'group_members', type: 'UUID[] DEFAULT \'{}\'' },
       { name: 'is_active', type: 'BOOLEAN DEFAULT true' },
-      { name: 'is_default', type: 'BOOLEAN DEFAULT false' }
+      { name: 'is_default', type: 'BOOLEAN DEFAULT false' },
+      { name: 'address', type: 'JSONB DEFAULT \'{}\'' }
     ];
 
     for (const col of groupColumnsToAdd) {

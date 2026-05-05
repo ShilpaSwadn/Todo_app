@@ -64,6 +64,17 @@ class Group {
     const result = await query(sqlQuery, [name, description, groupId]);
     return result.rows[0] || null;
   }
+
+  static async updateAddress(groupId, address) {
+    const sqlQuery = `
+      UPDATE public.groups 
+      SET address = $1
+      WHERE group_id = $2
+      RETURNING *
+    `;
+    const result = await query(sqlQuery, [address, groupId]);
+    return result.rows[0] || null;
+  }
   static async delete(groupId, userId) {
     const sqlQuery = `
       DELETE FROM public.groups 

@@ -6,9 +6,11 @@ import { HiX } from 'react-icons/hi'
 import { ImSpinner2 } from 'react-icons/im'
 import api from '@/lib/api/client'
 import { LoadingOverlay } from '@/components/ui/LoadingSpinner'
+import { accessConfig } from '@/lib/utils/accessConfig'
 
 export default function GroupSection({ user, config, setError, setSuccess }) {
   const [groups, setGroups] = useState([])
+  const [payments, setPayments] = useState([])
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [savingLabel, setSavingLabel] = useState('Saving...')
@@ -34,12 +36,22 @@ export default function GroupSection({ user, config, setError, setSuccess }) {
   const fetchGroups = async () => {
     try {
       setLoading(true)
-      const response = await api.get('/groups')
-      if (response.success) {
-        setGroups(response.groups || [])
+      const [groupsRes, paymentsRes] = await Promise.all([
+        api.get('/groups'),
+        api.get('/payment-info').catch(() => []) // Gracefully fail if payment-info fails
+      ])
+      
+      if (groupsRes.success) {
+        setGroups(groupsRes.groups || [])
+      }
+      
+      if (Array.isArray(paymentsRes)) {
+        setPayments(paymentsRes)
+      } else if (paymentsRes && Array.isArray(paymentsRes.payments)) {
+        setPayments(paymentsRes.payments)
       }
     } catch (err) {
-      console.error("Failed to fetch groups:", err)
+      console.error("Failed to fetch groups data:", err)
       setError("Failed to load groups.")
     } finally {
       setLoading(false)
@@ -353,12 +365,70 @@ export default function GroupSection({ user, config, setError, setSuccess }) {
                   ) : (
                     <>
                       <h4 className="text-lg font-black text-gray-900 dark:text-white uppercase tracking-wider">{group.name}</h4>
-                      <p className="text-[10px] text-gray-400 font-bold uppercase mt-1 italic tracking-widest opacity-60">{group.description || ''}</p>
+                      <p className="text-[10px] text-gray-400 font-bold uppercase mt-1 italic tracking-widest opacity-60">{group.description || 'No description'}</p>
                     </>
                   )}
                 </div>
                 <div className="flex items-center gap-3">
-                  <span className="hidden sm:inline-block text-[9px] font-black text-indigo-600 bg-indigo-50 dark:bg-indigo-900/20 px-3 py-1 rounded-full uppercase tracking-widest leading-none">{group.members.length} Members</span>
+                  {/* Group Details Pop Overview */}
+                  {(() => {
+                    const groupPayments = payments.filter(p => p.group_id === group.id);
+                    const hasAddress = group.address && Object.keys(group.address).length > 0 && group.address.addressLine1;
+                    const hasPayments = groupPayments.length > 0;
+                    
+                    if (!hasAddress && !hasPayments) return null;
+
+                    return (
+                      <div className="relative group/info">
+                        <button className="text-[9px] font-black bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 px-4 py-2 rounded-xl uppercase tracking-widest transition-all hover:bg-indigo-100 dark:hover:bg-indigo-900/50 cursor-pointer shadow-sm">
+                          View Details
+                        </button>
+                        
+                        <div className="absolute right-0 top-full mt-3 w-80 bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-2xl shadow-2xl p-6 z-[100] opacity-0 invisible group-hover/info:opacity-100 group-hover/info:visible transition-all pointer-events-none origin-top-right transform scale-95 group-hover/info:scale-100">
+                          <div className="space-y-5">
+                            {/* Address Info */}
+                            {hasAddress && (
+                              <div>
+                                <h5 className="text-[10px] font-black text-indigo-500 uppercase tracking-[0.2em] mb-3 flex items-center gap-2">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-indigo-500"></span>
+                                  Billing Address
+                                </h5>
+                                <div className="text-[11px] font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider leading-relaxed bg-gray-50 dark:bg-gray-800/50 p-4 rounded-xl border border-gray-100 dark:border-gray-800">
+                                  <p>{group.address.addressLine1}</p>
+                                  {group.address.addressLine2 && <p>{group.address.addressLine2}</p>}
+                                  <p>{group.address.city}, {group.address.stateProvince} {group.address.postalCode}</p>
+                                  <p className="text-[9px] text-gray-400 mt-2 font-black">{group.address.country}</p>
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Payment Info */}
+                            {hasPayments && (
+                              <div>
+                                <h5 className="text-[10px] font-black text-emerald-500 uppercase tracking-[0.2em] mb-3 flex items-center gap-2">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                                  Payment Methods
+                                </h5>
+                                <div className="space-y-3">
+                                  {groupPayments.map(p => (
+                                    <div key={p.payment_details_id} className="flex items-center justify-between text-[11px] font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider bg-gray-50 dark:bg-gray-800/50 p-4 rounded-xl border border-gray-100 dark:border-gray-800">
+                                      <div className="flex items-center gap-3">
+                                        <span className="text-[9px] font-black bg-white dark:bg-gray-700 px-2 py-1 rounded shadow-sm text-gray-900 dark:text-white">{p.provider || 'Card'}</span>
+                                        <span>•••• {p.card_number}</span>
+                                      </div>
+                                      <span className="text-[9px] font-black text-gray-400">{p.expiry_date}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })()}
+
+                  <span className="hidden sm:inline-block text-[9px] font-black text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-800 px-4 py-2 rounded-xl uppercase tracking-widest leading-none border border-transparent">{group.members.length} Members</span>
 
                   {(() => {
                     const userId = user?.id || user?.uid;
@@ -487,7 +557,23 @@ export default function GroupSection({ user, config, setError, setSuccess }) {
                                     <span className="text-[7px] font-black text-white bg-indigo-600 px-1.5 py-0.5 rounded uppercase tracking-widest">Creator</span>
                                   )}
                                 </div>
-                                <p className="text-[9px] text-gray-400 font-medium">{member.email}</p>
+                                <p className="text-[9px] text-gray-400 font-medium mb-1">{member.email}</p>
+                                <div className="flex flex-wrap gap-1 mt-1">
+                                  {(member.roles || []).map(roleId => {
+                                    const roleDef = accessConfig.roles.find(r => r.id === roleId) || { label: roleId, description: 'Unknown role' };
+                                    return (
+                                      <div key={roleId} className="relative group/role inline-block">
+                                        <span className="text-[8px] font-black text-indigo-500 bg-indigo-50 dark:bg-indigo-900/30 dark:text-indigo-400 px-2 py-0.5 rounded uppercase tracking-widest cursor-help">
+                                          {roleDef.label}
+                                        </span>
+                                        <div className="absolute left-0 bottom-full mb-2 w-48 p-2 bg-gray-900 text-white dark:bg-white dark:text-gray-900 rounded-lg shadow-xl text-[9px] font-bold uppercase tracking-widest opacity-0 invisible group-hover/role:opacity-100 group-hover/role:visible transition-all z-[100] pointer-events-none">
+                                          {roleDef.description}
+                                          <div className="absolute left-4 top-full w-2 h-2 bg-gray-900 dark:bg-white rotate-45 -mt-1 pointer-events-none"></div>
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
                               </div>
                             </div>
                           </td>

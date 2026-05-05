@@ -110,6 +110,20 @@ class UserRole {
   }
 
   /**
+   * Check if a user can manage group addresses
+   */
+  static async canManageAddress(userId, groupId) {
+    const [roles, group] = await Promise.all([
+      this.getUserRoles(userId, groupId),
+      query('SELECT user_id FROM public.groups WHERE group_id = $1', [groupId])
+    ]);
+    const isOwner = group.rows[0]?.user_id === userId;
+    const isGroupAdmin = roles.includes('GROUP_ADMIN');
+    const isAddressAdmin = roles.includes('GROUP_ADDRESS_ADMIN');
+    return isOwner || isGroupAdmin || isAddressAdmin;
+  }
+
+  /**
    * Remove a user's role (effectively removing them from the group's role management)
    */
   static async removeRole(userId, groupId) {
