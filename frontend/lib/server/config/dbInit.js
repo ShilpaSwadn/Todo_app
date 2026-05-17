@@ -77,6 +77,7 @@ const initDatabase = async () => {
         is_active BOOLEAN DEFAULT true,
         is_default BOOLEAN DEFAULT false,
         address JSONB DEFAULT '{}',
+        addresses JSONB DEFAULT '[]',
         created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
       );
     `);
@@ -88,7 +89,8 @@ const initDatabase = async () => {
       { name: 'group_members', type: 'UUID[] DEFAULT \'{}\'' },
       { name: 'is_active', type: 'BOOLEAN DEFAULT true' },
       { name: 'is_default', type: 'BOOLEAN DEFAULT false' },
-      { name: 'address', type: 'JSONB DEFAULT \'{}\'' }
+      { name: 'address', type: 'JSONB DEFAULT \'{}\'' },
+      { name: 'addresses', type: 'JSONB DEFAULT \'[]\'' }
     ];
 
     for (const col of groupColumnsToAdd) {
@@ -108,6 +110,8 @@ const initDatabase = async () => {
             ELSIF '${col.name}' = 'is_default' THEN
               -- Mark the 'Personal Hub' or 'default group' as default if they exist
               UPDATE public.groups SET is_default = true WHERE group_name IN ('Personal Hub', 'default group');
+            ELSIF '${col.name}' = 'addresses' THEN
+              UPDATE public.groups SET addresses = jsonb_build_array(address) WHERE address IS NOT NULL AND address::text != '{}';
             END IF;
           END IF;
         END $$;

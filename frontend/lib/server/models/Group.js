@@ -75,6 +75,53 @@ class Group {
     const result = await query(sqlQuery, [address, groupId]);
     return result.rows[0] || null;
   }
+
+  static async addAddress(groupId, address) {
+    address.id = uuidv7();
+    const sqlQuery = `
+      UPDATE public.groups 
+      SET addresses = addresses || $1::jsonb
+      WHERE group_id = $2
+      RETURNING *
+    `;
+    const result = await query(sqlQuery, [JSON.stringify([address]), groupId]);
+    return result.rows[0] || null;
+  }
+
+  static async editAddress(groupId, addressId, updatedAddress) {
+    updatedAddress.id = addressId;
+    const sqlQuery = `
+      UPDATE public.groups
+      SET addresses = (
+        SELECT COALESCE(jsonb_agg(
+          CASE
+            WHEN COALESCE(elem->>'id', 'legacy') = $1 THEN $2::jsonb
+            ELSE elem
+          END
+        ), '[]'::jsonb)
+        FROM jsonb_array_elements(addresses) AS elem
+      )
+      WHERE group_id = $3
+      RETURNING *
+    `;
+    const result = await query(sqlQuery, [addressId, JSON.stringify(updatedAddress), groupId]);
+    return result.rows[0] || null;
+  }
+
+  static async removeAddress(groupId, addressId) {
+    const sqlQuery = `
+      UPDATE public.groups
+      SET addresses = (
+        SELECT COALESCE(jsonb_agg(elem), '[]'::jsonb)
+        FROM jsonb_array_elements(addresses) AS elem
+        WHERE COALESCE(elem->>'id', 'legacy') != $1
+      )
+      WHERE group_id = $2
+      RETURNING *
+    `;
+    const result = await query(sqlQuery, [addressId, groupId]);
+    return result.rows[0] || null;
+  }
   static async delete(groupId, userId) {
     const sqlQuery = `
       DELETE FROM public.groups 

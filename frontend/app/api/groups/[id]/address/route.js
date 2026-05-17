@@ -17,28 +17,53 @@ export async function PUT(request, { params }) {
 
     const currentUser = await authService.getUserByUid(uid)
     const body = await request.json()
-    const { address } = body
-
-    if (address !== null) {
-      const { addressLine1, city, stateProvince, postalCode, country } = address
-      if (!addressLine1 || !city || !stateProvince || !postalCode || !country) {
-        return NextResponse.json({ success: false, message: 'Invalid address format. Missing required fields.' }, { status: 400 })
-      }
-      
-      // Basic validation checks matching frontend configs
-      if (addressLine1.length < 5 || addressLine1.length > 100) return NextResponse.json({ success: false, message: 'Address Line 1 must be between 5 and 100 characters.' }, { status: 400 })
-      if (city.length < 2 || city.length > 50) return NextResponse.json({ success: false, message: 'City must be between 2 and 50 characters.' }, { status: 400 })
-      if (stateProvince.length < 2 || stateProvince.length > 50) return NextResponse.json({ success: false, message: 'State/Province must be between 2 and 50 characters.' }, { status: 400 })
-      if (country.length < 2 || country.length > 50) return NextResponse.json({ success: false, message: 'Country must be between 2 and 50 characters.' }, { status: 400 })
-      if (!/^[a-zA-Z0-9 -]{3,10}$/.test(postalCode)) return NextResponse.json({ success: false, message: 'Invalid Postal Code format.' }, { status: 400 })
-    }
+    const { address, addressId, action } = body
 
     const isAuthorized = await UserRole.canManageAddress(currentUser.id, id);
     if (!isAuthorized) {
       return NextResponse.json({ success: false, message: 'Group not found or unauthorized' }, { status: 404 })
     }
 
-    const group = await Group.updateAddress(id, address)
+    let group;
+
+    if (action === 'delete') {
+      if (!addressId) return NextResponse.json({ success: false, message: 'Address ID required' }, { status: 400 })
+      group = await Group.removeAddress(id, addressId)
+    } else {
+      if (!address) return NextResponse.json({ success: false, message: 'Address required' }, { status: 400 })
+      
+      const { country, countryCode } = address
+      if (!country) {
+        return NextResponse.json({ success: false, message: 'Country is required.' }, { status: 400 })
+      }
+      
+      // Ensure at least some address content exists
+      const hasContent = Object.keys(address).some(key => 
+        !['country', 'countryCode', 'id'].includes(key) && address[key] && address[key].toString().trim().length > 0
+      )
+      
+      if (!hasContent) {
+        return NextResponse.json({ success: false, message: 'Address details are missing. Please fill in the required fields.' }, { status: 400 })
+      }
+
+      if (action === 'update' && addressId) {
+        group = await Group.editAddress(id, addressId, address)
+      } else {
+        const targetGroup = await Group.findById(id)
+        if (!targetGroup) {
+          return NextResponse.json({ success: false, message: 'Group not found' }, { status: 404 })
+        }
+        
+        if (targetGroup.is_default) {
+          const addressCount = targetGroup.addresses ? targetGroup.addresses.length : (targetGroup.address && Object.keys(targetGroup.address).length > 0 ? 1 : 0);
+          if (addressCount >= 1) {
+            return NextResponse.json({ success: false, message: 'Default group can only have one address.' }, { status: 400 })
+          }
+        }
+        
+        group = await Group.addAddress(id, address)
+      }
+    }
 
     if (!group) {
       return NextResponse.json({ success: false, message: 'Group not found or unauthorized' }, { status: 404 })
@@ -50,7 +75,8 @@ export async function PUT(request, { params }) {
       group: {
         id: group.group_id,
         name: group.group_name,
-        address: group.address
+        address: group.address,
+        addresses: group.addresses
       }
     })
   } catch (error) {
