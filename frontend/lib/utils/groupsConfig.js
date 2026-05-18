@@ -1,10 +1,10 @@
 /**
- * Group Management Configuration
+ * Groups Configuration
  */
 export const groupsConfig = {
   id: 'groups',
-  title: 'Group Management',
-  description: 'Manage your groups',
+  title: 'Groups',
+  description: 'Create collaborative workspaces, manage members, and configure access permissions.',
   categories: [
     {
       id: 'new_group_identity',

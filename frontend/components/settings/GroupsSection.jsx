@@ -8,7 +8,7 @@ import api from '@/lib/api/client'
 import { LoadingOverlay } from '@/components/ui/LoadingSpinner'
 import { accessConfig } from '@/lib/utils/accessConfig'
 
-export default function GroupSection({ user, config, setError, setSuccess }) {
+export default function GroupsSection({ user, config, setError, setSuccess }) {
   const [groups, setGroups] = useState([])
   const [payments, setPayments] = useState([])
   const [loading, setLoading] = useState(false)
@@ -129,7 +129,11 @@ export default function GroupSection({ user, config, setError, setSuccess }) {
       })
 
       if (response.success) {
-        setGroups(groups.map(g => g.id === groupId ? { ...g, name: editGroupName, description: editGroupDesc } : g))
+        if (response.group) {
+          setGroups(groups.map(g => g.id === groupId ? { ...g, ...response.group } : g))
+        } else {
+          setGroups(groups.map(g => g.id === groupId ? { ...g, name: editGroupName, description: editGroupDesc } : g))
+        }
         setEditingGroupId(null)
         setSuccess(true)
         setTimeout(() => setSuccess(false), 3000)
@@ -364,7 +368,9 @@ export default function GroupSection({ user, config, setError, setSuccess }) {
                     </div>
                   ) : (
                     <>
-                      <h4 className="text-lg font-black text-gray-900 dark:text-white uppercase tracking-wider">{group.name}</h4>
+                      <h4 className="text-lg font-black text-gray-900 dark:text-white uppercase tracking-wider">
+                        {group.is_default && (group.name?.toLowerCase() === 'default group' || group.name?.toLowerCase() === 'personal hub') ? 'Personal hub (self)' : group.name}
+                      </h4>
                       <p className="text-[10px] text-gray-400 font-bold uppercase mt-1 italic tracking-widest opacity-60">{group.description || 'No description'}</p>
                     </>
                   )}
@@ -456,30 +462,28 @@ export default function GroupSection({ user, config, setError, setSuccess }) {
                           </div>
                         ) : (
                           <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => {
+                                setEditingGroupId(group.id);
+                                setEditGroupName(group.name);
+                                setEditGroupDesc(group.description || '');
+                              }}
+                              className="p-3 bg-indigo-50 dark:bg-indigo-900/10 text-indigo-600 rounded-xl hover:bg-indigo-600 hover:text-white transition-all transform active:scale-95"
+                              title="Edit Group"
+                            >
+                              <FiEdit2 className="w-4 h-4" />
+                            </button>
                             {!group.is_default ? (
-                              <>
-                                <button
-                                  onClick={() => {
-                                    setEditingGroupId(group.id);
-                                    setEditGroupName(group.name);
-                                    setEditGroupDesc(group.description || '');
-                                  }}
-                                  className="p-3 bg-indigo-50 dark:bg-indigo-900/10 text-indigo-600 rounded-xl hover:bg-indigo-600 hover:text-white transition-all transform active:scale-95"
-                                  title="Edit Group"
-                                >
-                                  <FiEdit2 className="w-4 h-4" />
-                                </button>
-                                <button
-                                  onClick={() => deleteGroup(group.id)}
-                                  className="p-3 bg-rose-50 dark:bg-rose-900/10 text-rose-600 rounded-xl hover:bg-rose-600 hover:text-white transition-all transform active:scale-95"
-                                  title="Delete Group"
-                                >
-                                  <FiTrash2 className="w-4 h-4" />
-                                </button>
-                              </>
+                              <button
+                                onClick={() => deleteGroup(group.id)}
+                                className="p-3 bg-rose-50 dark:bg-rose-900/10 text-rose-600 rounded-xl hover:bg-rose-600 hover:text-white transition-all transform active:scale-95"
+                                title="Delete Group"
+                              >
+                                <FiTrash2 className="w-4 h-4" />
+                              </button>
                             ) : (
                               <div className="px-4 py-2 bg-gray-50 dark:bg-gray-800/50 rounded-xl">
-                                <span className="text-[8px] font-black text-gray-400 uppercase tracking-[0.2em]">Default Workspace</span>
+                                <span className="text-[8px] font-black text-gray-400 uppercase tracking-[0.2em]">Default</span>
                               </div>
                             )}
                           </div>

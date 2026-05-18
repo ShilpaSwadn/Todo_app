@@ -169,13 +169,20 @@ export default function AccessSection({ user, config, setError, setSuccess }) {
   const isAdmin = currentUserMember?.user_roles?.includes('GROUP_ADMIN')
   const isAuthorized = isOwner || isAdmin
 
+  const adminGroups = groups.filter(g => {
+    if (g.is_default) return false;
+    const currentUserId = user?.id || user?.uid;
+    const isOwnerOfGroup = g.ownerId === currentUserId;
+    const isGroupAdminOfGroup = (g.userRoles || []).includes('GROUP_ADMIN');
+    return isOwnerOfGroup || isGroupAdminOfGroup;
+  });
+
   const getRoleBadgeColor = (role) => {
     switch (role) {
       case 'GROUP_ADMIN': return 'bg-indigo-500/10 text-indigo-600 border-indigo-500/20';
       case 'PAYMENT_ADMIN': return 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20';
       case 'PAYMENT_USER': return 'bg-purple-500/10 text-purple-600 border-purple-500/20';
       case 'GROUP_ADDRESS_ADMIN': return 'bg-amber-500/10 text-amber-600 border-amber-500/20';
-      case 'GROUP_ADDRESS_MEMBER': return 'bg-blue-500/10 text-blue-600 border-blue-500/20';
       default: return 'bg-gray-500/10 text-gray-600 border-gray-500/20';
     }
   }
@@ -195,7 +202,7 @@ export default function AccessSection({ user, config, setError, setSuccess }) {
               className="w-full bg-white dark:bg-gray-900 border-2 border-gray-100 dark:border-gray-800 focus:border-indigo-500 rounded-[1.5rem] p-5 text-[11px] font-black uppercase tracking-widest text-gray-900 dark:text-white appearance-none cursor-pointer outline-none transition-all shadow-sm"
             >
               <option value="">Select a group...</option>
-              {groups.filter(g => !g.is_default).map(g => (
+              {adminGroups.map(g => (
                 <option key={g.id} value={g.id}>{g.name}</option>
               ))}
             </select>

@@ -101,7 +101,6 @@ export async function GET(request) {
         g.created_at as "createdAt",
         g.is_active as "is_active",
         g.is_default as "is_default",
-        g.address as "address",
         COALESCE(ur.user_roles, ARRAY['GROUP_MEMBER']) as "userRoles"
       FROM public.groups g
       LEFT JOIN public.user_roles ur ON g.group_id = ur.group_id AND ur.user_id = $1
@@ -122,8 +121,24 @@ export async function GET(request) {
       const rolesMap = {}
       rolesResult.rows.forEach(r => { rolesMap[r.user_id] = r.user_roles })
 
+      // Fetch addresses for this group from relational many-to-many junction tables
+      const addressesResult = await query(`
+        SELECT a.address_id as id, a.address_line1 as "addressLine1", a.address_line2 as "addressLine2",
+               a.city, a.state_province as "stateProvince", a.postal_code as "postalCode", a.country,
+               ga.is_default
+        FROM public.addresses a
+        JOIN public.group_addresses ga ON ga.address_id = a.address_id
+        WHERE ga.group_id = $1
+        ORDER BY ga.is_default DESC, a.created_at ASC
+      `, [group.id]);
+
+      const addresses = addressesResult.rows;
+      const defaultAddress = addresses.find(addr => addr.is_default) || null;
+
       return {
         ...group,
+        address: defaultAddress,
+        addresses: addresses,
         members: memberDetails.map(m => ({
           id: m.id,
           name: `${m.first_name} ${m.last_name || ''}`.trim(),

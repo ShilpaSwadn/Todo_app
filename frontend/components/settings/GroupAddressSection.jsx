@@ -5,6 +5,52 @@ import { FiPlus, FiMapPin, FiTrash2, FiChevronRight, FiEdit2, FiCheck, FiX, FiLo
 import api from '@/lib/api/client'
 import { LoadingOverlay } from '@/components/ui/LoadingSpinner'
 
+const localCountryFallbackData = {
+  BJ: {
+    fmt: "%N%n%O%n%A%n%C",
+    require: "AC",
+    state_name_type: "department"
+  },
+  IN: {
+    fmt: "%A%C%S%Z",
+    require: "ACSZ",
+    zip: "[1-9][0-9]{5}",
+    zip_name_type: "pin",
+    state_name_type: "state"
+  },
+  US: {
+    fmt: "%A%C%S%Z",
+    require: "ACSZ",
+    zip: "[0-9]{5}(?:-[0-9]{4})?",
+    zip_name_type: "zip",
+    state_name_type: "state"
+  },
+  AT: {
+    fmt: "%A%Z%C",
+    require: "ACZ",
+    zip: "[0-9]{4}",
+    zip_name_type: "postal",
+    state_name_type: "province"
+  },
+  GB: {
+    fmt: "%A%C%Z",
+    require: "ACZ",
+    zip: "[A-Z]{1,2}[0-9][A-Z0-9]? ?[0-9][A-Z]{2}",
+    zip_name_type: "postcode",
+    state_name_type: "county"
+  }
+};
+export function getProfessionalGroupName(group) {
+  if (!group) return '';
+  const isDefault = group.is_default || group.isDefault;
+  if (isDefault) {
+    if (!group.name || group.name.toLowerCase() === 'default group' || group.name.toLowerCase() === 'personal hub' || group.name.toLowerCase() === 'personal hub (self)') {
+      return 'Personal hub (self)';
+    }
+  }
+  return group.name || '';
+}
+
 export default function GroupAddressSection({ user, config, setError, setSuccess }) {
   const [groups, setGroups] = useState([])
   const [loading, setLoading] = useState(false)
@@ -20,9 +66,10 @@ export default function GroupAddressSection({ user, config, setError, setSuccess
   
   const [editingGroupId, setEditingGroupId] = useState(null)
   const [editingAddressId, setEditingAddressId] = useState(null)
+  const [isDefaultAddress, setIsDefaultAddress] = useState(false)
 
   const [formData, setFormData] = useState({
-    groupId: '',
+    groupIds: [],
     country: '',
     dynamicFields: {} 
   })
@@ -57,12 +104,18 @@ export default function GroupAddressSection({ user, config, setError, setSuccess
       }
       try {
         setLoadingFormat(true)
-        const response = await fetch(`https://chromium-i18n.appspot.com/ssl-address/data/${formData.country}`)
-        const data = await response.json()
-        setAddressMetadata(data)
+        const response = await fetch(`/api/countries/${formData.country}`)
+        const json = await response.json()
+        if (json.success && json.data) {
+          setAddressMetadata(json.data)
+        } else {
+          const fallback = localCountryFallbackData[formData.country];
+          setAddressMetadata(fallback || null)
+        }
       } catch (err) {
         console.error("Failed to fetch address metadata:", err)
-        setAddressMetadata(null)
+        const fallback = localCountryFallbackData[formData.country];
+        setAddressMetadata(fallback || null)
       } finally {
         setLoadingFormat(false)
       }
@@ -70,84 +123,92 @@ export default function GroupAddressSection({ user, config, setError, setSuccess
     fetchMetadata()
   }, [formData.country])
 
-  const getLabel = (key, metadata) => {
-    const labels = {
-      'A': 'Address Line 1',
-      'C': 'City',
-      'S': metadata?.state_name_type === 'state' ? 'State' : 
-           metadata?.state_name_type === 'province' ? 'Province' : 'State/Province',
-      'Z': metadata?.zip_name_type === 'pin' ? 'PIN Code' :
-           metadata?.zip_name_type === 'postal' ? 'Postal Code' : 'ZIP Code',
-      'X': 'Address Line 2'
-    };
-    return labels[key] || key;
-  };
-
   const getDynamicFields = useCallback(() => {
-    if (!addressMetadata) return [
-      { id: 'addressLine1', label: 'Address Line 1', required: true },
-      { id: 'addressLine2', label: 'Address Line 2', required: false },
-      { id: 'city', label: 'City', required: true },
-      { id: 'stateProvince', label: 'State/Province', required: true },
-      { id: 'postalCode', label: 'Postal Code', required: true }
-    ];
+    // If no metadata has been loaded yet, return a clean default set of international fields
+    if (!addressMetadata) {
+      return [
+        { id: 'addressLine1', label: 'Address Line 1', required: true },
+        { id: 'addressLine2', label: 'Address Line 2 (Optional)', required: false },
+        { id: 'city', label: 'City', required: true },
+        { id: 'stateProvince', label: 'State/Province (Optional)', required: false },
+        { id: 'postalCode', label: 'Postal Code (Optional)', required: false }
+      ];
+    }
 
     const fmt = addressMetadata.fmt || '%A%C%S%Z';
+    const requireStr = addressMetadata.require || 'ACSZ';
     const fields = [];
     const seen = new Set();
-    const requiredStr = addressMetadata.require || 'ACSZ';
 
-    // %A = Address, %C = City, %S = State, %Z = Zip
+    // Map chromium-i18n symbols to field IDs
+    const symbolMap = {
+      'A': 'addressLine1',
+      'C': 'city',
+      'S': 'stateProvince',
+      'Z': 'postalCode'
+    };
+
+    // Determine clean localized labels based on API type configs
+    const getLocalizedLabel = (sym) => {
+      if (sym === 'A') return 'Street Address';
+      if (sym === 'C') return 'City';
+      if (sym === 'S') {
+        const type = addressMetadata.state_name_type;
+        return type === 'state' ? 'State' :
+               type === 'province' ? 'Province' :
+               type === 'county' ? 'County' :
+               type === 'department' ? 'Department' :
+               type === 'prefecture' ? 'Prefecture' : 'State/Province';
+      }
+      if (sym === 'Z') {
+        const type = addressMetadata.zip_name_type;
+        return type === 'pin' ? 'Pin Code' :
+               type === 'postal' ? 'Postal Code' :
+               type === 'zip' ? 'ZIP Code' :
+               type === 'postcode' ? 'Postcode' : 'Postal Code';
+      }
+      return sym;
+    };
+
     const parts = fmt.split('%').filter(Boolean);
     parts.forEach(part => {
       const char = part[0];
-      let fieldId = '';
-      if (char === 'A') fieldId = 'addressLine1';
-      else if (char === 'C') fieldId = 'city';
-      else if (char === 'S') fieldId = 'stateProvince';
-      else if (char === 'Z') fieldId = 'postalCode';
+      const fieldId = symbolMap[char];
 
       if (fieldId && !seen.has(fieldId)) {
-        let maxLength = addressMetadata.max_length || null;
-        if (char === 'Z') {
-          if (formData.country === 'IN') maxLength = 6;
-          else if (formData.country === 'DE') maxLength = 5;
-          else if (formData.country === 'US') maxLength = 10;
-        }
-
         fields.push({
           id: fieldId,
-          label: getLabel(char, addressMetadata),
-          required: requiredStr.includes(char),
-          placeholder: `Enter ${getLabel(char, addressMetadata).toLowerCase()}`,
-          maxLength: maxLength
+          label: getLocalizedLabel(char),
+          required: requireStr.includes(char),
+          placeholder: `Enter ${getLocalizedLabel(char).toLowerCase()}`
         });
         seen.add(fieldId);
       }
     });
 
-    // Always ensure Address Line 2 exists if not in format
+    // Always ensure Address Line 2 exists
     if (!seen.has('addressLine2')) {
       fields.splice(1, 0, {
         id: 'addressLine2',
-        label: 'Address Line 2',
+        label: 'Apartment, Suite, etc. (Optional)',
         required: false,
-        placeholder: 'Enter apartment, suite, etc.'
+        placeholder: 'Enter apartment, suite, unit, etc.'
       });
     }
 
     return fields;
-  }, [addressMetadata, formData.country]);
+  }, [addressMetadata]);
 
   const resetForm = () => {
     setFormData({
-      groupId: '',
+      groupIds: [],
       country: '',
       dynamicFields: {}
     })
     setAddressMetadata(null)
     setEditingGroupId(null)
     setEditingAddressId(null)
+    setIsDefaultAddress(false)
   }
 
   // Filter groups where user can manage addresses
@@ -159,26 +220,15 @@ export default function GroupAddressSection({ user, config, setError, setSuccess
   });
 
   useEffect(() => {
-    if (authorizedGroups.length > 0 && !formData.groupId) {
+    if (authorizedGroups.length > 0 && (!formData.groupIds || formData.groupIds.length === 0)) {
       const defaultGroup = authorizedGroups.find(g => g.is_default);
-      const defaultAddressCount = defaultGroup ? (defaultGroup.addresses ? defaultGroup.addresses.length : (defaultGroup.address && Object.keys(defaultGroup.address).length > 0 ? 1 : 0)) : 0;
-      
-      if (defaultGroup && defaultAddressCount === 0) {
-        setFormData(prev => ({ ...prev, groupId: defaultGroup.id }));
-      } else {
-        const availableGroup = authorizedGroups.find(g => {
-          if (g.is_default) return false;
-          return true;
-        });
-        if (availableGroup) {
-          setFormData(prev => ({ ...prev, groupId: availableGroup.id }));
-        } else if (authorizedGroups[0]) {
-          // Fallback, though the default group might be disabled in the dropdown
-          setFormData(prev => ({ ...prev, groupId: authorizedGroups[0].id }));
-        }
+      if (defaultGroup) {
+        setFormData(prev => ({ ...prev, groupIds: [defaultGroup.id] }));
+      } else if (authorizedGroups[0]) {
+        setFormData(prev => ({ ...prev, groupIds: [authorizedGroups[0].id] }));
       }
     }
-  }, [authorizedGroups, formData.groupId])
+  }, [authorizedGroups, formData.groupIds])
 
   const fetchGroups = async () => {
     try {
@@ -198,11 +248,16 @@ export default function GroupAddressSection({ user, config, setError, setSuccess
     if (e) e.preventDefault()
     setError('')
 
-    const { groupId, country, dynamicFields } = formData;
+    let { groupIds, country, dynamicFields } = formData;
     const errors = [];
     
-    if (!groupId) {
-      errors.push('Please select a group.');
+    if (!groupIds || groupIds.length === 0) {
+      const defaultGroup = authorizedGroups.find(g => g.is_default);
+      if (defaultGroup) {
+        groupIds = [defaultGroup.id];
+      } else {
+        errors.push('Please select at least one group.');
+      }
     }
 
     if (!country) {
@@ -217,17 +272,24 @@ export default function GroupAddressSection({ user, config, setError, setSuccess
     const currentFields = getDynamicFields();
     const requiredFields = currentFields.filter(f => f.required);
 
-    // Validation Rules mapping
-    const validationRules = {
-      IN: { zip: /^[1-9][0-9]{5}$/, zipMsg: 'PIN Code must be exactly 6 digits.' },
-      DE: { zip: /^[0-9]{5}$/, zipMsg: 'Postal Code must be exactly 5 digits.' },
-      US: { zip: /^[0-9]{5}(?:-[0-9]{4})?$/, zipMsg: 'ZIP Code must be 5 digits (or 5+4 format).' }
-    };
+    // Resolve ZIP validations automatically from addressMetadata regex patterns
+    let postalRegex = /^[a-zA-Z0-9 -]{3,10}$/;
+    let postalLabel = 'Postal Code';
 
-    const rules = validationRules[country] || { 
-      zip: addressMetadata?.zip ? new RegExp(`^${addressMetadata.zip}$`) : /^[a-zA-Z0-9 -]{3,10}$/,
-      zipMsg: `Invalid ${getLabel('Z', addressMetadata)} format.`
-    };
+    if (addressMetadata) {
+      if (addressMetadata.zip) {
+        try {
+          postalRegex = new RegExp(`^${addressMetadata.zip}$`, 'i');
+        } catch (e) {
+          console.error("Invalid regex in addressMetadata:", e);
+        }
+      }
+      const type = addressMetadata.zip_name_type;
+      postalLabel = type === 'pin' ? 'Pin Code' :
+                    type === 'postal' ? 'Postal Code' :
+                    type === 'zip' ? 'ZIP Code' :
+                    type === 'postcode' ? 'Postcode' : 'Postal Code';
+    }
 
     requiredFields.forEach(field => {
       const value = dynamicFields[field.id]?.trim() || '';
@@ -240,20 +302,14 @@ export default function GroupAddressSection({ user, config, setError, setSuccess
             errors.push(`${field.label} contains invalid characters.`);
           }
         }
-        
-        // Address lines
-        if (field.id === 'addressLine1' || field.id === 'addressLine2') {
-          if (value && !/^[a-zA-Z0-9\s.,\-\/#':()]+$/.test(value)) {
-            errors.push(`${field.label} contains invalid characters.`);
-          }
-        }
       }
     });
 
-    // Zip/Postal specific validation
+    // Zip/Postal specific validation if field is visible
+    const hasPostalCodeField = currentFields.some(f => f.id === 'postalCode');
     const postalValue = dynamicFields.postalCode || '';
-    if (postalValue && !rules.zip.test(postalValue)) {
-      errors.push(rules.zipMsg);
+    if (hasPostalCodeField && postalValue && !postalRegex.test(postalValue)) {
+      errors.push(`Invalid ${postalLabel} format.`);
     }
 
     if (errors.length > 0) {
@@ -273,18 +329,16 @@ export default function GroupAddressSection({ user, config, setError, setSuccess
           country: countryName,
           countryCode: country
         },
+        isDefault: isDefaultAddress,
         action: editingAddressId ? 'update' : 'add',
-        addressId: editingAddressId
+        addressId: editingAddressId,
+        groupIds: groupIds
       };
 
-      const response = await api.put(`/groups/${groupId}/address`, payload)
+      const response = await api.put(`/groups/${groupIds[0]}/address`, payload)
 
       if (response.success) {
-        if (response.group) {
-          setGroups(groups.map(g => g.id === groupId ? { ...g, ...response.group } : g));
-        } else {
-          fetchGroups();
-        }
+        await fetchGroups();
         setShowForm(false)
         resetForm()
         setSuccess(true)
@@ -310,11 +364,7 @@ export default function GroupAddressSection({ user, config, setError, setSuccess
       });
 
       if (response.success) {
-        if (response.group) {
-          setGroups(groups.map(g => g.id === groupId ? { ...g, ...response.group } : g));
-        } else {
-          fetchGroups();
-        }
+        await fetchGroups();
         setConfirmDeleteId(null);
         setSuccess(true);
         setTimeout(() => setSuccess(false), 5000);
@@ -329,16 +379,25 @@ export default function GroupAddressSection({ user, config, setError, setSuccess
   // Flatten all addresses from all groups for display
   const allAddresses = [];
   groups.forEach(g => {
+    const currentUserId = user?.id || user?.uid;
+    const isOwner = g.ownerId === currentUserId;
+    const hasManageRole = (g.userRoles || []).some(r => ['GROUP_ADMIN', 'GROUP_ADDRESS_ADMIN'].includes(r));
+    const canManageAddress = isOwner || hasManageRole;
+
     if (g.addresses && Array.isArray(g.addresses)) {
-      g.addresses.forEach(addr => allAddresses.push({ ...addr, group: g }));
+      g.addresses.forEach(addr => {
+        if (canManageAddress || addr.is_default) {
+          allAddresses.push({ ...addr, group: g });
+        }
+      });
     } else if (g.address && Object.keys(g.address).length > 0) {
-      // Fallback for old data
+      // Fallback for old data (legacy single address is always treated as default)
       allAddresses.push({ ...g.address, group: g, id: 'legacy' });
     }
   });
 
-  const isFormValid = formData.groupId && 
-                      formData.country && 
+  const isFormValid = formData.country && 
+                      formData.groupIds && formData.groupIds.length > 0 &&
                       getDynamicFields().every(f => !f.required || (formData.dynamicFields[f.id] && formData.dynamicFields[f.id].trim() !== ''));
 
   return (
@@ -384,31 +443,34 @@ export default function GroupAddressSection({ user, config, setError, setSuccess
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
             {/* Group Selection */}
             <div className="space-y-3 md:col-span-2">
-              <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest px-2">Select Group</label>
-              <div className="relative">
-                <select
-                  required
-                  value={formData.groupId}
-                  onChange={(e) => setFormData({ ...formData, groupId: e.target.value })}
-                  disabled={!!editingGroupId}
-                  className="w-full h-14 px-6 bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-2xl text-xs font-black uppercase tracking-[0.1em] focus:ring-4 focus:ring-indigo-500/10 outline-none transition-all appearance-none cursor-pointer disabled:opacity-50"
-                >
-                  {!formData.groupId && <option value="">Choose a group</option>}
-                  {authorizedGroups.map(group => {
-                    const isDefault = group.is_default;
-                    const addressCount = group.addresses ? group.addresses.length : (group.address && Object.keys(group.address).length > 0 ? 1 : 0);
-                    const isDisabled = !editingAddressId && isDefault && addressCount >= 1;
-                    
-                    return (
-                      <option key={group.id} value={group.id} disabled={isDisabled}>
-                        {group.name} {isDefault ? '(SYSTEM DEFAULT)' : ''} {isDisabled ? '(Address already set)' : ''}
-                      </option>
-                    )
-                  })}
-                </select>
-                <div className="absolute right-6 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
-                  <FiChevronRight className="rotate-90" />
-                </div>
+              <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest px-2">Assign to Groups</label>
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                {authorizedGroups.map(group => {
+                  const displayName = getProfessionalGroupName(group);
+                  const isSelected = (formData.groupIds || []).includes(group.id);
+                  return (
+                    <label key={group.id} className={`flex items-center gap-4 p-4 rounded-2xl border cursor-pointer transition-all select-none ${
+                      isSelected 
+                        ? 'bg-indigo-50/50 dark:bg-indigo-950/20 border-indigo-200 dark:border-indigo-900/50 text-indigo-600 dark:text-indigo-400 shadow-sm'
+                        : 'bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-750 text-gray-700 dark:text-gray-300'
+                    }`}>
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={(e) => {
+                          const newIds = e.target.checked 
+                            ? [...(formData.groupIds || []), group.id]
+                            : (formData.groupIds || []).filter(id => id !== group.id);
+                          setFormData(prev => ({ ...prev, groupIds: newIds }));
+                        }}
+                        className="w-5 h-5 rounded-lg border-gray-200 dark:border-gray-700 text-indigo-600 focus:ring-indigo-500/20 cursor-pointer"
+                      />
+                      <div className="min-w-0">
+                        <p className="text-[11px] font-black uppercase tracking-wider truncate">{displayName}</p>
+                      </div>
+                    </label>
+                  );
+                })}
               </div>
             </div>
 
@@ -477,6 +539,21 @@ export default function GroupAddressSection({ user, config, setError, setSuccess
             ))}
           </div>
 
+          {(formData.groupIds || []).length > 0 && (
+            <div className="flex items-center gap-3 py-2 px-1 bg-transparent animate-in fade-in duration-200 select-none">
+              <input
+                type="checkbox"
+                id="isDefaultAddressCheckbox"
+                checked={isDefaultAddress}
+                onChange={(e) => setIsDefaultAddress(e.target.checked)}
+                className="w-5 h-5 rounded-lg border-gray-200 dark:border-gray-700 text-indigo-600 focus:ring-indigo-500/20 cursor-pointer"
+              />
+              <label htmlFor="isDefaultAddressCheckbox" className="text-[10px] font-black text-gray-600 dark:text-gray-400 uppercase tracking-widest cursor-pointer">
+                Make this as default address for the assigned groups
+              </label>
+            </div>
+          )}
+
           <button
             type="submit"
             disabled={saving || !isFormValid}
@@ -514,11 +591,6 @@ export default function GroupAddressSection({ user, config, setError, setSuccess
                     <FiMapPin className="w-8 h-8" />
                   </div>
                   <div>
-                    <div className="flex items-center gap-3">
-                      <p className="text-[10px] font-black text-indigo-500 uppercase tracking-[0.2em]">
-                        {group.name} {group.is_default ? '(DEFAULT GROUP)' : ''}
-                      </p>
-                    </div>
                     <p className="text-sm font-black text-gray-900 dark:text-white mt-1 uppercase tracking-tight">
                       {addr.addressLine1} {addr.addressLine2 && `, ${addr.addressLine2}`}
                     </p>
@@ -530,6 +602,18 @@ export default function GroupAddressSection({ user, config, setError, setSuccess
                       <p className="text-[8px] font-black text-indigo-400 bg-indigo-50/50 dark:bg-indigo-900/20 px-2 py-0.5 rounded uppercase tracking-[0.1em]">
                         {addr.country}
                       </p>
+                    </div>
+
+                    <div className="flex items-center gap-3 flex-wrap mt-4 pt-3 border-t border-gray-100 dark:border-gray-800/40">
+                      <span className="text-[9px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest">Group:</span>
+                      <p className="text-[10px] font-black text-indigo-500 dark:text-indigo-400 uppercase tracking-[0.2em]">
+                        {getProfessionalGroupName(group)}
+                      </p>
+                      {addr.is_default && (
+                        <span className="text-[8px] font-black text-emerald-600 bg-emerald-50 dark:bg-emerald-950/30 dark:text-emerald-400 px-2 py-0.5 rounded uppercase tracking-[0.1em] border border-emerald-100 dark:border-emerald-900/30 animate-in fade-in duration-200">
+                          Default Address
+                        </span>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -565,15 +649,20 @@ export default function GroupAddressSection({ user, config, setError, setSuccess
                                   countryCode = found ? found.code : 'OTHER';
                                 }
                                 
-                                const { country, countryCode: _, group: __, id, ...dynamicFields } = addr;
+                                const { country, countryCode: _, group: __, id, is_default, ...dynamicFields } = addr;
                                 
+                                const linkedGroupIds = groups
+                                  .filter(g => (g.addresses || []).some(a => a.id === addr.id) || (g.address && g.address.id === addr.id))
+                                  .map(g => g.id);
+
                                 setFormData({
-                                  groupId: group.id,
+                                  groupIds: linkedGroupIds,
                                   country: countryCode || '',
                                   dynamicFields: dynamicFields
                                 });
                                 setEditingGroupId(group.id);
                                 setEditingAddressId(id === 'legacy' ? null : id);
+                                setIsDefaultAddress(is_default || false);
                                 setShowForm(true);
                                 window.scrollTo({ top: 0, behavior: 'smooth' });
                               }}

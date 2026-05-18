@@ -21,7 +21,7 @@ import {
 import { HiX } from 'react-icons/hi'
 import Link from 'next/link'
 import PersonalSection from '@/components/settings/PersonalSection'
-import GroupSection from '@/components/settings/GroupSection'
+import GroupsSection from '@/components/settings/GroupsSection'
 import LanguageSection from '@/components/settings/LanguageSection'
 import PaymentSection from '@/components/settings/PaymentSection'
 import GroupAddressSection from '@/components/settings/GroupAddressSection'
@@ -226,12 +226,9 @@ export default function SettingsPage() {
         );
       }
 
-      // Group Address section visible if Owner, GROUP_ADMIN, GROUP_ADDRESS_ADMIN, or GROUP_ADDRESS_MEMBER
+      // Group Address section visible if member of any group
       if (section.id === 'group_address') {
-        return userGroups.some(g => 
-          g.ownerId === userId || 
-          (g.userRoles || []).some(role => ['GROUP_ADMIN', 'GROUP_ADDRESS_ADMIN', 'GROUP_ADDRESS_MEMBER'].includes(role))
-        );
+        return userGroups.length > 0;
       }
 
       // Payment section visible if Owner, GROUP_ADMIN, PAYMENT_ADMIN, or PAYMENT_USER in any group
@@ -473,7 +470,7 @@ export default function SettingsPage() {
               )}
 
               {activeSection === 'groups' && (
-                <GroupSection 
+                <GroupsSection 
                   user={user} 
                   config={groupsConfig} 
                   setError={setError} 

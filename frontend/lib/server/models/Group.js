@@ -17,16 +17,50 @@ class Group {
   static async findByMemberId(userId) {
     const sqlQuery = 'SELECT * FROM public.groups WHERE user_id = $1 OR $1 = ANY(group_members)';
     const result = await query(sqlQuery, [userId]);
-    return result.rows;
+    const groups = result.rows;
+
+    for (const group of groups) {
+      const addressesResult = await query(`
+        SELECT a.address_id as id, a.address_line1 as "addressLine1", a.address_line2 as "addressLine2",
+               a.city, a.state_province as "stateProvince", a.postal_code as "postalCode", a.country,
+               ga.is_default
+        FROM public.addresses a
+        JOIN public.group_addresses ga ON ga.address_id = a.address_id
+        WHERE ga.group_id = $1
+        ORDER BY ga.is_default DESC, a.created_at ASC
+      `, [group.group_id]);
+
+      const addresses = addressesResult.rows;
+      group.addresses = addresses;
+      group.address = addresses.find(addr => addr.is_default) || null;
+    }
+
+    return groups;
   }
 
   /**
    * Find a group by group ID
    */
   static async findById(groupId) {
-    const sqlQuery = 'SELECT * FROM public.groups WHERE group_id = $1';
-    const result = await query(sqlQuery, [groupId]);
-    return result.rows[0] || null;
+    const groupResult = await query('SELECT * FROM public.groups WHERE group_id = $1', [groupId]);
+    const group = groupResult.rows[0];
+    if (!group) return null;
+
+    // Fetch all addresses for this group
+    const addressesResult = await query(`
+      SELECT a.address_id as id, a.address_line1 as "addressLine1", a.address_line2 as "addressLine2",
+             a.city, a.state_province as "stateProvince", a.postal_code as "postalCode", a.country,
+             ga.is_default
+      FROM public.addresses a
+      JOIN public.group_addresses ga ON ga.address_id = a.address_id
+      WHERE ga.group_id = $1
+      ORDER BY ga.is_default DESC, a.created_at ASC
+    `, [groupId]);
+
+    const addresses = addressesResult.rows;
+    group.addresses = addresses;
+    group.address = addresses.find(addr => addr.is_default) || null;
+    return group;
   }
 
   /**
@@ -51,10 +85,16 @@ class Group {
       `, [userId, newId, ['GROUP_ADMIN', 'GROUP_MEMBER']]);
     }
 
-    return result.rows[0] || null;
+    const group = result.rows[0] || null;
+    if (group) {
+      group.addresses = [];
+      group.address = null;
+    }
+    return group;
   }
+
   static async update(groupId, data) {
-    const { name, description } = data;
+    const { name, description, defaultAddressId } = data;
     const sqlQuery = `
       UPDATE public.groups 
       SET group_name = $1, group_description = $2, created_at = created_at
@@ -62,65 +102,162 @@ class Group {
       RETURNING *
     `;
     const result = await query(sqlQuery, [name, description, groupId]);
-    return result.rows[0] || null;
+
+    // Handle default address selection
+    if (defaultAddressId !== undefined) {
+      if (defaultAddressId === null || defaultAddressId === '') {
+        // Clear all defaults for this group
+        await query('UPDATE public.group_addresses SET is_default = false WHERE group_id = $1', [groupId]);
+      } else {
+        // Verify this address belongs to this group
+        const existsResult = await query('SELECT 1 FROM public.group_addresses WHERE group_id = $1 AND address_id = $2', [groupId, defaultAddressId]);
+        if (existsResult.rows.length > 0) {
+          // Clear previous defaults
+          await query('UPDATE public.group_addresses SET is_default = false WHERE group_id = $1', [groupId]);
+          // Set this as new default
+          await query('UPDATE public.group_addresses SET is_default = true WHERE group_id = $1 AND address_id = $2', [groupId, defaultAddressId]);
+        }
+      }
+    }
+
+    return this.findById(groupId);
   }
 
-  static async updateAddress(groupId, address) {
-    const sqlQuery = `
-      UPDATE public.groups 
-      SET address = $1
-      WHERE group_id = $2
-      RETURNING *
-    `;
-    const result = await query(sqlQuery, [address, groupId]);
-    return result.rows[0] || null;
+  static async addAddress(groupIdOrIds, address, isDefault = false) {
+    const addressId = uuidv7();
+    const shouldMakeDefault = isDefault === true || isDefault === 'true';
+
+    // Insert into addresses
+    await query(`
+      INSERT INTO public.addresses (address_id, address_line1, address_line2, city, state_province, postal_code, country)
+      VALUES ($1, $2, $3, $4, $5, $6, $7)
+    `, [
+      addressId,
+      address.addressLine1,
+      address.addressLine2 || '',
+      address.city,
+      address.stateProvince || null,
+      address.postalCode || null,
+      address.country
+    ]);
+
+    const groupIds = Array.isArray(groupIdOrIds) ? groupIdOrIds : [groupIdOrIds];
+
+    for (const gid of groupIds) {
+      if (shouldMakeDefault) {
+        await query(`
+          UPDATE public.group_addresses SET is_default = false WHERE group_id = $1
+        `, [gid]);
+      }
+
+      // Check if there is already a default address for this group
+      const hasDefaultResult = await query(`
+        SELECT 1 FROM public.group_addresses WHERE group_id = $1 AND is_default = true
+      `, [gid]);
+      
+      const linkDefault = shouldMakeDefault || hasDefaultResult.rows.length === 0;
+
+      await query(`
+        INSERT INTO public.group_addresses (group_id, address_id, is_default)
+        VALUES ($1, $2, $3)
+      `, [gid, addressId, linkDefault]);
+    }
+
+    return this.findById(groupIds[0]);
   }
 
-  static async addAddress(groupId, address) {
-    address.id = uuidv7();
-    const sqlQuery = `
-      UPDATE public.groups 
-      SET addresses = addresses || $1::jsonb
-      WHERE group_id = $2
-      RETURNING *
-    `;
-    const result = await query(sqlQuery, [JSON.stringify([address]), groupId]);
-    return result.rows[0] || null;
-  }
+  static async editAddress(groupIdOrIds, addressId, updatedAddress, isDefault = false) {
+    const shouldMakeDefault = isDefault === true || isDefault === 'true';
 
-  static async editAddress(groupId, addressId, updatedAddress) {
-    updatedAddress.id = addressId;
-    const sqlQuery = `
-      UPDATE public.groups
-      SET addresses = (
-        SELECT COALESCE(jsonb_agg(
-          CASE
-            WHEN COALESCE(elem->>'id', 'legacy') = $1 THEN $2::jsonb
-            ELSE elem
-          END
-        ), '[]'::jsonb)
-        FROM jsonb_array_elements(addresses) AS elem
-      )
-      WHERE group_id = $3
-      RETURNING *
-    `;
-    const result = await query(sqlQuery, [addressId, JSON.stringify(updatedAddress), groupId]);
-    return result.rows[0] || null;
+    // Update the address in public.addresses
+    await query(`
+      UPDATE public.addresses
+      SET address_line1 = $1, address_line2 = $2, city = $3, state_province = $4, postal_code = $5, country = $6
+      WHERE address_id = $7
+    `, [
+      updatedAddress.addressLine1,
+      updatedAddress.addressLine2 || '',
+      updatedAddress.city,
+      updatedAddress.stateProvince || null,
+      updatedAddress.postalCode || null,
+      updatedAddress.country,
+      addressId
+    ]);
+
+    const groupIds = Array.isArray(groupIdOrIds) ? groupIdOrIds : [groupIdOrIds];
+
+    // Delete any previous group links for this address that are NOT in the new list
+    if (groupIds.length > 0) {
+      await query(`
+        DELETE FROM public.group_addresses
+        WHERE address_id = $1 AND NOT (group_id = ANY($2::uuid[]))
+      `, [addressId, groupIds]);
+    } else {
+      await query(`
+        DELETE FROM public.group_addresses
+        WHERE address_id = $1
+      `, [addressId]);
+    }
+
+    // Upsert the links for the selected groups
+    for (const gid of groupIds) {
+      // Check if link exists
+      const linkCheck = await query(`
+        SELECT is_default FROM public.group_addresses WHERE group_id = $1 AND address_id = $2
+      `, [gid, addressId]);
+
+      if (linkCheck.rows.length === 0) {
+        // Insert new link
+        if (shouldMakeDefault) {
+          await query(`
+            UPDATE public.group_addresses SET is_default = false WHERE group_id = $1
+          `, [gid]);
+        }
+        const hasDefaultResult = await query(`
+          SELECT 1 FROM public.group_addresses WHERE group_id = $1 AND is_default = true
+        `, [gid]);
+        
+        const linkDefault = shouldMakeDefault || hasDefaultResult.rows.length === 0;
+
+        await query(`
+          INSERT INTO public.group_addresses (group_id, address_id, is_default)
+          VALUES ($1, $2, $3)
+        `, [gid, addressId, linkDefault]);
+      } else {
+        // Update existing link's default status
+        if (shouldMakeDefault) {
+          await query(`
+            UPDATE public.group_addresses SET is_default = false WHERE group_id = $1
+          `, [gid]);
+          await query(`
+            UPDATE public.group_addresses SET is_default = true WHERE group_id = $1 AND address_id = $2
+          `, [gid, addressId]);
+        }
+      }
+    }
+
+    return this.findById(groupIds[0]);
   }
 
   static async removeAddress(groupId, addressId) {
-    const sqlQuery = `
-      UPDATE public.groups
-      SET addresses = (
-        SELECT COALESCE(jsonb_agg(elem), '[]'::jsonb)
-        FROM jsonb_array_elements(addresses) AS elem
-        WHERE COALESCE(elem->>'id', 'legacy') != $1
-      )
-      WHERE group_id = $2
-      RETURNING *
-    `;
-    const result = await query(sqlQuery, [addressId, groupId]);
-    return result.rows[0] || null;
+    // Delete from group_addresses junction table first
+    await query(`
+      DELETE FROM public.group_addresses
+      WHERE group_id = $1 AND address_id = $2
+    `, [groupId, addressId]);
+
+    // Delete from addresses table if it is no longer referenced by any other group
+    const referencedResult = await query(`
+      SELECT 1 FROM public.group_addresses WHERE address_id = $1
+    `, [addressId]);
+
+    if (referencedResult.rows.length === 0) {
+      await query(`
+        DELETE FROM public.addresses WHERE address_id = $1
+      `, [addressId]);
+    }
+
+    return this.findById(groupId);
   }
   static async delete(groupId, userId) {
     const sqlQuery = `

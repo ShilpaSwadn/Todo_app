@@ -212,14 +212,22 @@ export default function PaymentSection({ user, config, setError, setSuccess }) {
                         required
                         value={formData.groupId}
                         onChange={(e) => setFormData({ ...formData, groupId: e.target.value })}
-                        className="w-full h-14 px-6 bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-2xl text-xs font-black uppercase tracking-[0.1em] focus:ring-4 focus:ring-indigo-500/10 outline-none transition-all appearance-none cursor-pointer"
+                        className="w-full h-14 px-6 bg-white dark:bg-gray-800 text-gray-900 dark:text-white border border-gray-100 dark:border-gray-700 rounded-2xl text-xs font-black uppercase tracking-[0.1em] focus:ring-4 focus:ring-indigo-500/10 outline-none transition-all appearance-none cursor-pointer"
                       >
                         {!formData.groupId && <option value="">{field.placeholder}</option>}
-                        {authorizedGroups.map(group => (
-                          <option key={group.id} value={group.id}>
-                            {group.name} {group.is_default ? '(SYSTEM DEFAULT)' : ''}
-                          </option>
-                        ))}
+                        {authorizedGroups.map(group => {
+                          const getProfessionalName = (g) => {
+                            if (g.is_default && (!g.name || g.name.toLowerCase() === 'default group' || g.name.toLowerCase() === 'personal hub' || g.name.toLowerCase() === 'personal hub (self)')) {
+                              return 'Personal hub (self)';
+                            }
+                            return g.name;
+                          };
+                          return (
+                            <option key={group.id} value={group.id}>
+                              {getProfessionalName(group)}
+                            </option>
+                          );
+                        })}
                       </select>
                       <div className="absolute right-6 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
                         <FiChevronRight className="rotate-90" />
@@ -237,7 +245,7 @@ export default function PaymentSection({ user, config, setError, setSuccess }) {
                       <select
                         value={formData[field.id]}
                         onChange={(e) => setFormData({ ...formData, [field.id]: e.target.value })}
-                        className="w-full h-14 px-6 bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-2xl text-xs font-black uppercase tracking-[0.1em] focus:ring-4 focus:ring-indigo-500/10 outline-none transition-all appearance-none cursor-pointer"
+                        className="w-full h-14 px-6 bg-white dark:bg-gray-800 text-gray-900 dark:text-white border border-gray-100 dark:border-gray-700 rounded-2xl text-xs font-black uppercase tracking-[0.1em] focus:ring-4 focus:ring-indigo-500/10 outline-none transition-all appearance-none cursor-pointer"
                       >
                         {field.options.map(opt => (
                           <option key={opt} value={opt}>{opt}</option>
@@ -262,7 +270,7 @@ export default function PaymentSection({ user, config, setError, setSuccess }) {
                     onChange={(e) => handleInputChange(field.id, e.target.value)}
                     placeholder={field.placeholder}
                     disabled={editingPaymentId && (field.id === 'cardNumber' || field.id === 'cvv')}
-                    className={`w-full h-14 px-6 bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-2xl text-xs font-bold transition-all focus:ring-4 focus:ring-indigo-500/10 outline-none ${
+                    className={`w-full h-14 px-6 bg-white dark:bg-gray-800 text-gray-900 dark:text-white border border-gray-100 dark:border-gray-700 rounded-2xl text-xs font-bold transition-all focus:ring-4 focus:ring-indigo-500/10 outline-none ${
                         field.id === 'cardholderName' ? 'uppercase tracking-widest' : 
                         field.id === 'cardNumber' ? 'tracking-[0.2em]' : 
                         field.id === 'cvv' ? 'tracking-[0.5em]' : 'tracking-widest'
@@ -328,7 +336,14 @@ export default function PaymentSection({ user, config, setError, setSuccess }) {
                       <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest">{payment.expiry_date}</p>
                       <div className="w-1 h-1 bg-gray-300 rounded-full" />
                       <p className="text-[8px] font-black text-indigo-400 bg-indigo-50/50 dark:bg-indigo-900/20 px-2 py-0.5 rounded uppercase tracking-[0.1em]">
-                        Group: {groups.find(g => g.id === payment.group_id)?.name || 'Unknown Group'}
+                        Group: {(() => {
+                          const g = groups.find(g => g.id === payment.group_id);
+                          if (!g) return 'Unknown Group';
+                          if (g.is_default && (!g.name || g.name.toLowerCase() === 'default group' || g.name.toLowerCase() === 'personal hub' || g.name.toLowerCase() === 'personal hub (self)')) {
+                            return 'Personal hub (self)';
+                          }
+                          return g.name;
+                        })()}
                       </p>
                     </div>
                   </div>

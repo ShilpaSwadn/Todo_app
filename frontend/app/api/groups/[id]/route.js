@@ -18,7 +18,7 @@ export async function PUT(request, { params }) {
 
     const currentUser = await authService.getUserByUid(uid)
     const body = await request.json()
-    const { name, description } = body
+    const { name, description, defaultAddressId } = body
 
     if (!name) {
       return NextResponse.json({ success: false, message: 'Group name is required' }, { status: 400 })
@@ -29,7 +29,7 @@ export async function PUT(request, { params }) {
       return NextResponse.json({ success: false, message: 'Group not found or unauthorized' }, { status: 404 })
     }
 
-    const group = await Group.update(id, { name, description })
+    const group = await Group.update(id, { name, description, defaultAddressId })
 
     if (!group) {
       return NextResponse.json({ success: false, message: 'Group not found or unauthorized' }, { status: 404 })
@@ -41,7 +41,9 @@ export async function PUT(request, { params }) {
       group: {
         id: group.group_id,
         name: group.group_name,
-        description: group.group_description
+        description: group.group_description,
+        address: group.address,
+        addresses: group.addresses
       }
     })
   } catch (error) {

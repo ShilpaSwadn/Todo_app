@@ -17,11 +17,16 @@ export async function PUT(request, { params }) {
 
     const currentUser = await authService.getUserByUid(uid)
     const body = await request.json()
-    const { address, addressId, action } = body
+    const { address, addressId, action, isDefault, groupIds } = body
 
-    const isAuthorized = await UserRole.canManageAddress(currentUser.id, id);
-    if (!isAuthorized) {
-      return NextResponse.json({ success: false, message: 'Group not found or unauthorized' }, { status: 404 })
+    const targetGroupIds = groupIds && Array.isArray(groupIds) && groupIds.length > 0 ? groupIds : [id];
+
+    // Check authorization for all target groups
+    for (const gid of targetGroupIds) {
+      const isAuthorized = await UserRole.canManageAddress(currentUser.id, gid);
+      if (!isAuthorized) {
+        return NextResponse.json({ success: false, message: 'Group not found or unauthorized' }, { status: 404 })
+      }
     }
 
     let group;
@@ -47,21 +52,9 @@ export async function PUT(request, { params }) {
       }
 
       if (action === 'update' && addressId) {
-        group = await Group.editAddress(id, addressId, address)
+        group = await Group.editAddress(targetGroupIds, addressId, address, isDefault)
       } else {
-        const targetGroup = await Group.findById(id)
-        if (!targetGroup) {
-          return NextResponse.json({ success: false, message: 'Group not found' }, { status: 404 })
-        }
-        
-        if (targetGroup.is_default) {
-          const addressCount = targetGroup.addresses ? targetGroup.addresses.length : (targetGroup.address && Object.keys(targetGroup.address).length > 0 ? 1 : 0);
-          if (addressCount >= 1) {
-            return NextResponse.json({ success: false, message: 'Default group can only have one address.' }, { status: 400 })
-          }
-        }
-        
-        group = await Group.addAddress(id, address)
+        group = await Group.addAddress(targetGroupIds, address, isDefault)
       }
     }
 

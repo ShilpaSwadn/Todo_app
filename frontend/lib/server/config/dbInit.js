@@ -207,6 +207,125 @@ const initDatabase = async () => {
       );
     `);
 
+    // 7. Ensure addresses and group_addresses junction tables exist for many-to-many relationship
+    console.log('Database: Synchronizing addresses and group_addresses junction tables...');
+    await query(`
+      CREATE TABLE IF NOT EXISTS public.addresses (
+        address_id UUID PRIMARY KEY DEFAULT public.uuid_v7(),
+        address_line1 VARCHAR(255) NOT NULL,
+        address_line2 VARCHAR(255),
+        city VARCHAR(100) NOT NULL,
+        state_province VARCHAR(100),
+        postal_code VARCHAR(20),
+        country VARCHAR(100) NOT NULL,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
+    // Ensure state_province and postal_code drop NOT NULL constraints for international addresses
+    try {
+      await query(`
+        ALTER TABLE public.addresses ALTER COLUMN state_province DROP NOT NULL;
+        ALTER TABLE public.addresses ALTER COLUMN postal_code DROP NOT NULL;
+      `);
+      console.log('Database: Successfully dropped NOT NULL constraints on addresses columns.');
+    } catch (alterErr) {
+      console.warn('Database: Note - Could not drop constraints (this is normal if columns are already nullable):', alterErr.message);
+    }
+
+    await query(`
+      CREATE TABLE IF NOT EXISTS public.group_addresses (
+        group_id UUID NOT NULL REFERENCES public.groups(group_id) ON DELETE CASCADE,
+        address_id UUID NOT NULL REFERENCES public.addresses(address_id) ON DELETE CASCADE,
+        is_default BOOLEAN DEFAULT false,
+        PRIMARY KEY (group_id, address_id)
+      );
+    `);
+
+    await query(`
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_group_addresses_default 
+      ON public.group_addresses (group_id) 
+      WHERE is_default = true;
+    `);
+
+    // Migrate any legacy addresses in groups JSON to relational many-to-many model
+    console.log('Database: Checking for legacy address migrations...');
+    await query(`
+      DO $$
+      DECLARE
+        g RECORD;
+        addr JSONB;
+        new_addr_id UUID;
+      BEGIN
+        -- Only proceed with migration if the legacy address/addresses columns still exist in the groups table
+        IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='groups' AND column_name='address') THEN
+          IF NOT EXISTS (SELECT 1 FROM public.group_addresses) THEN
+            FOR g IN SELECT group_id, address, addresses FROM public.groups LOOP
+              -- Migrate address (singular, legacy default)
+              IF g.address IS NOT NULL AND g.address::text != '{}' AND g.address->>'addressLine1' IS NOT NULL THEN
+                new_addr_id := public.uuid_v7();
+                INSERT INTO public.addresses (address_id, address_line1, address_line2, city, state_province, postal_code, country)
+                VALUES (
+                  new_addr_id, 
+                  g.address->>'addressLine1', 
+                  g.address->>'addressLine2', 
+                  g.address->>'city', 
+                  g.address->>'stateProvince', 
+                  g.address->>'postalCode', 
+                  g.address->>'country'
+                );
+                
+                INSERT INTO public.group_addresses (group_id, address_id, is_default)
+                VALUES (g.group_id, new_addr_id, true)
+                ON CONFLICT DO NOTHING;
+              END IF;
+
+              -- Migrate addresses array
+              IF g.addresses IS NOT NULL AND jsonb_array_length(g.addresses) > 0 THEN
+                FOR addr IN SELECT * FROM jsonb_array_elements(g.addresses) LOOP
+                  IF addr->>'addressLine1' IS NOT NULL THEN
+                    -- Check if this address is identical to the singular legacy one to avoid duplicate entry
+                    IF g.address IS NOT NULL AND g.address::text != '{}' AND 
+                       addr->>'addressLine1' = g.address->>'addressLine1' AND
+                       COALESCE(addr->>'addressLine2', '') = COALESCE(g.address->>'addressLine2', '') AND
+                       addr->>'city' = g.address->>'city' AND
+                       addr->>'postalCode' = g.address->>'postalCode' THEN
+                      -- Already migrated above as default
+                      CONTINUE;
+                    END IF;
+
+                    new_addr_id := public.uuid_v7();
+                    INSERT INTO public.addresses (address_id, address_line1, address_line2, city, state_province, postal_code, country)
+                    VALUES (
+                      new_addr_id, 
+                      addr->>'addressLine1', 
+                      addr->>'addressLine2', 
+                      addr->>'city', 
+                      addr->>'stateProvince', 
+                      addr->>'postalCode', 
+                      addr->>'country'
+                    );
+
+                    INSERT INTO public.group_addresses (group_id, address_id, is_default)
+                    VALUES (g.group_id, new_addr_id, false)
+                    ON CONFLICT DO NOTHING;
+                  END IF;
+                END LOOP;
+              END IF;
+            END LOOP;
+          END IF;
+        END IF;
+      END $$;
+    `);
+
+    // 8. Safely drop the legacy address and addresses columns from the groups table
+    console.log('Database: Removing obsolete address/addresses JSON columns from groups table...');
+    await query(`
+      ALTER TABLE public.groups DROP COLUMN IF EXISTS address;
+      ALTER TABLE public.groups DROP COLUMN IF EXISTS addresses;
+    `).catch(err => console.warn('Could not drop obsolete columns:', err.message));
+
+
     // Migration: Handle transition from single user_role to multiple user_roles array
     await query(`
       DO $$ 
