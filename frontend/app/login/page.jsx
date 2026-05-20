@@ -144,10 +144,11 @@ export default function Login() {
         }
         console.log('Google login successful, redirecting to dashboard...');
         router.push('/dashboard')
+      } else {
+        setLoading(false)
       }
     } catch (err) {
       setError(formatFirebaseError(err));
-    } finally {
       setLoading(false)
     }
   }
@@ -167,10 +168,11 @@ export default function Login() {
         }
         console.log('Twitter login successful, redirecting to dashboard...');
         router.push('/dashboard');
+      } else {
+        setLoading(false)
       }
     } catch (err) {
       setError(formatFirebaseError(err));
-    } finally {
       setLoading(false)
     }
   }
@@ -719,20 +721,22 @@ export default function Login() {
               {/* Tab Switcher */}
               <div className="flex p-1 bg-gray-100 dark:bg-gray-800 rounded-xl mb-4">
                 <button
-                  onClick={() => { setLoginMode('password'); setError(''); }}
+                  onClick={() => { if (!loading && !sendingOTP) { setLoginMode('password'); setError(''); } }}
+                  disabled={loading || sendingOTP}
                   className={`flex-1 py-2.5 text-sm font-bold rounded-lg transition-all ${loginMode === 'password'
                     ? 'bg-white dark:bg-gray-700 text-indigo-600 dark:text-white shadow-sm'
                     : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
-                    }`}
+                    } disabled:opacity-50 disabled:cursor-not-allowed`}
                 >
                   Password Login
                 </button>
                 <button
-                  onClick={() => { setLoginMode('otp'); setError(''); }}
+                  onClick={() => { if (!loading && !sendingOTP) { setLoginMode('otp'); setError(''); } }}
+                  disabled={loading || sendingOTP}
                   className={`flex-1 py-2.5 text-sm font-bold rounded-lg transition-all ${loginMode === 'otp'
                     ? 'bg-white dark:bg-gray-700 text-indigo-600 dark:text-white shadow-sm'
                     : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
-                    }`}
+                    } disabled:opacity-50 disabled:cursor-not-allowed`}
                 >
                   OTP Login
                 </button>
@@ -874,6 +878,7 @@ export default function Login() {
                               value={identifier}
                               onChange={handleIdentifierChange}
                               required
+                              disabled={loading || sendingOTP}
                               maxLength={(!identifier.includes('@') && !identifier.startsWith('+') && /^\d+/.test(identifier.replace(/\s/g, ''))) ? selectedCountry.maxLength : 100}
                               className={`w-full pl-10 pr-4 py-3 bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 ${(!identifier.includes('@') && !identifier.startsWith('+') && /^\d+/.test(identifier.replace(/\s/g, ''))) ? 'rounded-r-xl border-l-0' : 'rounded-xl'} focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 dark:text-white transition-all`}
                               placeholder={(!identifier.includes('@') && !identifier.startsWith('+') && /^\d+/.test(identifier.replace(/\s/g, ''))) ? `${selectedCountry.maxLength}-digit mobile number` : "Email or mobile number"}
@@ -898,6 +903,7 @@ export default function Login() {
                           value={password}
                           onChange={(e) => setPassword(e.target.value)}
                           required
+                          disabled={loading || sendingOTP}
                           className="w-full pl-10 pr-10 py-3 bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 dark:text-white transition-all"
                           placeholder="••••••••"
                         />
@@ -921,13 +927,13 @@ export default function Login() {
 
                     <button
                       type="submit"
-                      disabled={loading || !identifier || !password}
+                      disabled={loading || sendingOTP || !identifier || !password}
                       className="w-full px-4 py-3 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400 disabled:cursor-not-allowed text-white font-bold rounded-xl transition-all shadow-lg shadow-indigo-200 dark:shadow-none active:scale-[0.98]"
                     >
-                      {loading ? (
+                      {loading || sendingOTP ? (
                         <span className="flex items-center justify-center">
                           <ImSpinner2 className="animate-spin -ml-1 mr-2 h-5 w-5 text-white" />
-                          Signing In...
+                          {sendingOTP ? 'Sending Code...' : 'Signing In...'}
                         </span>
                       ) : (
                         'Sign In'
@@ -985,6 +991,7 @@ export default function Login() {
                               value={identifier}
                               onChange={handleIdentifierChange}
                               required
+                              disabled={loading || sendingOTP}
                               maxLength={(!identifier.includes('@') && !identifier.startsWith('+') && /^\d+/.test(identifier.replace(/\s/g, ''))) ? selectedCountry.maxLength : 100}
                               className={`w-full pl-10 pr-4 py-3 bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 ${(!identifier.includes('@') && !identifier.startsWith('+') && /^\d+/.test(identifier.replace(/\s/g, ''))) ? 'rounded-r-xl border-l-0' : 'rounded-xl'} focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 dark:text-white transition-all`}
                               placeholder={(!identifier.includes('@') && !identifier.startsWith('+') && /^\d+/.test(identifier.replace(/\s/g, ''))) ? `${selectedCountry.maxLength}-digit mobile number` : "Email or mobile number"}
@@ -996,13 +1003,13 @@ export default function Login() {
 
                     <button
                       type="submit"
-                      disabled={sendingOTP || !identifier}
+                      disabled={sendingOTP || loading || !identifier}
                       className="w-full px-4 py-3 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400 disabled:cursor-not-allowed text-white font-bold rounded-xl transition-all shadow-lg shadow-indigo-200 dark:shadow-none active:scale-[0.98]"
                     >
-                      {sendingOTP ? (
+                      {sendingOTP || loading ? (
                         <span className="flex items-center justify-center">
                           <ImSpinner2 className="animate-spin -ml-1 mr-2 h-5 w-5 text-white" />
-                          {deliveryStatus || 'Sending Code...'}
+                          {sendingOTP ? (deliveryStatus || 'Sending Code...') : 'Signing In...'}
                         </span>
                       ) : (
                         'Get Login Code'
@@ -1023,18 +1030,20 @@ export default function Login() {
 
                   <div className="grid grid-cols-2 gap-3 mt-3">
                     <button
+                      type="button"
                       onClick={handleGoogleLogin}
-                      disabled={loading}
-                      className="w-full flex items-center justify-center gap-2 px-4 py-2.5 border-2 border-gray-100 dark:border-gray-800 hover:border-indigo-500 dark:hover:border-indigo-500 rounded-xl transition-all duration-200 font-bold text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800/50 text-xs"
+                      disabled={loading || sendingOTP}
+                      className="w-full flex items-center justify-center gap-2 px-4 py-2.5 border-2 border-gray-100 dark:border-gray-800 hover:border-indigo-500 dark:hover:border-indigo-500 rounded-xl transition-all duration-200 font-bold text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800/50 text-xs disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       <FcGoogle className="w-4 h-4" />
                       Google
                     </button>
 
                     <button
+                      type="button"
                       onClick={handleTwitterLogin}
-                      disabled={loading}
-                      className="w-full flex items-center justify-center gap-2 px-4 py-2.5 border-2 border-gray-100 dark:border-gray-800 hover:border-black dark:hover:border-white rounded-xl transition-all duration-200 font-bold text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800/50 text-xs"
+                      disabled={loading || sendingOTP}
+                      className="w-full flex items-center justify-center gap-2 px-4 py-2.5 border-2 border-gray-100 dark:border-gray-800 hover:border-black dark:hover:border-white rounded-xl transition-all duration-200 font-bold text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800/50 text-xs disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       <RiTwitterXFill className="w-4 h-4 text-black dark:text-white" />
                       Twitter

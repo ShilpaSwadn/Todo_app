@@ -113,10 +113,11 @@ export default function Register() {
           return
         }
         router.push('/dashboard')
+      } else {
+        setLoading(false)
       }
     } catch (err) {
       setError(formatFirebaseError(err))
-    } finally {
       setLoading(false)
     }
   }
@@ -133,10 +134,11 @@ export default function Register() {
           return
         }
         router.push('/dashboard')
+      } else {
+        setLoading(false)
       }
     } catch (err) {
       setError(formatFirebaseError(err))
-    } finally {
       setLoading(false)
     }
   }
@@ -561,7 +563,8 @@ export default function Register() {
                         name="firstName"
                         value={formData.firstName}
                         onChange={handleChange}
-                        className="w-full pl-9 pr-3 py-2 border-2 border-gray-200 dark:border-gray-700 rounded-lg focus:outline-none focus:border-indigo-500 dark:bg-gray-800 dark:text-white transition-colors text-sm"
+                        disabled={loading}
+                        className="w-full pl-9 pr-3 py-2 border-2 border-gray-200 dark:border-gray-700 rounded-lg focus:outline-none focus:border-indigo-500 dark:bg-gray-800 dark:text-white transition-colors text-sm disabled:opacity-50 disabled:cursor-not-allowed"
                         placeholder="John"
                       />
                     </div>
@@ -581,7 +584,8 @@ export default function Register() {
                         name="lastName"
                         value={formData.lastName}
                         onChange={handleChange}
-                        className="w-full pl-9 pr-3 py-2 border-2 border-gray-200 dark:border-gray-700 rounded-lg focus:outline-none focus:border-indigo-500 dark:bg-gray-800 dark:text-white transition-colors text-sm"
+                        disabled={loading}
+                        className="w-full pl-9 pr-3 py-2 border-2 border-gray-200 dark:border-gray-700 rounded-lg focus:outline-none focus:border-indigo-500 dark:bg-gray-800 dark:text-white transition-colors text-sm disabled:opacity-50 disabled:cursor-not-allowed"
                         placeholder="Doe"
                       />
                     </div>
@@ -603,7 +607,8 @@ export default function Register() {
                       name="email"
                       value={formData.email}
                       onChange={handleChange}
-                      className="w-full pl-9 pr-3 py-2 border-2 border-gray-200 dark:border-gray-700 rounded-lg focus:outline-none focus:border-indigo-500 dark:bg-gray-800 dark:text-white transition-colors text-sm"
+                      disabled={loading}
+                      className="w-full pl-9 pr-3 py-2 border-2 border-gray-200 dark:border-gray-700 rounded-lg focus:outline-none focus:border-indigo-500 dark:bg-gray-800 dark:text-white transition-colors text-sm disabled:opacity-50 disabled:cursor-not-allowed"
                       placeholder="john.doe@example.com"
                     />
                   </div>
@@ -637,7 +642,8 @@ export default function Register() {
                         name="password"
                         value={formData.password}
                         onChange={handleChange}
-                        className="w-full pl-9 pr-3 py-2 border-2 border-gray-200 dark:border-gray-700 rounded-lg focus:outline-none focus:border-indigo-500 dark:bg-gray-800 dark:text-white transition-colors text-sm"
+                        disabled={loading}
+                        className="w-full pl-9 pr-3 py-2 border-2 border-gray-200 dark:border-gray-700 rounded-lg focus:outline-none focus:border-indigo-500 dark:bg-gray-800 dark:text-white transition-colors text-sm disabled:opacity-50 disabled:cursor-not-allowed"
                         placeholder="Min 6 characters"
                       />
                     </div>
@@ -657,7 +663,8 @@ export default function Register() {
                         name="confirmPassword"
                         value={formData.confirmPassword}
                         onChange={handleChange}
-                        className="w-full pl-9 pr-3 py-2 border-2 border-gray-200 dark:border-gray-700 rounded-lg focus:outline-none focus:border-indigo-500 dark:bg-gray-800 dark:text-white transition-colors text-sm"
+                        disabled={loading}
+                        className="w-full pl-9 pr-3 py-2 border-2 border-gray-200 dark:border-gray-700 rounded-lg focus:outline-none focus:border-indigo-500 dark:bg-gray-800 dark:text-white transition-colors text-sm disabled:opacity-50 disabled:cursor-not-allowed"
                         placeholder="Confirm password"
                       />
                     </div>
@@ -667,7 +674,7 @@ export default function Register() {
                 <button
                   type="submit"
                   disabled={loading}
-                  className="w-full mt-2 px-4 py-2.5 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 disabled:from-gray-400 disabled:to-gray-500 text-white font-semibold rounded-lg transition-all duration-200 shadow-md hover:shadow-lg disabled:transform-none text-sm"
+                  className="w-full mt-2 px-4 py-2.5 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 disabled:from-gray-400 disabled:to-gray-500 text-white font-semibold rounded-lg transition-all duration-200 shadow-md hover:shadow-lg disabled:transform-none text-sm disabled:cursor-not-allowed"
                 >
                   {loading ? (
                     <span className="flex items-center justify-center">
@@ -692,18 +699,20 @@ export default function Register() {
 
                 <div className="grid grid-cols-2 gap-3 mt-3">
                   <button
+                    type="button"
                     onClick={handleGoogleLogin}
                     disabled={loading}
-                    className="w-full flex items-center justify-center gap-2 px-4 py-2.5 border-2 border-gray-100 dark:border-gray-700 hover:border-indigo-500 dark:hover:border-indigo-500 rounded-lg transition-all duration-200 font-semibold text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800/50 text-xs"
+                    className="w-full flex items-center justify-center gap-2 px-4 py-2.5 border-2 border-gray-100 dark:border-gray-700 hover:border-indigo-500 dark:hover:border-indigo-500 rounded-lg transition-all duration-200 font-semibold text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800/50 text-xs disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <FcGoogle className="w-4 h-4" />
                     Google
                   </button>
 
                   <button
+                    type="button"
                     onClick={handleTwitterLogin}
                     disabled={loading}
-                    className="w-full flex items-center justify-center gap-2 px-4 py-2.5 border-2 border-gray-100 dark:border-gray-700 hover:border-black dark:hover:border-white rounded-lg transition-all duration-200 font-semibold text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800/50 text-xs"
+                    className="w-full flex items-center justify-center gap-2 px-4 py-2.5 border-2 border-gray-100 dark:border-gray-700 hover:border-black dark:hover:border-white rounded-lg transition-all duration-200 font-semibold text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800/50 text-xs disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <RiTwitterXFill className="w-4 h-4 text-black dark:text-white" />
                     Twitter

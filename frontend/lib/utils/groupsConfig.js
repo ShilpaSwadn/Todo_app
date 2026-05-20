@@ -4,7 +4,7 @@
 export const groupsConfig = {
   id: 'groups',
   title: 'Groups',
-  description: 'Create collaborative workspaces, manage members, and configure access permissions.',
+  description: 'Collaborate with team workspaces and permissions.git',
   categories: [
     {
       id: 'new_group_identity',
