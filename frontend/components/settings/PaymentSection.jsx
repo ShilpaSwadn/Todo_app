@@ -17,6 +17,8 @@ export default function PaymentSection({ user, config, setError, setSuccess }) {
   const [confirmDeleteGroupId, setConfirmDeleteGroupId] = useState(null)
   
   const [editingPaymentId, setEditingPaymentId] = useState(null)
+  const [isGroupDropdownOpen, setIsGroupDropdownOpen] = useState(false)
+  const [unlinkSelections, setUnlinkSelections] = useState([])
   
   const [formData, setFormData] = useState({
     cardholderName: '',
@@ -240,39 +242,54 @@ export default function PaymentSection({ user, config, setError, setSuccess }) {
                 return (
                   <div key={field.id} className="space-y-3 md:col-span-2">
                     <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest px-2">Assign to Groups</label>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-                      {authorizedGroups.map(group => {
-                        const getProfessionalName = (g) => {
-                          if (g.is_default && (!g.name || g.name.toLowerCase() === 'default group' || g.name.toLowerCase() === 'personal hub' || g.name.toLowerCase() === 'personal hub (self)')) {
-                            return 'Personal hub (self)';
-                          }
-                          return g.name;
-                        };
-                        const displayName = getProfessionalName(group);
-                        const isSelected = (formData.groupIds || []).includes(group.id);
-                        return (
-                          <label key={group.id} className={`flex items-center gap-4 p-4 rounded-2xl border cursor-pointer transition-all select-none ${
-                            isSelected 
-                              ? 'bg-indigo-50/50 dark:bg-indigo-950/20 border-indigo-200 dark:border-indigo-900/50 text-indigo-600 dark:text-indigo-400 shadow-sm'
-                              : 'bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-750 text-gray-700 dark:text-gray-300'
-                          }`}>
-                            <input
-                              type="checkbox"
-                              checked={isSelected}
-                              onChange={(e) => {
-                                const newIds = e.target.checked 
-                                  ? [...(formData.groupIds || []), group.id]
-                                  : (formData.groupIds || []).filter(id => id !== group.id);
-                                setFormData(prev => ({ ...prev, groupIds: newIds }));
-                              }}
-                              className="w-5 h-5 rounded-lg border-gray-200 dark:border-gray-700 text-indigo-600 focus:ring-indigo-500/20 cursor-pointer"
-                            />
-                            <div className="min-w-0">
-                              <p className="text-[11px] font-black uppercase tracking-wider truncate">{displayName}</p>
-                            </div>
-                          </label>
-                        );
-                      })}
+                    <div className="relative">
+                      <div 
+                        onClick={() => setIsGroupDropdownOpen(!isGroupDropdownOpen)}
+                        className="w-full h-14 px-6 bg-white dark:bg-gray-800 text-gray-900 dark:text-white border border-gray-100 dark:border-gray-700 rounded-2xl text-xs font-bold transition-all focus-within:ring-4 focus-within:ring-indigo-500/10 flex items-center justify-between cursor-pointer"
+                      >
+                        <span className="truncate pr-4 uppercase tracking-widest text-gray-400">
+                          {(formData.groupIds && formData.groupIds.length > 0)
+                            ? `${formData.groupIds.length} GROUP${formData.groupIds.length > 1 ? 'S' : ''} SELECTED`
+                            : 'SELECT GROUPS'}
+                        </span>
+                        <FiChevronRight className={`w-4 h-4 text-gray-400 transition-transform ${isGroupDropdownOpen ? '-rotate-90' : 'rotate-90'}`} />
+                      </div>
+                      
+                      {isGroupDropdownOpen && (
+                        <>
+                          <div className="fixed inset-0 z-40" onClick={() => setIsGroupDropdownOpen(false)} />
+                          <div className="absolute top-full left-0 right-0 mt-2 p-2 bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-2xl shadow-xl z-50 max-h-60 overflow-y-auto animate-in fade-in slide-in-from-top-2 duration-200">
+                            {authorizedGroups.map(group => {
+                              const getProfessionalName = (g) => {
+                                if (g.is_default && (!g.name || g.name.toLowerCase() === 'default group' || g.name.toLowerCase() === 'personal hub' || g.name.toLowerCase() === 'personal hub (self)')) {
+                                  return 'Personal hub (self)';
+                                }
+                                return g.name;
+                              };
+                              const displayName = getProfessionalName(group);
+                              const isSelected = (formData.groupIds || []).includes(group.id);
+                              return (
+                                <label key={group.id} className="flex items-center gap-4 p-3 rounded-xl cursor-pointer transition-all hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                                  <input
+                                    type="checkbox"
+                                    checked={isSelected}
+                                    onChange={(e) => {
+                                      const newIds = e.target.checked 
+                                        ? [...(formData.groupIds || []), group.id]
+                                        : (formData.groupIds || []).filter(id => id !== group.id);
+                                      setFormData(prev => ({ ...prev, groupIds: newIds }));
+                                    }}
+                                    className="w-5 h-5 rounded border-gray-200 dark:border-gray-600 text-indigo-600 focus:ring-indigo-500/20 cursor-pointer"
+                                  />
+                                  <span className="text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider truncate">
+                                    {displayName}
+                                  </span>
+                                </label>
+                              );
+                            })}
+                          </div>
+                        </>
+                      )}
                     </div>
                   </div>
                 )
@@ -419,34 +436,82 @@ export default function PaymentSection({ user, config, setError, setSuccess }) {
                       {isConfirming ? (
                         <div className="flex flex-col items-end gap-2 animate-in fade-in duration-200">
                           {linkedGroups.length > 1 ? (
-                            <>
-                              <p className="text-[9px] font-black text-gray-500 uppercase tracking-widest text-right">Unlink from group:</p>
-                              <div className="flex flex-wrap gap-2 justify-end">
-                                {linkedGroups.map(g => (
+                            <div className="relative group/unlink">
+                              <button className="px-4 py-3 bg-gray-900 dark:bg-white text-white dark:text-gray-900 rounded-2xl text-[9px] font-black uppercase tracking-widest hover:bg-gray-800 transition-all shadow-md flex items-center gap-2">
+                                <span>Unlink Groups...</span>
+                                <FiChevronRight className="w-3 h-3 rotate-90" />
+                              </button>
+                              
+                              <div className="absolute bottom-full right-0 mb-2 w-64 p-4 bg-gray-900 dark:bg-gray-800 border border-gray-800 dark:border-gray-700 rounded-3xl shadow-2xl opacity-0 invisible group-hover/unlink:opacity-100 group-hover/unlink:visible transition-all flex flex-col gap-3 z-50">
+                                <p className="text-[9px] font-black text-gray-400 uppercase tracking-[0.2em] px-1">Select groups to keep</p>
+                                <div className="max-h-48 overflow-y-auto space-y-1 pr-1 custom-scrollbar">
+                                  {linkedGroups.map(g => {
+                                    const isChecked = unlinkSelections.includes(g.id);
+                                    return (
+                                      <label key={g.id} className="flex items-center gap-4 p-3 rounded-xl cursor-pointer hover:bg-gray-800 dark:hover:bg-gray-700 transition-all select-none">
+                                        <div className={`w-5 h-5 flex-shrink-0 rounded flex items-center justify-center border transition-colors ${isChecked ? 'bg-indigo-500 border-indigo-500' : 'bg-transparent border-gray-600'}`}>
+                                          {isChecked && <FiCheck className="w-3 h-3 text-white" />}
+                                        </div>
+                                        <span className={`text-[10px] font-bold uppercase tracking-widest truncate transition-colors ${isChecked ? 'text-white' : 'text-gray-500'}`}>
+                                          {getProfessionalName(g)}
+                                        </span>
+                                        <input
+                                          type="checkbox"
+                                          className="hidden"
+                                          checked={isChecked}
+                                          onChange={(e) => {
+                                            if (e.target.checked) {
+                                              setUnlinkSelections(prev => [...prev, g.id]);
+                                            } else {
+                                              setUnlinkSelections(prev => prev.filter(id => id !== g.id));
+                                            }
+                                          }}
+                                        />
+                                      </label>
+                                    );
+                                  })}
+                                </div>
+                                <div className="flex items-center gap-2 mt-2 pt-3 border-t border-gray-800 dark:border-gray-700">
                                   <button
-                                    key={g.id}
-                                    onClick={() => removePayment(payment.payment_details_id, g.id)}
-                                    className="px-3 py-2 bg-amber-500 text-white rounded-xl text-[8px] font-black uppercase tracking-widest hover:bg-amber-600 transition-all shadow-md"
+                                    onClick={() => setConfirmDeleteId(null)}
+                                    className="px-4 py-3 bg-gray-800 dark:bg-gray-700 text-gray-400 rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-gray-700 transition-all flex-1"
                                   >
-                                    {getProfessionalName(g)}
+                                    Cancel
                                   </button>
-                                ))}
+                                  <button
+                                    onClick={async () => {
+                                      const groupsToUnlink = linkedGroups.filter(g => !unlinkSelections.includes(g.id)).map(g => g.id);
+                                      if (groupsToUnlink.length === 0) {
+                                        setConfirmDeleteId(null);
+                                        return;
+                                      }
+                                      if (groupsToUnlink.length === linkedGroups.length) {
+                                        removePayment(payment.payment_details_id, null);
+                                      } else {
+                                        setSaving(true);
+                                        setSavingLabel('Unlinking groups...');
+                                        try {
+                                          for (const gid of groupsToUnlink) {
+                                            await api.delete(`/payment-info/delete?id=${payment.payment_details_id}&groupId=${gid}`);
+                                          }
+                                          setConfirmDeleteId(null);
+                                          await fetchPayments();
+                                          setSuccess(true);
+                                          setTimeout(() => setSuccess(false), 5000);
+                                        } catch (err) {
+                                          setError('Failed to unlink some groups.');
+                                        } finally {
+                                          setSaving(false);
+                                        }
+                                      }
+                                    }}
+                                    className="px-4 py-3 bg-indigo-600 text-white rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-indigo-700 transition-all flex-1 flex items-center justify-center gap-2"
+                                  >
+                                    <FiCheck className="w-3 h-3" /> Apply
+                                  </button>
+                                </div>
                               </div>
-                              <div className="flex gap-2">
-                                <button
-                                  onClick={() => removePayment(payment.payment_details_id, null)}
-                                  className="px-3 py-2 bg-rose-500 text-white rounded-xl text-[8px] font-black uppercase tracking-widest hover:bg-rose-600 transition-all shadow-md"
-                                >
-                                  Remove from all
-                                </button>
-                                <button
-                                  onClick={() => { setConfirmDeleteId(null); setConfirmDeleteGroupId(null); }}
-                                  className="px-3 py-2 bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 rounded-xl text-[8px] font-black uppercase tracking-widest hover:bg-gray-200 transition-all"
-                                >
-                                  Cancel
-                                </button>
-                              </div>
-                            </>
+                            </div>
                           ) : (
                             <div className="flex items-center gap-2">
                               <button
@@ -487,7 +552,10 @@ export default function PaymentSection({ user, config, setError, setSuccess }) {
                             <FiEdit2 className="w-5 h-5" />
                           </button>
                           <button
-                            onClick={() => setConfirmDeleteId(payment.payment_details_id)}
+                            onClick={() => {
+                              setConfirmDeleteId(payment.payment_details_id);
+                              setUnlinkSelections(linkedGroups.map(g => g.id));
+                            }}
                             className="p-4 bg-white dark:bg-rose-900/20 text-rose-500 rounded-2xl hover:bg-rose-500 hover:text-white shadow-xl transition-all"
                             title="Delete Card"
                           >

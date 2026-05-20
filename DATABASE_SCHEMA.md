@@ -106,5 +106,4 @@ This document provides a comprehensive overview of the database tables used in t
 | :--- | :--- | :--- |
 | `group_id` | UUID (Foreign Key) | Refers to the group the address belongs to. Cascades on delete. |
 | `address_id` | UUID (Foreign Key) | Refers to the specific address details. Cascades on delete. |
-| `is_default` | BOOLEAN | Indicates if this address is the primary/default address for the group (e.g., primary billing address). A database index ensures only one default address exists per group. |
 | **Primary Key** | Composite | `(group_id, address_id)` ensures the same address isn't linked to the same group multiple times. |

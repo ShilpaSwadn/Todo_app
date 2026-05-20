@@ -22,17 +22,16 @@ class Group {
     for (const group of groups) {
       const addressesResult = await query(`
         SELECT a.address_id as id, a.address_line1 as "addressLine1", a.address_line2 as "addressLine2",
-               a.city, a.state_province as "stateProvince", a.postal_code as "postalCode", a.country,
-               ga.is_default
+               a.city, a.state_province as "stateProvince", a.postal_code as "postalCode", a.country
         FROM public.addresses a
         JOIN public.group_addresses ga ON ga.address_id = a.address_id
         WHERE ga.group_id = $1
-        ORDER BY ga.is_default DESC, a.created_at ASC
+        ORDER BY a.created_at ASC
       `, [group.group_id]);
 
       const addresses = addressesResult.rows;
       group.addresses = addresses;
-      group.address = addresses.find(addr => addr.is_default) || null;
+      group.address = addresses[0] || null;
     }
 
     return groups;
@@ -49,17 +48,16 @@ class Group {
     // Fetch all addresses for this group
     const addressesResult = await query(`
       SELECT a.address_id as id, a.address_line1 as "addressLine1", a.address_line2 as "addressLine2",
-             a.city, a.state_province as "stateProvince", a.postal_code as "postalCode", a.country,
-             ga.is_default
+             a.city, a.state_province as "stateProvince", a.postal_code as "postalCode", a.country
       FROM public.addresses a
       JOIN public.group_addresses ga ON ga.address_id = a.address_id
       WHERE ga.group_id = $1
-      ORDER BY ga.is_default DESC, a.created_at ASC
+      ORDER BY a.created_at ASC
     `, [groupId]);
 
     const addresses = addressesResult.rows;
     group.addresses = addresses;
-    group.address = addresses.find(addr => addr.is_default) || null;
+    group.address = addresses[0] || null;
     return group;
   }
 
@@ -103,29 +101,11 @@ class Group {
     `;
     const result = await query(sqlQuery, [name, description, groupId]);
 
-    // Handle default address selection
-    if (defaultAddressId !== undefined) {
-      if (defaultAddressId === null || defaultAddressId === '') {
-        // Clear all defaults for this group
-        await query('UPDATE public.group_addresses SET is_default = false WHERE group_id = $1', [groupId]);
-      } else {
-        // Verify this address belongs to this group
-        const existsResult = await query('SELECT 1 FROM public.group_addresses WHERE group_id = $1 AND address_id = $2', [groupId, defaultAddressId]);
-        if (existsResult.rows.length > 0) {
-          // Clear previous defaults
-          await query('UPDATE public.group_addresses SET is_default = false WHERE group_id = $1', [groupId]);
-          // Set this as new default
-          await query('UPDATE public.group_addresses SET is_default = true WHERE group_id = $1 AND address_id = $2', [groupId, defaultAddressId]);
-        }
-      }
-    }
-
     return this.findById(groupId);
   }
 
-  static async addAddress(groupIdOrIds, address, isDefault = false) {
+  static async addAddress(groupIdOrIds, address) {
     const addressId = uuidv7();
-    const shouldMakeDefault = isDefault === true || isDefault === 'true';
 
     // Insert into addresses
     await query(`
@@ -144,31 +124,16 @@ class Group {
     const groupIds = Array.isArray(groupIdOrIds) ? groupIdOrIds : [groupIdOrIds];
 
     for (const gid of groupIds) {
-      if (shouldMakeDefault) {
-        await query(`
-          UPDATE public.group_addresses SET is_default = false WHERE group_id = $1
-        `, [gid]);
-      }
-
-      // Check if there is already a default address for this group
-      const hasDefaultResult = await query(`
-        SELECT 1 FROM public.group_addresses WHERE group_id = $1 AND is_default = true
-      `, [gid]);
-      
-      const linkDefault = shouldMakeDefault || hasDefaultResult.rows.length === 0;
-
       await query(`
-        INSERT INTO public.group_addresses (group_id, address_id, is_default)
-        VALUES ($1, $2, $3)
-      `, [gid, addressId, linkDefault]);
+        INSERT INTO public.group_addresses (group_id, address_id)
+        VALUES ($1, $2)
+      `, [gid, addressId]);
     }
 
     return this.findById(groupIds[0]);
   }
 
-  static async editAddress(groupIdOrIds, addressId, updatedAddress, isDefault = false) {
-    const shouldMakeDefault = isDefault === true || isDefault === 'true';
-
+  static async editAddress(groupIdOrIds, addressId, updatedAddress) {
     // Update the address in public.addresses
     await query(`
       UPDATE public.addresses
@@ -203,36 +168,15 @@ class Group {
     for (const gid of groupIds) {
       // Check if link exists
       const linkCheck = await query(`
-        SELECT is_default FROM public.group_addresses WHERE group_id = $1 AND address_id = $2
+        SELECT 1 FROM public.group_addresses WHERE group_id = $1 AND address_id = $2
       `, [gid, addressId]);
 
       if (linkCheck.rows.length === 0) {
         // Insert new link
-        if (shouldMakeDefault) {
-          await query(`
-            UPDATE public.group_addresses SET is_default = false WHERE group_id = $1
-          `, [gid]);
-        }
-        const hasDefaultResult = await query(`
-          SELECT 1 FROM public.group_addresses WHERE group_id = $1 AND is_default = true
-        `, [gid]);
-        
-        const linkDefault = shouldMakeDefault || hasDefaultResult.rows.length === 0;
-
         await query(`
-          INSERT INTO public.group_addresses (group_id, address_id, is_default)
-          VALUES ($1, $2, $3)
-        `, [gid, addressId, linkDefault]);
-      } else {
-        // Update existing link's default status
-        if (shouldMakeDefault) {
-          await query(`
-            UPDATE public.group_addresses SET is_default = false WHERE group_id = $1
-          `, [gid]);
-          await query(`
-            UPDATE public.group_addresses SET is_default = true WHERE group_id = $1 AND address_id = $2
-          `, [gid, addressId]);
-        }
+          INSERT INTO public.group_addresses (group_id, address_id)
+          VALUES ($1, $2)
+        `, [gid, addressId]);
       }
     }
 
