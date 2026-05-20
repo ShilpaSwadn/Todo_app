@@ -12,6 +12,7 @@ export async function DELETE(request) {
     }
 
     const id = request.nextUrl.searchParams.get('id')
+    const groupId = request.nextUrl.searchParams.get('groupId')
     if (!id) return NextResponse.json({ error: 'Missing ID' }, { status: 400 })
 
     // Find the payment to get its group_id
@@ -22,16 +23,18 @@ export async function DELETE(request) {
       return NextResponse.json({ error: 'Payment method not found' }, { status: 404 })
     }
 
-    // Check permissions
-    const canManage = await UserRole.canManagePayments(auth.user.id, payment.group_id)
+    const targetGroupId = groupId || payment.group_id;
+
+    // Check permissions on the target group
+    const canManage = await UserRole.canManagePayments(auth.user.id, targetGroupId)
     if (!canManage) {
-      return NextResponse.json({ error: 'Permission denied. You do not have authority to delete this payment method.' }, { status: 403 })
+      return NextResponse.json({ error: 'Permission denied. You do not have authority to delete or unlink this payment method.' }, { status: 403 })
     }
 
-    // Perform hard delete
-    await query('DELETE FROM public.payment_info WHERE payment_details_id = $1', [id]);
+    // Perform delete or unlink via the PaymentInfo model
+    await PaymentInfo.delete(id, auth.user.id, groupId);
     
-    return NextResponse.json({ success: true, message: 'Payment method deleted successfully' })
+    return NextResponse.json({ success: true, message: groupId ? 'Payment method unlinked successfully' : 'Payment method deleted successfully' })
   } catch (error) {
     console.error('Payment info delete error:', error)
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })

@@ -13,10 +13,11 @@ export default function PaymentSection({ user, config, setError, setSuccess }) {
   const [saving, setSaving] = useState(false)
   const [savingLabel, setSavingLabel] = useState('')
   const [showForm, setShowForm] = useState(false)
+  const [confirmDeleteId, setConfirmDeleteId] = useState(null)
+  const [confirmDeleteGroupId, setConfirmDeleteGroupId] = useState(null)
   
   const [editingPaymentId, setEditingPaymentId] = useState(null)
-  const [editPaymentData, setEditPaymentData] = useState({ cardholderName: '', expiryDate: '', provider: '', fundingType: '', groupId: '' })
-
+  
   const [formData, setFormData] = useState({
     cardholderName: '',
     cardNumber: '',
@@ -24,7 +25,7 @@ export default function PaymentSection({ user, config, setError, setSuccess }) {
     cvv: '',
     provider: 'Stripe',
     fundingType: 'credit card',
-    groupId: ''
+    groupIds: []
   })
 
   useEffect(() => {
@@ -42,16 +43,16 @@ export default function PaymentSection({ user, config, setError, setSuccess }) {
 
   // Auto-select first authorized group for payment form
   useEffect(() => {
-    if (authorizedGroups.length > 0 && !formData.groupId) {
+    if (authorizedGroups.length > 0 && (!formData.groupIds || formData.groupIds.length === 0)) {
       // Prioritize default group if authorized
       const defaultGroup = authorizedGroups.find(g => g.is_default);
       if (defaultGroup) {
-        setFormData(prev => ({ ...prev, groupId: defaultGroup.id }));
+        setFormData(prev => ({ ...prev, groupIds: [defaultGroup.id] }));
       } else {
-        setFormData(prev => ({ ...prev, groupId: authorizedGroups[0].id }));
+        setFormData(prev => ({ ...prev, groupIds: [authorizedGroups[0].id] }));
       }
     }
-  }, [authorizedGroups, formData.groupId])
+  }, [authorizedGroups, formData.groupIds])
 
   const fetchPayments = async () => {
     try {
@@ -84,25 +85,57 @@ export default function PaymentSection({ user, config, setError, setSuccess }) {
       cvv: '',
       provider: 'Stripe',
       fundingType: 'credit card',
-      groupId: ''
+      groupIds: []
     })
     setEditingPaymentId(null)
+  }
+
+  const removePayment = async (paymentDetailsId, groupId = null) => {
+    setError('')
+    try {
+      setSavingLabel(groupId ? 'Unlinking card...' : 'Removing card...')
+      setSaving(true)
+      const url = groupId
+        ? `/payment-info/delete?id=${paymentDetailsId}&groupId=${groupId}`
+        : `/payment-info/delete?id=${paymentDetailsId}`
+      const response = await api.delete(url)
+      if (response.success) {
+        setConfirmDeleteId(null)
+        setConfirmDeleteGroupId(null)
+        await fetchPayments()
+        setSuccess(true)
+        setTimeout(() => setSuccess(false), 5000)
+      }
+    } catch (err) {
+      console.error("Failed to delete payment:", err)
+      setError(err.message || 'Failed to remove card.')
+    } finally {
+      setSaving(false)
+    }
   }
 
   const handleSubmitPayment = async (e) => {
     if (e) e.preventDefault()
     setError('')
 
-    const { cardholderName, cardNumber, expiryDate, cvv, provider, fundingType, groupId } = formData;
+    const { cardholderName, cardNumber, expiryDate, cvv, provider, fundingType, groupIds } = formData;
     
     if (!editingPaymentId) {
       if (!cardholderName || !cardNumber || !expiryDate || !cvv) {
         setError('Please fill in all the details for your card so we can add it to your account.');
         return;
       }
+      if (!groupIds || groupIds.length === 0) {
+        setError('Please assign this payment method to at least one group.');
+        return;
+      }
     } else {
       if (!cardholderName || !expiryDate) {
         setError('Please fill in required details.');
+        return;
+      }
+      if (!groupIds || groupIds.length === 0) {
+        setError('Please select at least one group.');
         return;
       }
     }
@@ -115,14 +148,14 @@ export default function PaymentSection({ user, config, setError, setSuccess }) {
         const response = await api.put('/payment-info', {
           paymentDetailsId: editingPaymentId,
           currentGroupId: currentPayment.group_id,
-          groupId,
+          groupIds,
           cardholderName,
           expiryDate,
           provider,
           fundingType
         })
         if (response.success) {
-          setPayments(payments.map(p => p.payment_details_id === editingPaymentId ? response.payment : p))
+          await fetchPayments()
           setShowForm(false)
           resetForm()
           setSuccess(true)
@@ -132,7 +165,7 @@ export default function PaymentSection({ user, config, setError, setSuccess }) {
         setSavingLabel('Adding your card...')
         setSaving(true)
         const response = await api.post('/payment-info', formData)
-        setPayments([...payments, response])
+        await fetchPayments()
         setShowForm(false)
         resetForm()
         setSuccess(true)
@@ -206,32 +239,40 @@ export default function PaymentSection({ user, config, setError, setSuccess }) {
               if (field.id === 'groupId') {
                 return (
                   <div key={field.id} className="space-y-3 md:col-span-2">
-                    <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest px-2">{field.label}</label>
-                    <div className="relative">
-                      <select
-                        required
-                        value={formData.groupId}
-                        onChange={(e) => setFormData({ ...formData, groupId: e.target.value })}
-                        className="w-full h-14 px-6 bg-white dark:bg-gray-800 text-gray-900 dark:text-white border border-gray-100 dark:border-gray-700 rounded-2xl text-xs font-black uppercase tracking-[0.1em] focus:ring-4 focus:ring-indigo-500/10 outline-none transition-all appearance-none cursor-pointer"
-                      >
-                        {!formData.groupId && <option value="">{field.placeholder}</option>}
-                        {authorizedGroups.map(group => {
-                          const getProfessionalName = (g) => {
-                            if (g.is_default && (!g.name || g.name.toLowerCase() === 'default group' || g.name.toLowerCase() === 'personal hub' || g.name.toLowerCase() === 'personal hub (self)')) {
-                              return 'Personal hub (self)';
-                            }
-                            return g.name;
-                          };
-                          return (
-                            <option key={group.id} value={group.id}>
-                              {getProfessionalName(group)}
-                            </option>
-                          );
-                        })}
-                      </select>
-                      <div className="absolute right-6 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
-                        <FiChevronRight className="rotate-90" />
-                      </div>
+                    <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest px-2">Assign to Groups</label>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                      {authorizedGroups.map(group => {
+                        const getProfessionalName = (g) => {
+                          if (g.is_default && (!g.name || g.name.toLowerCase() === 'default group' || g.name.toLowerCase() === 'personal hub' || g.name.toLowerCase() === 'personal hub (self)')) {
+                            return 'Personal hub (self)';
+                          }
+                          return g.name;
+                        };
+                        const displayName = getProfessionalName(group);
+                        const isSelected = (formData.groupIds || []).includes(group.id);
+                        return (
+                          <label key={group.id} className={`flex items-center gap-4 p-4 rounded-2xl border cursor-pointer transition-all select-none ${
+                            isSelected 
+                              ? 'bg-indigo-50/50 dark:bg-indigo-950/20 border-indigo-200 dark:border-indigo-900/50 text-indigo-600 dark:text-indigo-400 shadow-sm'
+                              : 'bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-750 text-gray-700 dark:text-gray-300'
+                          }`}>
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={(e) => {
+                                const newIds = e.target.checked 
+                                  ? [...(formData.groupIds || []), group.id]
+                                  : (formData.groupIds || []).filter(id => id !== group.id);
+                                setFormData(prev => ({ ...prev, groupIds: newIds }));
+                              }}
+                              className="w-5 h-5 rounded-lg border-gray-200 dark:border-gray-700 text-indigo-600 focus:ring-indigo-500/20 cursor-pointer"
+                            />
+                            <div className="min-w-0">
+                              <p className="text-[11px] font-black uppercase tracking-wider truncate">{displayName}</p>
+                            </div>
+                          </label>
+                        );
+                      })}
                     </div>
                   </div>
                 )
@@ -301,95 +342,164 @@ export default function PaymentSection({ user, config, setError, setSuccess }) {
               <p className="text-[11px] font-bold text-gray-400 uppercase tracking-widest">No Payment Methods</p>
             </div>
           ) : (
-            payments.map(payment => (
-              <div
-                key={payment.payment_details_id}
-                className="p-8 bg-gray-50 dark:bg-gray-900 rounded-[2.5rem] border border-gray-100 dark:border-gray-800 flex items-center justify-between group hover:border-indigo-200 dark:hover:border-indigo-900/40 transition-all"
-              >
-                <div className="flex items-center gap-6">
-                  <div className="w-16 h-16 bg-white dark:bg-gray-800 rounded-2xl flex items-center justify-center text-indigo-600 shadow-inner overflow-hidden">
-                    {(() => {
-                      const brand = (payment.card_brand || '').toLowerCase();
-                      if (brand.includes('visa')) return <FaCcVisa className="w-10 h-10" />;
-                      if (brand.includes('mastercard')) return <FaCcMastercard className="w-10 h-10" />;
-                      if (brand.includes('american express') || brand.includes('amex')) return <FaCcAmex className="w-10 h-10" />;
-                      if (brand.includes('discover')) return <FaCcDiscover className="w-10 h-10" />;
-                      if (brand.includes('diners')) return <FaCcDinersClub className="w-10 h-10" />;
-                      return <FaDefaultCard className="w-8 h-8 opacity-40" />;
-                    })()}
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-3">
-                      <p className="text-[10px] font-black text-indigo-500 uppercase tracking-[0.2em]">
-                        {payment.provider || 'Verified Gateway'}
-                      </p>
-                      <span className="text-[8px] px-2 py-0.5 bg-gray-100 dark:bg-gray-800 rounded-full font-black text-gray-400 uppercase tracking-widest">
-                        {payment.funding_type || 'Standard'}
-                      </span>
+            // Deduplicate by payment_details_id, collecting all linked group_ids
+            Object.values(
+              payments.reduce((acc, p) => {
+                if (!acc[p.payment_details_id]) {
+                  acc[p.payment_details_id] = { ...p, linkedGroupIds: [] };
+                }
+                if (p.group_id && !acc[p.payment_details_id].linkedGroupIds.includes(p.group_id)) {
+                  acc[p.payment_details_id].linkedGroupIds.push(p.group_id);
+                }
+                return acc;
+              }, {})
+            ).map(payment => {
+              const linkedGroups = (payment.linkedGroupIds || []).map(gid => groups.find(g => g.id === gid)).filter(Boolean);
+              const getProfessionalName = (g) => {
+                if (g.is_default && (!g.name || ['default group','personal hub','personal hub (self)'].includes(g.name.toLowerCase()))) return 'Personal hub (self)';
+                return g.name;
+              };
+              const canManage = linkedGroups.some(g => {
+                const isOwner = g.ownerId === (user?.id || user?.uid);
+                const hasRole = (g.userRoles || []).some(r => ['GROUP_ADMIN','PAYMENT_ADMIN'].includes(r));
+                return isOwner || hasRole;
+              });
+              const isConfirming = confirmDeleteId === payment.payment_details_id;
+
+              return (
+                <div
+                  key={payment.payment_details_id}
+                  className="p-8 bg-gray-50 dark:bg-gray-900 rounded-[2.5rem] border border-gray-100 dark:border-gray-800 flex items-center justify-between group hover:border-indigo-200 dark:hover:border-indigo-900/40 transition-all"
+                >
+                  <div className="flex items-center gap-6 min-w-0">
+                    <div className="w-16 h-16 flex-shrink-0 bg-white dark:bg-gray-800 rounded-2xl flex items-center justify-center text-indigo-600 shadow-inner overflow-hidden">
+                      {(() => {
+                        const brand = (payment.card_brand || '').toLowerCase();
+                        if (brand.includes('visa')) return <FaCcVisa className="w-10 h-10" />;
+                        if (brand.includes('mastercard')) return <FaCcMastercard className="w-10 h-10" />;
+                        if (brand.includes('american express') || brand.includes('amex')) return <FaCcAmex className="w-10 h-10" />;
+                        if (brand.includes('discover')) return <FaCcDiscover className="w-10 h-10" />;
+                        if (brand.includes('diners')) return <FaCcDinersClub className="w-10 h-10" />;
+                        return <FaDefaultCard className="w-8 h-8 opacity-40" />;
+                      })()}
                     </div>
-                    <p className="text-sm font-black text-gray-900 dark:text-white mt-1 uppercase tracking-tight">
-                      •••• •••• •••• {payment.card_number}
-                    </p>
-                    <div className="flex items-center gap-4 mt-2">
-                      <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest">{payment.cardholder_name}</p>
-                      <div className="w-1 h-1 bg-gray-300 rounded-full" />
-                      <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest">{payment.expiry_date}</p>
-                      <div className="w-1 h-1 bg-gray-300 rounded-full" />
-                      <p className="text-[8px] font-black text-indigo-400 bg-indigo-50/50 dark:bg-indigo-900/20 px-2 py-0.5 rounded uppercase tracking-[0.1em]">
-                        Group: {(() => {
-                          const g = groups.find(g => g.id === payment.group_id);
-                          if (!g) return 'Unknown Group';
-                          if (g.is_default && (!g.name || g.name.toLowerCase() === 'default group' || g.name.toLowerCase() === 'personal hub' || g.name.toLowerCase() === 'personal hub (self)')) {
-                            return 'Personal hub (self)';
-                          }
-                          return g.name;
-                        })()}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-                {(() => {
-                  const group = groups.find(g => g.id === payment.group_id);
-                  const isOwner = group?.ownerId === user?.id;
-                  const hasManageRole = (group?.userRoles || []).some(r => ['GROUP_ADMIN', 'PAYMENT_ADMIN'].includes(r));
-                  
-                  if (isOwner || hasManageRole) {
-                    return (
-                      <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-all">
-                        <button
-                          onClick={() => {
-                            setEditingPaymentId(payment.payment_details_id);
-                            setFormData({
-                              cardholderName: payment.cardholder_name,
-                              cardNumber: `•••• •••• •••• ${payment.card_number}`,
-                              expiryDate: payment.expiry_date,
-                              cvv: '***',
-                              provider: payment.provider || 'Stripe',
-                              fundingType: payment.funding_type || 'credit card',
-                              groupId: payment.group_id
-                            });
-                            setShowForm(true);
-                            window.scrollTo({ top: 0, behavior: 'smooth' });
-                          }}
-                          className="p-4 bg-white dark:bg-indigo-900/20 text-indigo-500 rounded-2xl hover:bg-indigo-500 hover:text-white shadow-xl transition-all"
-                          title="Edit Card"
-                        >
-                          <FiEdit2 className="w-5 h-5" />
-                        </button>
-                        <button
-                          onClick={() => removePayment(payment.payment_details_id)}
-                          className="p-4 bg-white dark:bg-rose-900/20 text-rose-500 rounded-2xl hover:bg-rose-500 hover:text-white shadow-xl transition-all"
-                          title="Delete Card"
-                        >
-                          <FiTrash2 className="w-5 h-5" />
-                        </button>
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-3">
+                        <p className="text-[10px] font-black text-indigo-500 uppercase tracking-[0.2em]">
+                          {payment.provider || 'Verified Gateway'}
+                        </p>
+                        <span className="text-[8px] px-2 py-0.5 bg-gray-100 dark:bg-gray-800 rounded-full font-black text-gray-400 uppercase tracking-widest">
+                          {payment.funding_type || 'Standard'}
+                        </span>
                       </div>
-                    );
-                  }
-                  return null;
-                })()}
-              </div>
-            ))
+                      <p className="text-sm font-black text-gray-900 dark:text-white mt-1 uppercase tracking-tight">
+                        •••• •••• •••• {payment.card_number}
+                      </p>
+                      <div className="flex items-center gap-4 mt-2">
+                        <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest">{payment.cardholder_name}</p>
+                        <div className="w-1 h-1 bg-gray-300 rounded-full" />
+                        <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest">{payment.expiry_date}</p>
+                      </div>
+                      {/* Linked Groups */}
+                      <div className="flex items-center gap-2 flex-wrap mt-3 pt-3 border-t border-gray-100 dark:border-gray-800/40">
+                        <span className="text-[9px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest">Groups:</span>
+                        {linkedGroups.length > 0 ? linkedGroups.map(g => (
+                          <span key={g.id} className="text-[8px] font-black text-indigo-500 dark:text-indigo-400 bg-indigo-50/50 dark:bg-indigo-900/20 px-2 py-0.5 rounded uppercase tracking-[0.1em]">
+                            {getProfessionalName(g)}
+                          </span>
+                        )) : (
+                          <span className="text-[8px] font-black text-gray-400 uppercase tracking-widest">No groups linked</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {canManage && (
+                    <div className="flex-shrink-0 flex items-center gap-2">
+                      {isConfirming ? (
+                        <div className="flex flex-col items-end gap-2 animate-in fade-in duration-200">
+                          {linkedGroups.length > 1 ? (
+                            <>
+                              <p className="text-[9px] font-black text-gray-500 uppercase tracking-widest text-right">Unlink from group:</p>
+                              <div className="flex flex-wrap gap-2 justify-end">
+                                {linkedGroups.map(g => (
+                                  <button
+                                    key={g.id}
+                                    onClick={() => removePayment(payment.payment_details_id, g.id)}
+                                    className="px-3 py-2 bg-amber-500 text-white rounded-xl text-[8px] font-black uppercase tracking-widest hover:bg-amber-600 transition-all shadow-md"
+                                  >
+                                    {getProfessionalName(g)}
+                                  </button>
+                                ))}
+                              </div>
+                              <div className="flex gap-2">
+                                <button
+                                  onClick={() => removePayment(payment.payment_details_id, null)}
+                                  className="px-3 py-2 bg-rose-500 text-white rounded-xl text-[8px] font-black uppercase tracking-widest hover:bg-rose-600 transition-all shadow-md"
+                                >
+                                  Remove from all
+                                </button>
+                                <button
+                                  onClick={() => { setConfirmDeleteId(null); setConfirmDeleteGroupId(null); }}
+                                  className="px-3 py-2 bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 rounded-xl text-[8px] font-black uppercase tracking-widest hover:bg-gray-200 transition-all"
+                                >
+                                  Cancel
+                                </button>
+                              </div>
+                            </>
+                          ) : (
+                            <div className="flex items-center gap-2">
+                              <button
+                                onClick={() => removePayment(payment.payment_details_id, linkedGroups[0]?.id || null)}
+                                className="px-4 py-3 bg-rose-500 text-white rounded-2xl hover:bg-rose-600 transition-all text-[9px] font-black uppercase tracking-widest shadow-lg shadow-rose-200 dark:shadow-none"
+                              >
+                                Confirm
+                              </button>
+                              <button
+                                onClick={() => { setConfirmDeleteId(null); setConfirmDeleteGroupId(null); }}
+                                className="px-4 py-3 bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 rounded-2xl hover:bg-gray-200 dark:hover:bg-gray-700 transition-all text-[9px] font-black uppercase tracking-widest"
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-all">
+                          <button
+                            onClick={() => {
+                              setEditingPaymentId(payment.payment_details_id);
+                              setFormData({
+                                cardholderName: payment.cardholder_name,
+                                cardNumber: `•••• •••• •••• ${payment.card_number}`,
+                                expiryDate: payment.expiry_date,
+                                cvv: '***',
+                                provider: payment.provider || 'Stripe',
+                                fundingType: payment.funding_type || 'credit card',
+                                groupIds: payment.linkedGroupIds || []
+                              });
+                              setShowForm(true);
+                              window.scrollTo({ top: 0, behavior: 'smooth' });
+                            }}
+                            className="p-4 bg-white dark:bg-indigo-900/20 text-indigo-500 rounded-2xl hover:bg-indigo-500 hover:text-white shadow-xl transition-all"
+                            title="Edit Card"
+                          >
+                            <FiEdit2 className="w-5 h-5" />
+                          </button>
+                          <button
+                            onClick={() => setConfirmDeleteId(payment.payment_details_id)}
+                            className="p-4 bg-white dark:bg-rose-900/20 text-rose-500 rounded-2xl hover:bg-rose-500 hover:text-white shadow-xl transition-all"
+                            title="Delete Card"
+                          >
+                            <FiTrash2 className="w-5 h-5" />
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })
           )}
         </div>
       )}

@@ -50,7 +50,7 @@ export async function POST(request) {
     if (!user) return NextResponse.json({ error: 'User not found' }, { status: 404 })
 
     const body = await request.json()
-    const { cardholderName, cardNumber, expiryDate, provider, cvv, fundingType, groupId } = body
+    const { cardholderName, cardNumber, expiryDate, provider, cvv, fundingType, groupId, groupIds } = body
     
     // Perform Security Validation
     const securityCheck = validatePaymentSecurity({ cardNumber, expiryDate, cvv })
@@ -58,29 +58,36 @@ export async function POST(request) {
       return NextResponse.json({ error: 'Security Validation Failed', details: securityCheck.errors }, { status: 400 })
     }
 
-    // Resolve Target Group
-    let targetGroupId = groupId;
-    if (!targetGroupId) {
-      const sqlQuery = 'SELECT group_id FROM public.groups WHERE user_id = $1 AND is_default = true';
-      const { query: dbQuery } = await import('@/lib/server/config/database');
-      const result = await dbQuery(sqlQuery, [user.id]);
-      if (result.rows.length > 0) targetGroupId = result.rows[0].group_id;
-      else {
-        const anyGroup = await Group.findByUserId(user.id);
-        if (!anyGroup) return NextResponse.json({ error: 'User has no available groups' }, { status: 400 });
-        targetGroupId = anyGroup.group_id;
+    // Resolve Target Group IDs
+    let targetGroupIds = groupIds;
+    if (!targetGroupIds || !Array.isArray(targetGroupIds) || targetGroupIds.length === 0) {
+      let resolvedGroupId = groupId;
+      if (!resolvedGroupId) {
+        const sqlQuery = 'SELECT group_id FROM public.groups WHERE user_id = $1 AND is_default = true';
+        const { query: dbQuery } = await import('@/lib/server/config/database');
+        const result = await dbQuery(sqlQuery, [user.id]);
+        if (result.rows.length > 0) resolvedGroupId = result.rows[0].group_id;
+        else {
+          const anyGroup = await Group.findByUserId(user.id);
+          if (!anyGroup) return NextResponse.json({ error: 'User has no available groups' }, { status: 400 });
+          resolvedGroupId = anyGroup.group_id;
+        }
       }
+      targetGroupIds = [resolvedGroupId];
     }
 
-    // Check Permissions
-    const canManage = await UserRole.canManagePayments(user.id, targetGroupId)
-    if (!canManage) {
-      return NextResponse.json({ error: 'Permission denied. You do not have authority to add payments to this group.' }, { status: 403 })
+    // Check Permissions for all target groups
+    for (const gid of targetGroupIds) {
+      const canManage = await UserRole.canManagePayments(user.id, gid)
+      if (!canManage) {
+        return NextResponse.json({ error: `Permission denied. You do not have authority to add payments to group: ${gid}` }, { status: 403 })
+      }
     }
 
     const lastFour = cardNumber.toString().slice(-4)
     const newPayment = await PaymentInfo.create({
-      groupId: targetGroupId,
+      groupIds: targetGroupIds,
+      groupId: targetGroupIds[0],
       userId: user.id,
       cardholderName,
       cardNumber: lastFour,
@@ -108,18 +115,24 @@ export async function PUT(request) {
     if (!user) return NextResponse.json({ error: 'User not found' }, { status: 404 })
 
     const body = await request.json()
-    const { paymentDetailsId, cardholderName, expiryDate, provider, fundingType, groupId, currentGroupId } = body
+    const { paymentDetailsId, cardholderName, expiryDate, provider, fundingType, groupId, groupIds, currentGroupId } = body
     
-    // Check Permissions
-    const canManage = await UserRole.canManagePayments(user.id, currentGroupId || groupId)
-    if (!canManage) {
-      return NextResponse.json({ error: 'Permission denied.' }, { status: 403 })
+    // Resolve Target Group IDs
+    const targetGroupIds = groupIds && Array.isArray(groupIds) && groupIds.length > 0 ? groupIds : (groupId ? [groupId] : []);
+    
+    // Check Permissions for all current and target groups
+    const currentGroupsToCheck = currentGroupId ? [currentGroupId] : (groupId ? [groupId] : []);
+    for (const gid of currentGroupsToCheck) {
+      const canManage = await UserRole.canManagePayments(user.id, gid)
+      if (!canManage) {
+        return NextResponse.json({ error: `Permission denied for group: ${gid}` }, { status: 403 })
+      }
     }
 
-    if (groupId && currentGroupId && groupId !== currentGroupId) {
-      const canManageTarget = await UserRole.canManagePayments(user.id, groupId)
+    for (const gid of targetGroupIds) {
+      const canManageTarget = await UserRole.canManagePayments(user.id, gid)
       if (!canManageTarget) {
-        return NextResponse.json({ error: 'Permission denied for target group.' }, { status: 403 })
+        return NextResponse.json({ error: `Permission denied for target group: ${gid}` }, { status: 403 })
       }
     }
 
@@ -128,7 +141,8 @@ export async function PUT(request) {
       expiryDate,
       provider,
       fundingType,
-      groupId
+      groupId: targetGroupIds[0],
+      groupIds: targetGroupIds
     })
 
     return NextResponse.json({ success: true, payment: updatedPayment })

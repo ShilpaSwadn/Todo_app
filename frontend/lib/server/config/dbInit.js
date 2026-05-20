@@ -196,6 +196,26 @@ const initDatabase = async () => {
       `);
     }
 
+    // 5. Ensure group_payments junction table exists for many-to-many relationship
+    console.log('Database: Synchronizing group_payments junction table...');
+    await query(`
+      CREATE TABLE IF NOT EXISTS public.group_payments (
+        group_id UUID NOT NULL REFERENCES public.groups(group_id) ON DELETE CASCADE,
+        payment_details_id UUID NOT NULL REFERENCES public.payment_info(payment_details_id) ON DELETE CASCADE,
+        PRIMARY KEY (group_id, payment_details_id)
+      );
+    `);
+
+    // Migrate any existing group_id column values to group_payments many-to-many model
+    console.log('Database: Migrating legacy single payment group_ids to group_payments...');
+    await query(`
+      INSERT INTO public.group_payments (group_id, payment_details_id)
+      SELECT group_id, payment_details_id 
+      FROM public.payment_info 
+      WHERE group_id IS NOT NULL
+      ON CONFLICT DO NOTHING;
+    `);
+
     // 6. Ensure user_roles table exists
     console.log('Database: Synchronizing user_roles table...');
     await query(`

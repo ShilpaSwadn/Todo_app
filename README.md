@@ -1,98 +1,69 @@
-# Swadn - Premium Pre-Flight Meal Booking Application
+# Swadn - Premium Pre-Flight Meal Booking & Group Settings Platform
 
-A high-end, full-stack application for pre-flight meal selection and dietary customization. Built with **Next.js 14 (App Router)**, **PostgreSQL**, and **Firebase**, it features a sophisticated multi-provider authentication system and a dynamic, interactive UI.
+Swadn is an elegant, full-stack web application designed to manage premium pre-flight meal bookings and collaborative group configurations. It allows passengers to personalize their in-flight dining experiences while enabling corporate or private groups to manage shared addresses, payment methods, and role-based permissions seamlessly.
 
-## 🚀 Overview
+---
 
-Swadn redefines the in-flight experience by allowing passengers to configure their meals with surgical precision. It's not just a profile manager; it's a complete dietary configuration engine.
+## 🛠️ Technologies Used (The Stack)
 
-### Key Features
-- **Dynamic Meal Configurator**: 3-step configuration flow (Dietary Type ➔ Dish Selection ➔ Ingredient Customization).
-- **Rule-Based Filtering**: Automatic forbidden ingredient detection (e.g., Jain meals automatically exclude root vegetables).
-- **Multi-Cloud Tech**: Powered by Next.js API routes, PostgreSQL for structured data, and Firebase for world-class authentication.
-- **Enterprise-Grade Auth**: 
-  - **Social Logins**: One-click sign-in with Google and Twitter.
-  - **Phone Auth**: Secure SMS-based OTP verification.
-  - **Email Security**: Mandatory account activation via emailed verification links.
-  - **Password Management**: Robust forgot-password/reset flow.
-  - **OTP Security**: Stateless, hash-based OTP verification for high-entropy security.
+Swadn is built using modern, industry-standard web technologies:
 
-## 🛠️ Tech Stack
+*   **Frontend Framework**: `Next.js 14` (App Router) & `React 18`
+*   **Styling & UI**: `Tailwind CSS` & Vanilla CSS (incorporating modern glassmorphism, responsive designs, and smooth hover animations)
+*   **Database**: `PostgreSQL` (powered by high-performance connection pooling and transaction retries via the `pg` client)
+*   **Authentication**: `Firebase Authentication` (Client & Admin SDKs) supporting Email, Google Login, and Phone OTP validation
+*   **Translations & Localization**: `i18next` with adaptive browser language detection
+*   **Transactional Mailer**: `Nodemailer` for dispatching verification links and account activation emails
+*   **Utilities**: `card-validator` for real-time payment validation, and `uuid` for secure entity indexing
 
-### Frontend & Framework
-- **Framework**: Next.js 14 (App Router)
-- **Styling**: Tailwind CSS (with Glassmorphism & Premium Aesthetics)
-- **Icons**: React Icons (Fi, Lu)
-- **State Management**: React Hooks (useState, useMemo, useEffect)
+---
 
-### Backend & Database
-- **Runtime**: Node.js (Next.js Serverless Functions)
-- **Database**: PostgreSQL (Supabase or Local) via `pg` pool
-- **Identity Provider**: Firebase Authentication
-- **Security**: JWT (JSON Web Tokens) & Bcryptjs
-- **Communication**: Nodemailer (for custom OTP/System emails)
+## 🚀 Key Functionalities & Features
 
-## 📁 Project Structure
+### 1. Dynamic Meal Configurator
+*   **3-Stage Selection Flow**: Interactive selection of dietary profile ➔ main course dish ➔ individual ingredient exclusions.
+*   **Cultural Exclusions Rules**: Smart filtering logic (e.g., selecting a *Jain* meal automatically disables and hides forbidden ingredients such as root vegetables).
 
-```
-frontend/                        # Next.js Unified Application
-│   ├── app/                     # Next.js App Router (Pages & API)
-│   │   ├── api/                 # API Routes (The Backend)
-│   │   │   └── auth/            # Auth Logic (Sync, OTP, Register, Login)
-│   │   ├── dashboard/           # Authenticated Dashboard (Swadn App)
-│   │   ├── forgot-password/     # Password Recovery
-│   │   ├── login/               # Adaptive Login (Email/Phone/Social/OTP)
-│   │   ├── register/            # Registration with Activation Logic
-│   │   └── verify/              # Account Activation Entry Point
-│   │
-│   ├── components/              # React Components
-│   │   ├── MealSelector.jsx     # The Core "Swadn Configurator"
-│   │   └── DynamicProfileForm.jsx # Unified Profile Engine
-│   │
-│   ├── lib/                     # System Core
-│   │   ├── firebase.js          # Firebase SDK Initialization
-│   │   ├── auth/                # Client-side Auth Helpers
-│   │   ├── services/            # API & Auth Services
-│   │   └── server/              # Server-side Logic (Models, Config)
-│   │       ├── config/          # Database & Pool Config
-│   │       ├── models/          # PostgreSQL User & OTP Models
-│   │       └── services/        # Backend Auth & Email Services
-│   │
-│   ├── public/                  # Static Assets
-│   └── .env.local               # Environment Secrets
-```
+### 2. Multi-Tenant Group Hub
+*   **Workspace Creation**: Users can create and manage up to 5 organizational groups to group profile data, shared addresses, and billing configurations.
+*   **Interactive Invitations**: Real-time auto-complete user searches by name or email with live feedback states for seamless team additions.
+
+### 3. Granular Role-Based Access Control (RBAC)
+Custom workspace security roles tailored to individual members within groups:
+*   `GROUP_ADMIN`: Full administrative access (inviting/removing members, bulk updating roles, managing group lifecycle).
+*   `PAYMENT_ADMIN`: Add, update, or remove masked group credit cards.
+*   `PAYMENT_USER`: View and select shared group cards for meal purchases.
+*   `GROUP_ADDRESS_ADMIN`: Manage shipping/delivery physical addresses linked to the group.
+*   `GROUP_MEMBER`: Base read-only membership access.
+
+### 4. Dynamic Group Address Manager
+*   **Localization Support**: Form structures and label names (ZIP Code vs Pin Code vs Postcode) adjust dynamically based on the country selected.
+*   **Many-to-Many Group Syncing**: Links a physical address to multiple groups simultaneously, automatically syncing updates across all linked workspaces.
+
+### 5. Verified Payment Vault
+*   **Brand Parser**: Real-time visual identification and badge rendering of card brands (Visa, Mastercard, American Express, Discover, Diners Club).
+*   **Secure Masking**: Visual masking of sensitive card details on both client and backend servers (saving only public metadata and masked representations).
+*   **Many-to-Many Group Linking**: Similar to group addresses, a single payment method can be linked or assigned to multiple groups simultaneously, allowing shared group billing configurations.
+
+### 6. Robust Authentication Gate
+*   **Multi-Auth Portal**: Seamless transitions for social sign-ins (Google) and stateless high-entropy SMS/OTP login workflows.
+*   **Activation Safeguards**: Protects account routes by requiring an email verification token before granting dashboard access.
+
+---
 
 ## 🚥 Getting Started
 
-### 1. Environment Configuration
-Create a `.env.local` file in the `frontend/` directory based on the following pattern:
-
-```env
-# Database (Supabase Recommended)
-DATABASE_URL=postgres://user:pass@host:5432/dbname
-
-# Firebase Client Configuration
-NEXT_PUBLIC_FIREBASE_API_KEY=...
-NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=...
-NEXT_PUBLIC_FIREBASE_PROJECT_ID=...
-# ... other firebase vars
-
-# System Auth
-JWT_SECRET=your_secret_key
-
-# Email (for OTP)
-SMTP_HOST=smtp.gmail.com
-SMTP_PORT=587
-SMTP_USER=your_email@gmail.com
-SMTP_PASS=your_app_password
-```
-
-### 2. Installation & Development
+To run the Swadn platform locally:
 
 ```bash
-cd Todo_app/frontend
+# 1. Navigate to the Next.js workspace
+cd frontend
+
+# 2. Install dependencies
 npm install
+
+# 3. Start the local development server
 npm run dev
 ```
 
-The application will be running at [http://localhost:3000](http://localhost:3000). You can visit this URL in your browser to start using Swadn.
+Open [http://localhost:3000](http://localhost:3000) on your browser to experience Swadn.
