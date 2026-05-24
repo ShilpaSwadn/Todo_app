@@ -35,13 +35,20 @@ export default function PaymentSection({ user, config, setError, setSuccess }) {
     fetchGroups()
   }, [])
 
-  // Filter groups where user can manage payments
+  // Groups where user can manage payments (owner/groupadmin excluded)
   const authorizedGroups = groups.filter(g => {
-    const userId = user?.id || user?.uid;
-    const isOwner = g.ownerId === userId;
-    const hasManageRole = (g.userRoles || []).some(r => ['GROUP_ADMIN', 'PAYMENT_ADMIN'].includes(r));
-    return isOwner || hasManageRole;
+    const isPersonalHub = g.is_default || g.isDefault;
+    const hasManageRole = (g.userRoles || []).some(r => ['PAYMENT_ADMIN'].includes(r));
+    return isPersonalHub || hasManageRole;
   });
+
+  // Groups where user can view payments
+  const viewableGroups = groups.filter(g => {
+    const isPersonalHub = g.is_default || g.isDefault;
+    const hasRole = (g.userRoles || []).some(r => ['PAYMENT_ADMIN', 'PAYMENT_USER'].includes(r));
+    return isPersonalHub || hasRole;
+  });
+  const viewableGroupIds = new Set(viewableGroups.map(g => g.id));
 
   // Auto-select first authorized group for payment form
   useEffect(() => {
@@ -156,17 +163,21 @@ export default function PaymentSection({ user, config, setError, setSuccess }) {
           provider,
           fundingType
         })
-        if (response.success) {
-          await fetchPayments()
-          setShowForm(false)
-          resetForm()
-          setSuccess(true)
-          setTimeout(() => setSuccess(false), 5000);
+        if (!response.success) {
+          throw new Error(response.message || 'Failed to update payment')
         }
+        await fetchPayments()
+        setShowForm(false)
+        resetForm()
+        setSuccess(true)
+        setTimeout(() => setSuccess(false), 5000);
       } else {
         setSavingLabel('Adding your card...')
         setSaving(true)
         const response = await api.post('/payment-info', formData)
+        if (!response.success) {
+          throw new Error(response.message || 'Failed to add payment')
+        }
         await fetchPayments()
         setShowForm(false)
         resetForm()
@@ -370,16 +381,19 @@ export default function PaymentSection({ user, config, setError, setSuccess }) {
                 }
                 return acc;
               }, {})
-            ).map(payment => {
+            )
+            // Only show payments linked to groups where user has PAYMENT_ADMIN or PAYMENT_USER
+            .filter(p => (p.linkedGroupIds || []).some(gid => viewableGroupIds.has(gid)))
+            .map(payment => {
               const linkedGroups = (payment.linkedGroupIds || []).map(gid => groups.find(g => g.id === gid)).filter(Boolean);
               const getProfessionalName = (g) => {
                 if (g.is_default && (!g.name || ['default group','personal hub','personal hub (self)'].includes(g.name.toLowerCase()))) return 'Personal hub (self)';
                 return g.name;
               };
               const canManage = linkedGroups.some(g => {
-                const isOwner = g.ownerId === (user?.id || user?.uid);
-                const hasRole = (g.userRoles || []).some(r => ['GROUP_ADMIN','PAYMENT_ADMIN'].includes(r));
-                return isOwner || hasRole;
+                const isPersonalHub = g.is_default || g.isDefault;
+                const hasRole = (g.userRoles || []).some(r => ['PAYMENT_ADMIN'].includes(r));
+                return isPersonalHub || hasRole;
               });
               const isConfirming = confirmDeleteId === payment.payment_details_id;
 

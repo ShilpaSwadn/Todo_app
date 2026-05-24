@@ -14,7 +14,7 @@ export default function GroupsSection({ user, config, setError, setSuccess }) {
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [savingLabel, setSavingLabel] = useState('Saving...')
-  
+
   // Create form state
   const [showCreateInline, setShowCreateInline] = useState(false)
   const [newGroupData, setNewGroupData] = useState({ name: '', description: '' })
@@ -29,6 +29,9 @@ export default function GroupsSection({ user, config, setError, setSuccess }) {
   const [editGroupName, setEditGroupName] = useState('')
   const [editGroupDesc, setEditGroupDesc] = useState('')
 
+  // Details modal state
+  const [detailsModalGroup, setDetailsModalGroup] = useState(null)
+
   useEffect(() => {
     fetchGroups()
   }, [])
@@ -40,11 +43,11 @@ export default function GroupsSection({ user, config, setError, setSuccess }) {
         api.get('/groups'),
         api.get('/payment-info').catch(() => []) // Gracefully fail if payment-info fails
       ])
-      
+
       if (groupsRes.success) {
         setGroups(groupsRes.groups || [])
       }
-      
+
       if (Array.isArray(paymentsRes)) {
         setPayments(paymentsRes)
       } else if (paymentsRes && Array.isArray(paymentsRes.payments)) {
@@ -79,11 +82,6 @@ export default function GroupsSection({ user, config, setError, setSuccess }) {
   }
 
   const createGroup = async () => {
-    if (groups.length >= 5) {
-      setError('Limit reached: Maximum of 5 groups allowed per account.')
-      return
-    }
-
     if (!newGroupData.name.trim() || selectedInitialMembers.length === 0) {
       setError('A group name and at least one initial member are mandatory.')
       return
@@ -226,12 +224,11 @@ export default function GroupsSection({ user, config, setError, setSuccess }) {
         <div className="flex justify-end -mt-20 mb-8 relative z-10">
           <button
             onClick={() => setShowCreateInline(true)}
-            disabled={groups.length >= 5}
-            className={`p-4 rounded-2xl transition-all shadow-xl active:scale-95 flex items-center gap-2 ${groups.length >= 5 ? 'bg-gray-100 text-gray-400 cursor-not-allowed shadow-none' : 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-indigo-100 dark:shadow-none'}`}
+            className="p-4 rounded-2xl transition-all shadow-xl active:scale-95 flex items-center gap-2 bg-indigo-600 text-white hover:bg-indigo-700 shadow-indigo-100 dark:shadow-none"
           >
             <FiPlus className="w-5 h-5" />
             <span className="text-[10px] font-black uppercase tracking-widest px-2">
-              {groups.length >= 5 ? 'Limit Reached' : 'New Group'}
+              New Group
             </span>
           </button>
         </div>
@@ -376,61 +373,31 @@ export default function GroupsSection({ user, config, setError, setSuccess }) {
                   )}
                 </div>
                 <div className="flex items-center gap-3">
-                  {/* Group Details Pop Overview */}
+                  {/* Group Details Modal Trigger */}
                   {(() => {
                     const groupPayments = payments.filter(p => p.group_id === group.id);
-                    const hasAddress = group.address && Object.keys(group.address).length > 0 && group.address.addressLine1;
+                    const groupAddresses = (group.addresses && Array.isArray(group.addresses) && group.addresses.length > 0)
+                      ? group.addresses
+                      : (group.address && Object.keys(group.address).length > 0 && group.address.addressLine1 ? [group.address] : []);
+                    const hasAddress = groupAddresses.length > 0;
                     const hasPayments = groupPayments.length > 0;
-                    
-                    if (!hasAddress && !hasPayments) return null;
+
+                    const userId = user?.id || user?.uid;
+                    const isOwner = group.ownerId === userId;
+                    const isPersonalHub = group.is_default || group.isDefault;
+                    const canViewPayments = isPersonalHub || (group.userRoles || []).some(r => ['PAYMENT_ADMIN', 'PAYMENT_USER'].includes(r));
+                    const canViewAddresses = isPersonalHub || (group.userRoles || []).some(r => ['GROUP_ADDRESS_ADMIN', 'GROUP_ADDRESS_USER'].includes(r));
+
+                    const showModal = (hasAddress && canViewAddresses) || (hasPayments && canViewPayments);
+                    if (!showModal) return null;
 
                     return (
-                      <div className="relative group/info">
-                        <button className="text-[9px] font-black bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 px-4 py-2 rounded-xl uppercase tracking-widest transition-all hover:bg-indigo-100 dark:hover:bg-indigo-900/50 cursor-pointer shadow-sm">
-                          View Details
-                        </button>
-                        
-                        <div className="absolute right-0 top-full mt-3 w-80 bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-2xl shadow-2xl p-6 z-[100] opacity-0 invisible group-hover/info:opacity-100 group-hover/info:visible transition-all pointer-events-none origin-top-right transform scale-95 group-hover/info:scale-100">
-                          <div className="space-y-5">
-                            {/* Address Info */}
-                            {hasAddress && (
-                              <div>
-                                <h5 className="text-[10px] font-black text-indigo-500 uppercase tracking-[0.2em] mb-3 flex items-center gap-2">
-                                  <span className="w-1.5 h-1.5 rounded-full bg-indigo-500"></span>
-                                  Billing Address
-                                </h5>
-                                <div className="text-[11px] font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider leading-relaxed bg-gray-50 dark:bg-gray-800/50 p-4 rounded-xl border border-gray-100 dark:border-gray-800">
-                                  <p>{group.address.addressLine1}</p>
-                                  {group.address.addressLine2 && <p>{group.address.addressLine2}</p>}
-                                  <p>{group.address.city}, {group.address.stateProvince} {group.address.postalCode}</p>
-                                  <p className="text-[9px] text-gray-400 mt-2 font-black">{group.address.country}</p>
-                                </div>
-                              </div>
-                            )}
-
-                            {/* Payment Info */}
-                            {hasPayments && (
-                              <div>
-                                <h5 className="text-[10px] font-black text-emerald-500 uppercase tracking-[0.2em] mb-3 flex items-center gap-2">
-                                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                                  Payment Methods
-                                </h5>
-                                <div className="space-y-3">
-                                  {groupPayments.map(p => (
-                                    <div key={p.payment_details_id} className="flex items-center justify-between text-[11px] font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider bg-gray-50 dark:bg-gray-800/50 p-4 rounded-xl border border-gray-100 dark:border-gray-800">
-                                      <div className="flex items-center gap-3">
-                                        <span className="text-[9px] font-black bg-white dark:bg-gray-700 px-2 py-1 rounded shadow-sm text-gray-900 dark:text-white">{p.provider || 'Card'}</span>
-                                        <span>•••• {p.card_number}</span>
-                                      </div>
-                                      <span className="text-[9px] font-black text-gray-400">{p.expiry_date}</span>
-                                    </div>
-                                  ))}
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      </div>
+                      <button
+                        onClick={() => setDetailsModalGroup({ group, groupPayments, groupAddresses, canViewPayments, canViewAddresses })}
+                        className="text-[9px] font-black bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 px-4 py-2 rounded-xl uppercase tracking-widest transition-all hover:bg-indigo-600 hover:text-white cursor-pointer shadow-sm"
+                      >
+                        View Details
+                      </button>
                     );
                   })()}
 
@@ -439,9 +406,8 @@ export default function GroupsSection({ user, config, setError, setSuccess }) {
                   {(() => {
                     const userId = user?.id || user?.uid;
                     const isOwner = group.ownerId === userId;
-                    const isGroupAdmin = (group.userRoles || []).includes('GROUP_ADMIN');
-                    
-                    if (isOwner || isGroupAdmin) {
+
+                    if (isOwner) {
                       return (
                         editingGroupId === group.id ? (
                           <div className="flex items-center gap-2">
@@ -504,36 +470,38 @@ export default function GroupsSection({ user, config, setError, setSuccess }) {
                 const userId = user?.id || user?.uid;
                 const isOwner = group.ownerId === userId;
                 const isGroupAdmin = (group.userRoles || []).includes('GROUP_ADMIN');
-                
+
+                // Group owners and group admins can add new members
                 return (isOwner || isGroupAdmin) && (
-                <div className="relative focus-within:z-[100]">
-                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">{isSearching && activeSearchId === group.id ? <ImSpinner2 className="w-4 h-4 text-indigo-600 animate-spin" /> : <FiSearch className="w-4 h-4 text-gray-400" />}</div>
-                  <input
-                    type="text"
-                    placeholder="Search people by Email or Name..."
-                    className="w-full pl-12 pr-4 py-3 bg-gray-50 dark:bg-gray-800/50 border border-gray-100 dark:border-gray-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 dark:text-white text-sm"
-                    value={searchQueries[group.id] || ''}
-                    onChange={(e) => handleMemberSearch(e.target.value, group.id)}
-                  />
-                  {activeSearchId === group.id && searchResults.length > 0 && (
-                    <div className="absolute z-10 w-full mt-2 bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-2xl shadow-2xl overflow-y-auto max-h-[300px] custom-scrollbar">
-                      {searchResults.map((result) => (
-                        <button
-                          key={result.id}
-                          type="button"
-                          onMouseDown={(e) => {
-                            e.preventDefault();
-                            addMemberToGroup(group.id, result);
-                          }}
-                          className="w-full px-6 py-4 flex items-center justify-between hover:bg-indigo-50 dark:hover:bg-indigo-900/20 text-left transition-colors"
-                        >
-                          <div><p className="text-sm font-bold text-gray-900 dark:text-white">{result.name}</p><p className="text-[10px] text-gray-400 uppercase tracking-widest">{result.email}</p></div><FiPlus className="w-4 h-4 text-indigo-600" />
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )})()}
+                  <div className="relative focus-within:z-[100]">
+                    <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">{isSearching && activeSearchId === group.id ? <ImSpinner2 className="w-4 h-4 text-indigo-600 animate-spin" /> : <FiSearch className="w-4 h-4 text-gray-400" />}</div>
+                    <input
+                      type="text"
+                      placeholder="Search people by Email or Name..."
+                      className="w-full pl-12 pr-4 py-3 bg-gray-50 dark:bg-gray-800/50 border border-gray-100 dark:border-gray-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 dark:text-white text-sm"
+                      value={searchQueries[group.id] || ''}
+                      onChange={(e) => handleMemberSearch(e.target.value, group.id)}
+                    />
+                    {activeSearchId === group.id && searchResults.length > 0 && (
+                      <div className="absolute z-10 w-full mt-2 bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-2xl shadow-2xl overflow-y-auto max-h-[300px] custom-scrollbar">
+                        {searchResults.map((result) => (
+                          <button
+                            key={result.id}
+                            type="button"
+                            onMouseDown={(e) => {
+                              e.preventDefault();
+                              addMemberToGroup(group.id, result);
+                            }}
+                            className="w-full px-6 py-4 flex items-center justify-between hover:bg-indigo-50 dark:hover:bg-indigo-900/20 text-left transition-colors"
+                          >
+                            <div><p className="text-sm font-bold text-gray-900 dark:text-white">{result.name}</p><p className="text-[10px] text-gray-400 uppercase tracking-widest">{result.email}</p></div><FiPlus className="w-4 h-4 text-indigo-600" />
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )
+              })()}
 
               <div className="overflow-hidden border border-gray-100 dark:border-gray-800 rounded-2xl">
                 <table className="w-full text-left border-collapse">
@@ -588,7 +556,7 @@ export default function GroupsSection({ user, config, setError, setSuccess }) {
                               const isCurrentUserAdmin = (group.userRoles || []).includes('GROUP_ADMIN');
                               const isTargetOwner = member.id === group.ownerId;
                               const isTargetAdmin = (member.roles || []).includes('GROUP_ADMIN');
-                              
+
                               let canManageTarget = false;
                               if (isCurrentUserOwner) {
                                 canManageTarget = !isTargetOwner;
@@ -617,6 +585,119 @@ export default function GroupsSection({ user, config, setError, setSuccess }) {
         )}
 
       </div>
+
+      {/* ── Group Details Modal ─────────────────────────────── */}
+      {detailsModalGroup && (
+        <div
+          className="fixed inset-0 z-[300] flex items-center justify-center p-4"
+          onClick={() => setDetailsModalGroup(null)}
+        >
+          {/* Blurred backdrop */}
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-md" />
+
+          {/* Modal panel */}
+          <div
+            className="relative w-full max-w-lg bg-white dark:bg-gray-900 rounded-[2rem] shadow-2xl border border-gray-100 dark:border-gray-800 overflow-hidden animate-in zoom-in-95 duration-200"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal header */}
+            <div className="flex items-center justify-between px-8 py-6 border-b border-gray-100 dark:border-gray-800">
+              <div>
+                <h3 className="text-sm font-black text-gray-900 dark:text-white uppercase tracking-wider">
+                  {detailsModalGroup.group.is_default &&
+                    ['default group', 'personal hub', 'personal hub (self)'].includes(detailsModalGroup.group.name?.toLowerCase())
+                    ? 'Personal hub (self)'
+                    : detailsModalGroup.group.name}
+                </h3>
+                <p className="text-[9px] font-bold text-indigo-400 uppercase tracking-[0.25em] mt-1">
+                  {detailsModalGroup.canViewAddresses && (
+                    <>{detailsModalGroup.groupAddresses.length} Address{detailsModalGroup.groupAddresses.length !== 1 ? 'es' : ''}</>
+                  )}
+                  {detailsModalGroup.canViewAddresses && detailsModalGroup.canViewPayments && (
+                    <>&nbsp;&bull;&nbsp;</>
+                  )}
+                  {detailsModalGroup.canViewPayments && (
+                    <>{detailsModalGroup.groupPayments.length} Payment{detailsModalGroup.groupPayments.length !== 1 ? 's' : ''}</>
+                  )}
+                </p>
+              </div>
+              <button
+                onClick={() => setDetailsModalGroup(null)}
+                className="p-2.5 rounded-xl bg-gray-100 dark:bg-gray-800 text-gray-400 hover:bg-rose-500 hover:text-white transition-all"
+                title="Close"
+              >
+                <HiX className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Scrollable body */}
+            <div className="p-8 space-y-8 max-h-[65vh] overflow-y-auto custom-scrollbar">
+
+              {/* Addresses — only visible to users with address view permission */}
+              {detailsModalGroup.canViewAddresses && detailsModalGroup.groupAddresses.length > 0 && (
+                <div className="space-y-4">
+                  <h5 className="text-[10px] font-black text-indigo-500 uppercase tracking-[0.25em] flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-indigo-500" />
+                    Addresses
+                    <span className="ml-auto text-[8px] bg-indigo-50 dark:bg-indigo-900/30 px-2 py-0.5 rounded-full">
+                      {detailsModalGroup.groupAddresses.length}
+                    </span>
+                  </h5>
+                  {detailsModalGroup.groupAddresses.map((addr, i) => (
+                    <div key={addr.id || i} className="bg-gray-50 dark:bg-gray-800/50 border border-gray-100 dark:border-gray-800 rounded-2xl p-5 space-y-1">
+                      <p className="text-[11px] font-black text-gray-800 dark:text-gray-200 uppercase tracking-wider">{addr.addressLine1}</p>
+                      {addr.addressLine2 && (
+                        <p className="text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">{addr.addressLine2}</p>
+                      )}
+                      <p className="text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                        {[addr.city, addr.stateProvince].filter(Boolean).join(', ')}{addr.postalCode ? ` ${addr.postalCode}` : ''}
+                      </p>
+                      <p className="text-[9px] font-black text-indigo-400 uppercase tracking-[0.2em] pt-1">{addr.country}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Payment Methods — only visible to group admins/owners */}
+              {detailsModalGroup.canViewPayments && detailsModalGroup.groupPayments.length > 0 && (
+                <div className="space-y-4">
+                  <h5 className="text-[10px] font-black text-emerald-500 uppercase tracking-[0.25em] flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                    Payment Methods
+                    <span className="ml-auto text-[8px] bg-emerald-50 dark:bg-emerald-900/20 text-emerald-500 px-2 py-0.5 rounded-full">
+                      {detailsModalGroup.groupPayments.length}
+                    </span>
+                  </h5>
+                  {detailsModalGroup.groupPayments.map(p => (
+                    <div key={p.payment_details_id} className="flex items-center justify-between bg-gray-50 dark:bg-gray-800/50 border border-gray-100 dark:border-gray-800 rounded-2xl p-5">
+                      <div className="flex flex-col gap-1">
+                        <div className="flex items-center gap-2">
+                          <span className="text-[9px] font-black bg-white dark:bg-gray-700 border border-gray-100 dark:border-gray-700 px-2.5 py-1 rounded-lg shadow-sm text-gray-700 dark:text-gray-300 uppercase tracking-widest">
+                            {p.provider || 'Card'}
+                          </span>
+                          {p.funding_type && (
+                            <span className="text-[8px] font-black text-gray-400 bg-gray-100 dark:bg-gray-800 px-2 py-0.5 rounded-full uppercase tracking-widest">
+                              {p.funding_type}
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-sm font-black text-gray-900 dark:text-white tracking-widest">•••• •••• •••• {p.card_number}</p>
+                        {p.cardholder_name && (
+                          <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest">{p.cardholder_name}</p>
+                        )}
+                      </div>
+                      <div className="text-right flex-shrink-0">
+                        <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Expires</p>
+                        <p className="text-xs font-black text-gray-700 dark:text-gray-300 mt-0.5">{p.expiry_date}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

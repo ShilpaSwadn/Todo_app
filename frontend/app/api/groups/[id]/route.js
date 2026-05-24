@@ -24,9 +24,10 @@ export async function PUT(request, { params }) {
       return NextResponse.json({ success: false, message: 'Group name is required' }, { status: 400 })
     }
 
-    const isAuthorized = await UserRole.isAuthorized(currentUser.id, id);
-    if (!isAuthorized) {
-      return NextResponse.json({ success: false, message: 'Group not found or unauthorized' }, { status: 404 })
+    const groupResult = await query('SELECT user_id FROM public.groups WHERE group_id = $1', [id]);
+    const groupOwnerId = groupResult.rows[0]?.user_id;
+    if (!groupOwnerId || groupOwnerId !== currentUser.id) {
+      return NextResponse.json({ success: false, message: 'Group not found or unauthorized' }, { status: 403 })
     }
 
     const group = await Group.update(id, { name, description, defaultAddressId })

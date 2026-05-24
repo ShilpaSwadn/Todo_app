@@ -211,12 +211,18 @@ export default function GroupAddressSection({ user, config, setError, setSuccess
     setEditingAddressId(null)
   }
 
-  // Filter groups where user can manage addresses
+  // Filter groups where user can manage addresses (add/edit/delete)
   const authorizedGroups = groups.filter(g => {
-    const userId = user?.id || user?.uid;
-    const isOwner = g.ownerId === userId;
-    const hasManageRole = (g.userRoles || []).some(r => ['GROUP_ADMIN', 'GROUP_ADDRESS_ADMIN'].includes(r));
-    return isOwner || hasManageRole;
+    const isPersonalHub = g.is_default || g.isDefault;
+    const hasRole = (g.userRoles || []).some(r => ['GROUP_ADDRESS_ADMIN'].includes(r));
+    return isPersonalHub || hasRole;
+  });
+
+  // Filter groups where user can at least view addresses
+  const viewableGroups = groups.filter(g => {
+    const isPersonalHub = g.is_default || g.isDefault;
+    const hasRole = (g.userRoles || []).some(r => ['GROUP_ADDRESS_ADMIN', 'GROUP_ADDRESS_USER'].includes(r));
+    return isPersonalHub || hasRole;
   });
 
   useEffect(() => {
@@ -337,13 +343,15 @@ export default function GroupAddressSection({ user, config, setError, setSuccess
 
       const response = await api.put(`/groups/${groupIds[0]}/address`, payload)
 
-      if (response.success) {
-        await fetchGroups();
-        setShowForm(false)
-        resetForm()
-        setSuccess(true)
-        setTimeout(() => setSuccess(false), 5000);
+      if (!response.success) {
+        throw new Error(response.message || 'Failed to save address')
       }
+
+      await fetchGroups();
+      setShowForm(false)
+      resetForm()
+      setSuccess(true)
+      setTimeout(() => setSuccess(false), 5000);
     } catch (err) {
       console.error("Failed to save address:", err)
       setError(err.message || "We ran into a problem saving your address. Please try again.")
@@ -376,9 +384,9 @@ export default function GroupAddressSection({ user, config, setError, setSuccess
     }
   }
 
-  // Deduplicate all addresses from all groups for display
+  // Deduplicate all addresses from viewable groups for display
   const addressMap = {};
-  groups.forEach(g => {
+  viewableGroups.forEach(g => {
     if (g.addresses && Array.isArray(g.addresses)) {
       g.addresses.forEach(addr => {
         if (!addressMap[addr.id]) {
@@ -587,10 +595,11 @@ export default function GroupAddressSection({ user, config, setError, setSuccess
               const addressId = addr.id || index;
               const linkedGroups = (addr.linkedGroupIds || []).map(gid => groups.find(g => g.id === gid)).filter(Boolean);
               
+              // canManage: can edit/delete (GROUP_ADDRESS_ADMIN or personal hub owner)
               const canManage = linkedGroups.some(g => {
-                const isOwner = g.ownerId === (user?.id || user?.uid);
-                const hasRole = (g.userRoles || []).some(r => ['GROUP_ADMIN','GROUP_ADDRESS_ADMIN'].includes(r));
-                return isOwner || hasRole;
+                const isPersonalHub = g.is_default || g.isDefault;
+                const hasRole = (g.userRoles || []).some(r => ['GROUP_ADDRESS_ADMIN'].includes(r));
+                return isPersonalHub || hasRole;
               });
 
               return (

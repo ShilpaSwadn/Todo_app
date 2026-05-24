@@ -210,37 +210,8 @@ export default function SettingsPage() {
       { ...paymentConfig, icon: <FiCreditCard /> },
     ];
 
-    return allSections.filter(section => {
-      const userId = user?.id || user?.uid;
-      // Core sections are always visible
-      if (['personal', 'language'].includes(section.id)) return true;
-
-      // Group section visible if member of any group
-      if (section.id === 'groups') return userGroups.length > 0;
-
-      // Access section visible if Owner or GROUP_ADMIN in any group
-      if (section.id === 'access') {
-        return userGroups.some(g => 
-          g.ownerId === userId || 
-          (g.userRoles || []).includes('GROUP_ADMIN')
-        );
-      }
-
-      // Group Address section visible if member of any group
-      if (section.id === 'group_address') {
-        return userGroups.length > 0;
-      }
-
-      // Payment section visible if Owner, GROUP_ADMIN, PAYMENT_ADMIN, or PAYMENT_USER in any group
-      if (section.id === 'payment') {
-        return userGroups.some(g => 
-          g.ownerId === userId || 
-          (g.userRoles || []).some(role => ['GROUP_ADMIN', 'PAYMENT_ADMIN', 'PAYMENT_USER'].includes(role))
-        );
-      }
-
-      return true;
-    });
+    // All sections are always visible; role filtering happens inside each component
+    return allSections;
   }, [userGroups, user]);
 
   // Ensure active section is valid

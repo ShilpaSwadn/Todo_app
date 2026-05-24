@@ -15,24 +15,21 @@ export default function AccessSection({ user, config, setError, setSuccess }) {
   const [pendingRoles, setPendingRoles] = useState({}) // { userId: roles[] }
   const [searchTerm, setSearchTerm] = useState('')
 
+  const fetchGroups = async () => {
+    try {
+      const response = await api.get('/groups')
+      if (response.success) {
+        setGroups(response.groups || [])
+      }
+    } catch (err) {
+      console.error('Error fetching groups:', err)
+    }
+  }
+
   // Fetch groups on mount
   useEffect(() => {
-    const fetchGroups = async () => {
-      setLoading(true)
-      try {
-        const response = await api.get('/groups')
-        if (response.success) {
-          setGroups(response.groups || [])
-        }
-      } catch (err) {
-        console.error('Error fetching groups:', err)
-        setError('Failed to load groups')
-      } finally {
-        setLoading(false)
-      }
-    }
     fetchGroups()
-  }, [setError, selectedGroupId])
+  }, [selectedGroupId])
 
   // Fetch members when group changes
   useEffect(() => {
@@ -94,7 +91,8 @@ export default function AccessSection({ user, config, setError, setSuccess }) {
           selectedUserIds.includes(m.user_id) ? { ...m, user_roles: savedRoles } : m
         ))
         setSelectedUserIds([])
-        setSelectedBulkRole([]) // Reset to empty array
+        setSelectedBulkRole([])
+        fetchGroups()
       } else {
         setError(response.message || 'Update failed')
       }
@@ -121,12 +119,12 @@ export default function AccessSection({ user, config, setError, setSuccess }) {
         setMembers(prev => prev.map(m => 
           m.user_id === userId ? { ...m, user_roles: savedRoles } : m
         ))
-        // Clear pending roles for this user after successful save
         setPendingRoles(prev => {
           const next = { ...prev };
           delete next[userId];
           return next;
         });
+        fetchGroups()
       } else {
         setError(response.message || 'Update failed')
       }
@@ -146,6 +144,7 @@ export default function AccessSection({ user, config, setError, setSuccess }) {
       if (response.success) {
         setSuccess(true)
         setMembers(prev => prev.filter(m => m.user_id !== userId))
+        fetchGroups()
       } else {
         setError(response.message || 'Failed to remove member')
       }
@@ -183,6 +182,7 @@ export default function AccessSection({ user, config, setError, setSuccess }) {
       case 'PAYMENT_ADMIN': return 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20';
       case 'PAYMENT_USER': return 'bg-purple-500/10 text-purple-600 border-purple-500/20';
       case 'GROUP_ADDRESS_ADMIN': return 'bg-amber-500/10 text-amber-600 border-amber-500/20';
+      case 'GROUP_ADDRESS_USER': return 'bg-teal-500/10 text-teal-600 border-teal-500/20';
       default: return 'bg-gray-500/10 text-gray-600 border-gray-500/20';
     }
   }
@@ -326,16 +326,6 @@ export default function AccessSection({ user, config, setError, setSuccess }) {
                     {isAuthorized && (
                       <td className="py-6 px-5 text-right relative">
                         {(() => {
-                          const isCurrentUserOwner = selectedGroup?.ownerId === userId;
-                          const isTargetOwner = selectedGroup?.ownerId === member.user_id;
-                          const isTargetAdmin = (member.user_roles || []).includes('GROUP_ADMIN');
-                          
-                          // Owner can manage everyone except themselves
-                          // Admins can manage everyone except Owner and other Admins
-                          const canManageTarget = isCurrentUserOwner ? !isTargetOwner : (!isTargetOwner && !isTargetAdmin);
-                          
-                          if (!canManageTarget) return null;
-
                           return (
                             <div className="flex items-center justify-end gap-3">
                               {/* Manage Roles Dropdown */}

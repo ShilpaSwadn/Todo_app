@@ -3,10 +3,11 @@ export const accessConfig = {
   title: 'User Access Control',
   description: 'Manage member roles and permissions within your groups.',
   roles: [
-    { id: 'GROUP_ADMIN', label: 'Group Admin', description: 'All privileges, manage group, can view or add or delete payments.' },
-    { id: 'PAYMENT_ADMIN', label: 'Payment Admin', description: 'Cannot manage group, can view or add or delete payments.' },
-    { id: 'GROUP_MEMBER', label: 'Group Member', description: 'Default role, cannot manage group, cannot view or add payments.' },
-    { id: 'PAYMENT_USER', label: 'Payment User', description: 'Cannot manage group, cannot add or delete payments, can only view and use the payment details.' },
-    { id: 'GROUP_ADDRESS_ADMIN', label: 'Group Address Admin', description: 'Can edit, delete, and add addresses.' }
+    { id: 'GROUP_ADMIN', label: 'Group Admin', description: 'Can only manage user roles and access control. Cannot manage group settings, addresses, or payments.' },
+    { id: 'PAYMENT_ADMIN', label: 'Payment Admin', description: 'Can view, add, edit, and delete payment details. Cannot manage group settings or roles.' },
+    { id: 'GROUP_MEMBER', label: 'Group Member', description: 'Default role. Cannot manage group settings, roles, payments, or addresses.' },
+    { id: 'PAYMENT_USER', label: 'Payment User', description: 'Can only view and use payment details. Cannot manage group settings or add/edit/delete payments.' },
+    { id: 'GROUP_ADDRESS_ADMIN', label: 'Group Address Admin', description: 'Can add, edit, and delete addresses. Cannot manage group settings, roles, or payments.' },
+    { id: 'GROUP_ADDRESS_USER', label: 'Group Address User', description: 'Can only view addresses. Cannot manage group settings, roles, payments, or add/edit/delete addresses.' }
   ]
 };

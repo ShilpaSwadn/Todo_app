@@ -89,38 +89,54 @@ class UserRole {
 
   /**
    * Check if a user can manage payments in a group
+   * Personal hub (self) owner always has permission
    */
   static async canManagePayments(userId, groupId) {
     const [roles, group] = await Promise.all([
       this.getUserRoles(userId, groupId),
-      query('SELECT user_id FROM public.groups WHERE group_id = $1', [groupId])
+      query('SELECT user_id, is_default FROM public.groups WHERE group_id = $1', [groupId])
     ]);
-    const isOwner = group.rows[0]?.user_id === userId;
-    const isGroupAdmin = roles.includes('GROUP_ADMIN');
-    const isPaymentAdmin = roles.includes('PAYMENT_ADMIN');
-    return isOwner || isGroupAdmin || isPaymentAdmin;
+    if (group.rows[0]?.user_id === userId && group.rows[0]?.is_default) return true;
+    return roles.includes('PAYMENT_ADMIN');
   }
 
   /**
    * Check if a user can view payments in a group
+   * Personal hub (self) owner always has permission
    */
   static async canViewPayments(userId, groupId) {
-    const roles = await this.getUserRoles(userId, groupId);
-    return roles.some(r => ['GROUP_ADMIN', 'PAYMENT_ADMIN', 'PAYMENT_USER'].includes(r));
+    const [roles, group] = await Promise.all([
+      this.getUserRoles(userId, groupId),
+      query('SELECT user_id, is_default FROM public.groups WHERE group_id = $1', [groupId])
+    ]);
+    if (group.rows[0]?.user_id === userId && group.rows[0]?.is_default) return true;
+    return roles.some(r => ['PAYMENT_ADMIN', 'PAYMENT_USER'].includes(r));
   }
 
   /**
-   * Check if a user can manage group addresses
+   * Check if a user can manage group addresses (add/edit/delete)
+   * Personal hub (self) owner always has permission
    */
   static async canManageAddress(userId, groupId) {
     const [roles, group] = await Promise.all([
       this.getUserRoles(userId, groupId),
-      query('SELECT user_id FROM public.groups WHERE group_id = $1', [groupId])
+      query('SELECT user_id, is_default FROM public.groups WHERE group_id = $1', [groupId])
     ]);
-    const isOwner = group.rows[0]?.user_id === userId;
-    const isGroupAdmin = roles.includes('GROUP_ADMIN');
-    const isAddressAdmin = roles.includes('GROUP_ADDRESS_ADMIN');
-    return isOwner || isGroupAdmin || isAddressAdmin;
+    if (group.rows[0]?.user_id === userId && group.rows[0]?.is_default) return true;
+    return roles.includes('GROUP_ADDRESS_ADMIN');
+  }
+
+  /**
+   * Check if a user can view group addresses (GROUP_ADDRESS_USER or higher)
+   * Personal hub (self) owner always has permission
+   */
+  static async canViewAddress(userId, groupId) {
+    const [roles, group] = await Promise.all([
+      this.getUserRoles(userId, groupId),
+      query('SELECT user_id, is_default FROM public.groups WHERE group_id = $1', [groupId])
+    ]);
+    if (group.rows[0]?.user_id === userId && group.rows[0]?.is_default) return true;
+    return roles.some(r => ['GROUP_ADDRESS_ADMIN', 'GROUP_ADDRESS_USER'].includes(r));
   }
 
   /**

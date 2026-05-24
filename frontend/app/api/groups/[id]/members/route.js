@@ -26,7 +26,7 @@ export async function POST(request, { params }) {
       return NextResponse.json({ success: false, message: 'Valid active member is required' }, { status: 400 })
     }
 
-    // Verify user authorization
+    // Verify user authorization (owner or GROUP_ADMIN)
     const isAuthorized = await UserRole.isAuthorized(currentUser.id, id);
     if (!isAuthorized) {
       return NextResponse.json({ success: false, message: 'Unauthorized' }, { status: 403 });
@@ -92,7 +92,7 @@ export async function DELETE(request, { params }) {
 
     const currentUser = await authService.getUserByUid(uid)
 
-    // Verify user authorization
+    // Verify user authorization (owner or GROUP_ADMIN)
     const isAuthorized = await UserRole.isAuthorized(currentUser.id, id);
     if (!isAuthorized) {
       return NextResponse.json({ success: false, message: 'Unauthorized' }, { status: 403 });
