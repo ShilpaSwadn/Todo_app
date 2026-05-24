@@ -229,7 +229,17 @@ export default function AccessSection({ user, config, setError, setSuccess }) {
         )}
       </div>
 
-      {!selectedGroupId ? (
+      {adminGroups.length === 0 && !selectedGroupId ? (
+        <div className="bg-white dark:bg-gray-900/40 border border-dashed border-gray-200 dark:border-gray-800 rounded-[3rem] p-20 flex flex-col items-center justify-center text-center">
+          <div className="w-20 h-20 rounded-[2rem] bg-gray-50 dark:bg-gray-800 flex items-center justify-center text-gray-300 mb-8">
+            <FiShield className="w-10 h-10" />
+          </div>
+          <h3 className="text-[12px] font-black text-gray-900 dark:text-white uppercase tracking-[0.2em] mb-3">No groups to manage</h3>
+          <p className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest max-w-[400px] leading-relaxed">
+            You don't have access to any groups yet. Only group owners and group admins can manage access roles. Contact your group owner to get admin access.
+          </p>
+        </div>
+      ) : !selectedGroupId ? (
         <div className="bg-white dark:bg-gray-900/40 border border-dashed border-gray-200 dark:border-gray-800 rounded-[3rem] p-20 flex flex-col items-center justify-center text-center">
           <div className="w-20 h-20 rounded-[2rem] bg-gray-50 dark:bg-gray-800 flex items-center justify-center text-gray-300 mb-8">
             <FiUsers className="w-10 h-10" />

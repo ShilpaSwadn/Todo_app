@@ -16,7 +16,8 @@ import {
   FiActivity,
   FiUsers,
   FiX,
-  FiMap
+  FiMap,
+  FiChevronDown
 } from 'react-icons/fi'
 import { HiX } from 'react-icons/hi'
 import Link from 'next/link'
@@ -45,6 +46,7 @@ export default function SettingsPage() {
   const [error, setError] = useState('')
   const [success, setSuccess] = useState(false)
   const [activeSection, setActiveSection] = useState('personal')
+  const [expandedSections, setExpandedSections] = useState({})
 
   // Initial states for change detection
   const [initialFormData, setInitialFormData] = useState({})
@@ -234,8 +236,7 @@ export default function SettingsPage() {
   }
 
   return (
-    <main className="min-h-screen bg-[#FDFDFD] dark:bg-[#020617] flex flex-col">
-      <LoadingOverlay active={saving} label="Saving Changes..." />
+    <main className="min-h-screen bg-[#FDFDFD] dark:bg-[#020617] flex flex-col relative">
       
       {/* Top Header */}
       <nav className="sticky top-0 z-[500] bg-white/95 dark:bg-[#0F172A]/95 backdrop-blur-md border-b border-gray-100 dark:border-gray-800/50 px-6 sm:px-12 py-5 flex items-center justify-between">
@@ -268,7 +269,12 @@ export default function SettingsPage() {
               : 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-indigo-100 dark:shadow-none'
               }`}
           >
-            {saving ? 'Saving...' : (
+            {saving ? (
+              <>
+                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                <span>Saving...</span>
+              </>
+            ) : (
               <>
                 <FiSave className="w-4 h-4" />
                 <span>Save changes</span>
@@ -286,11 +292,17 @@ export default function SettingsPage() {
               Settings Menu
             </h4>
             <div className="space-y-3">
-              {availableSections.map(section => (
+              {availableSections.map(section => {
+                const isPersonal = section.id === 'personal';
+                const isExpanded = expandedSections[section.id];
+                return (
                 <div key={section.id} className="space-y-2">
                   <button
                     onClick={() => {
                       setActiveSection(section.id);
+                      if (isPersonal) {
+                        setExpandedSections(prev => ({ ...prev, [section.id]: !prev[section.id] }));
+                      }
                       window.scrollTo({ top: 0, behavior: 'smooth' });
                     }}
                     className={`w-full group text-left p-6 rounded-[2.5rem] transition-all duration-500 relative overflow-hidden ${activeSection === section.id
@@ -307,7 +319,7 @@ export default function SettingsPage() {
                           {section.icon}
                         </span>
                       </div>
-                      <div>
+                      <div className="flex-1">
                         <p className={`text-[11px] font-black uppercase tracking-widest ${activeSection === section.id ? 'text-white' : 'text-gray-900 dark:text-white'
                           }`}>
                           {section.title}
@@ -317,11 +329,16 @@ export default function SettingsPage() {
                           {section.description}
                         </p>
                       </div>
+                      {isPersonal && (
+                        <FiChevronDown
+                          className={`w-4 h-4 transition-transform duration-300 shrink-0 ${activeSection === section.id ? 'text-white/70' : 'text-gray-400'} ${isExpanded ? 'rotate-180' : ''}`}
+                        />
+                      )}
                     </div>
                   </button>
 
                   {/* Nested Subnav for Personal Information */}
-                  {activeSection === 'personal' && section.id === 'personal' && (
+                  {isPersonal && isExpanded && (
                     <div className="pl-6 pr-2 py-2 space-y-1 border-l-2 border-indigo-100 dark:border-indigo-900/50 ml-8 animate-in slide-in-from-top-2 duration-300">
                       {personalConfig.categories.map(cat => (
                         <button
@@ -341,7 +358,8 @@ export default function SettingsPage() {
                     </div>
                   )}
                 </div>
-              ))}
+                );
+              })}
             </div>
           </div>
 
@@ -361,6 +379,7 @@ export default function SettingsPage() {
         {/* Main Section Content */}
         <div className="flex-1 min-w-0 font-sans">
           <div className="bg-white dark:bg-gray-800/40 border border-gray-100 dark:border-gray-800 rounded-[4rem] p-8 sm:p-14 shadow-sm min-h-[600px] relative">
+            <LoadingOverlay active={saving} label="Saving Changes..." />
             {/* Header for Active Section */}
             <div className="flex items-center justify-between mb-12">
               <div className="flex items-center gap-6">
