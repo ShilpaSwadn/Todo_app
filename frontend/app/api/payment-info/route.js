@@ -120,20 +120,12 @@ export async function PUT(request) {
     // Resolve Target Group IDs
     const targetGroupIds = groupIds && Array.isArray(groupIds) && groupIds.length > 0 ? groupIds : (groupId ? [groupId] : []);
     
-    // Check Permissions for all current and target groups
+    // Check if user has manage permission in at least one of the current or target groups
     const currentGroupsToCheck = currentGroupId ? [currentGroupId] : (groupId ? [groupId] : []);
-    for (const gid of currentGroupsToCheck) {
-      const canManage = await UserRole.canManagePayments(user.id, gid)
-      if (!canManage) {
-        return NextResponse.json({ error: `Permission denied for group: ${gid}` }, { status: 403 })
-      }
-    }
-
-    for (const gid of targetGroupIds) {
-      const canManageTarget = await UserRole.canManagePayments(user.id, gid)
-      if (!canManageTarget) {
-        return NextResponse.json({ error: `Permission denied for target group: ${gid}` }, { status: 403 })
-      }
+    const allGroupsToCheck = [...new Set([...currentGroupsToCheck, ...targetGroupIds])];
+    const permissionResults = await Promise.all(allGroupsToCheck.map(gid => UserRole.canManagePayments(user.id, gid)));
+    if (!permissionResults.some(Boolean)) {
+      return NextResponse.json({ error: 'Permission denied. You do not have authority to update this payment method.' }, { status: 403 })
     }
 
     const updatedPayment = await PaymentInfo.update(paymentDetailsId, {

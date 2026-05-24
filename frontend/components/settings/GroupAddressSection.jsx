@@ -561,7 +561,7 @@ export default function GroupAddressSection({ user, config, setError, setSuccess
                   })}
                   placeholder={field.placeholder}
                   maxLength={field.maxLength}
-                  className="w-full h-14 px-6 bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-2xl text-xs font-bold transition-all focus:ring-4 focus:ring-indigo-500/10 outline-none uppercase tracking-widest placeholder:text-gray-300 dark:placeholder:text-gray-600"
+                  className="w-full h-14 px-6 bg-white dark:bg-gray-800 text-gray-900 dark:text-white border border-gray-100 dark:border-gray-700 rounded-2xl text-xs font-bold transition-all focus:ring-4 focus:ring-indigo-500/10 outline-none uppercase tracking-widest placeholder:text-gray-300 dark:placeholder:text-gray-600"
                 />
               </div>
             ))}

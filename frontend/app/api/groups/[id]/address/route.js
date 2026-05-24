@@ -21,12 +21,10 @@ export async function PUT(request, { params }) {
 
     const targetGroupIds = groupIds && Array.isArray(groupIds) && groupIds.length > 0 ? groupIds : [id];
 
-    // Check authorization for all target groups
-    for (const gid of targetGroupIds) {
-      const isAuthorized = await UserRole.canManageAddress(currentUser.id, gid);
-      if (!isAuthorized) {
-        return NextResponse.json({ success: false, message: 'Group not found or unauthorized' }, { status: 404 })
-      }
+    // Check authorization in at least one of the target groups
+    const authorizationResults = await Promise.all(targetGroupIds.map(gid => UserRole.canManageAddress(currentUser.id, gid)));
+    if (!authorizationResults.some(Boolean)) {
+      return NextResponse.json({ success: false, message: 'Group not found or unauthorized' }, { status: 404 })
     }
 
     let group;
