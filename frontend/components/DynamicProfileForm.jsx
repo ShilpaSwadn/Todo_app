@@ -2,8 +2,11 @@
 
 import React from 'react';
 import { FiCheck, FiChevronDown } from 'react-icons/fi';
+import { useTranslation } from 'react-i18next';
 
 export default function DynamicProfileForm({ data, onChange, categories }) {
+  const { t } = useTranslation();
+
 
   const [openSelect, setOpenSelect] = React.useState(null);
   const formRef = React.useRef(null);
@@ -111,7 +114,7 @@ export default function DynamicProfileForm({ data, onChange, categories }) {
               <div className="w-2.5 h-14 bg-gradient-to-b from-indigo-500 to-indigo-700 rounded-full" />
               <div>
                 <h3 className="text-xl font-black text-gray-900 dark:text-white uppercase tracking-[0.25em]">
-                  {category.title}
+                  {t('settings.categories.' + category.id, category.title)}
                 </h3>
               </div>
             </div>
@@ -135,11 +138,11 @@ export default function DynamicProfileForm({ data, onChange, categories }) {
                         htmlFor={field.id}
                         className="block text-[11px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest"
                       >
-                        {field.label}
+                        {t('settings.fields.' + field.id, field.label)}
                       </label>
                       {isReadOnly && (
                         <span className="text-[9px] font-black text-amber-500 uppercase tracking-widest">
-                          Read only
+                          {t('settings.read_only', 'Read only')}
                         </span>
                       )}
                     </div>
@@ -157,10 +160,11 @@ export default function DynamicProfileForm({ data, onChange, categories }) {
                               }`}
                           >
                             <span className={value ? 'text-gray-900 dark:text-white' : 'text-gray-300'}>
-                              {value || field.placeholder || `Select ${field.label}`}
+                              {value || (field.placeholder ? t('settings.placeholders.' + field.id, field.placeholder) : t('settings.select_field', 'Select {{field}}', { field: t('settings.fields.' + field.id, field.label) }))}
                             </span>
                             <FiChevronDown className={`w-4 h-4 transition-transform duration-300 ${openSelect === field.id ? 'rotate-180' : ''}`} />
                           </button>
+
 
                           {/* Custom Dropdown Menu */}
                           {openSelect === field.id && !isReadOnly && (
@@ -225,7 +229,7 @@ export default function DynamicProfileForm({ data, onChange, categories }) {
                           value={value}
                           onChange={handleInputChange}
                           readOnly={isReadOnly}
-                          placeholder={field.placeholder}
+                          placeholder={field.placeholder ? t('settings.placeholders.' + field.id, field.placeholder) : ''}
                           min={field.min}
                           className={`w-full px-7 py-5 border rounded-[1.75rem] transition-all text-sm font-bold ${isReadOnly
                               ? 'bg-gray-50 dark:bg-gray-900/50 border-gray-100 dark:border-gray-800 text-gray-400 dark:text-gray-500 cursor-not-allowed'

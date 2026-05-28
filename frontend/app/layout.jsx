@@ -1,6 +1,7 @@
 import './globals.css'
 import { ThemeProvider } from '@/context/ThemeContext'
 import { AuthProvider } from '@/context/AuthContext'
+import { LocaleProvider } from '@/context/LocaleContext'
 
 export const metadata = {
   title: 'Swadn',
@@ -13,11 +14,14 @@ export default function RootLayout({ children }) {
       <body>
         <ThemeProvider>
           <AuthProvider>
-            {children}
+            <LocaleProvider>
+              {children}
+            </LocaleProvider>
           </AuthProvider>
         </ThemeProvider>
       </body>
     </html>
   )
 }
+
 

@@ -36,13 +36,29 @@ import { LoadingOverlay } from '@/components/ui/LoadingSpinner'
 import { accessConfig } from '@/lib/utils/accessConfig'
 import AccessSection from '@/components/settings/AccessSection'
 import { FiShield } from 'react-icons/fi'
+import { useTranslation } from 'react-i18next'
+import i18n from '@/lib/i18n'
+
+// Maps the human-readable language name (stored in DB) → i18next language code
+const LANG_CODE_MAP = {
+  English: 'en',
+  German: 'de',
+  Hindi: 'hi',
+  Tamil: 'ta',
+  Spanish: 'en',
+  French: 'en',
+  Japanese: 'en',
+  Mandarin: 'en',
+}
 
 
 export default function SettingsPage() {
   const router = useRouter()
+  const { t } = useTranslation()
   const [user, setUser] = useState(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+
   const [error, setError] = useState('')
   const [success, setSuccess] = useState(false)
   const [activeSection, setActiveSection] = useState('personal')
@@ -190,6 +206,10 @@ export default function SettingsPage() {
       if (token) saveAuthData(updatedUser, token);
       setUser(updatedUser);
 
+      // Apply language change immediately — don't wait for AuthContext to re-sync
+      const langCode = LANG_CODE_MAP[formData.languagePreference] || 'en';
+      i18n.changeLanguage(langCode);
+
       setInitialFormData({ ...formData });
       setInitialProfileData({ ...profileData });
 
@@ -229,7 +249,7 @@ export default function SettingsPage() {
       <main className="h-screen bg-white dark:bg-[#020617] flex flex-col items-center justify-center">
         <div className="animate-spin rounded-full h-12 w-12 border-2 border-indigo-600 border-t-transparent"></div>
         <p className="mt-6 text-[10px] font-black text-gray-400 dark:text-gray-600 uppercase tracking-[0.5em] animate-pulse">
-          Loading settings...
+          {t('settings.loading_settings')}
         </p>
       </main>
     )
@@ -249,12 +269,12 @@ export default function SettingsPage() {
           </Link>
           <div>
             <h1 className="text-lg font-black text-gray-900 dark:text-white tracking-tight uppercase">
-              Account Settings
+              {t('settings.title')}
             </h1>
             <div className="flex items-center gap-2">
               <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
               <span className="text-[9px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest">
-                Secure connection active
+                {t('settings.secure_connection')}
               </span>
             </div>
           </div>
@@ -272,12 +292,12 @@ export default function SettingsPage() {
             {saving ? (
               <>
                 <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                <span>Saving...</span>
+                <span>{t('settings.saving')}</span>
               </>
             ) : (
               <>
                 <FiSave className="w-4 h-4" />
-                <span>Save changes</span>
+                <span>{t('settings.save_changes')}</span>
               </>
             )}
           </button>
@@ -289,7 +309,7 @@ export default function SettingsPage() {
         <aside className="lg:w-[380px] shrink-0 space-y-8 lg:sticky lg:top-32 lg:self-start lg:h-[calc(100vh-160px)] overflow-y-auto custom-scrollbar pr-2 pb-10">
           <div className="p-8 bg-white dark:bg-gray-800/50 border border-gray-100 dark:border-gray-800 rounded-[3rem] shadow-sm">
             <h4 className="text-[10px] font-black text-gray-300 dark:text-gray-600 uppercase tracking-[0.4em] mb-8 px-2">
-              Settings Menu
+              {t('settings.menu_title')}
             </h4>
             <div className="space-y-3">
               {availableSections.map(section => {
@@ -322,11 +342,11 @@ export default function SettingsPage() {
                       <div className="flex-1">
                         <p className={`text-[11px] font-black uppercase tracking-widest ${activeSection === section.id ? 'text-white' : 'text-gray-900 dark:text-white'
                           }`}>
-                          {section.title}
+                          {t('settings.sections.' + section.id + '.title', section.title)}
                         </p>
                         <p className={`text-[9px] font-bold mt-1 uppercase ${activeSection === section.id ? 'text-white/60' : 'text-gray-400 dark:text-gray-600'
                           }`}>
-                          {section.description}
+                          {t('settings.sections.' + section.id + '.description', section.description)}
                         </p>
                       </div>
                       {isPersonal && (
@@ -352,7 +372,7 @@ export default function SettingsPage() {
                           }}
                           className="block w-full text-left px-4 py-2.5 text-[10px] font-black uppercase tracking-widest text-gray-500 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 rounded-xl transition-all"
                         >
-                          {cat.title}
+                          {t('settings.categories.' + cat.id, cat.title)}
                         </button>
                       ))}
                     </div>
@@ -367,8 +387,8 @@ export default function SettingsPage() {
           <div className="p-10 bg-gradient-to-br from-indigo-600 to-purple-700 rounded-[3.5rem] text-white shadow-2xl overflow-hidden relative">
             <div className="absolute -right-10 -bottom-10 w-40 h-40 bg-white/10 rounded-full blur-3xl" />
             <FiActivity className="w-10 h-10 mb-6 opacity-40" />
-            <h5 className="text-[10px] font-black uppercase tracking-[0.3em] opacity-60">System Health</h5>
-            <p className="text-2xl font-black mt-2 tracking-tighter uppercase leading-none">System Status</p>
+            <h5 className="text-[10px] font-black uppercase tracking-[0.3em] opacity-60">{t('settings.system_health')}</h5>
+            <p className="text-2xl font-black mt-2 tracking-tighter uppercase leading-none">{t('settings.system_status')}</p>
             <div className="mt-8 flex items-center gap-3">
               <div className="px-4 py-2 bg-white/20 rounded-full text-[9px] font-black uppercase tracking-widest">TLS 1.3</div>
               <div className="px-4 py-2 bg-white/20 rounded-full text-[9px] font-black uppercase tracking-widest">AES-256</div>
@@ -379,7 +399,7 @@ export default function SettingsPage() {
         {/* Main Section Content */}
         <div className="flex-1 min-w-0 font-sans">
           <div className="bg-white dark:bg-gray-800/40 border border-gray-100 dark:border-gray-800 rounded-[4rem] p-8 sm:p-14 shadow-sm min-h-[600px] relative">
-            <LoadingOverlay active={saving} label="Saving Changes..." />
+            <LoadingOverlay active={saving} label={t('settings.saving')} />
             {/* Header for Active Section */}
             <div className="flex items-center justify-between mb-12">
               <div className="flex items-center gap-6">
@@ -395,10 +415,10 @@ export default function SettingsPage() {
                 </div>
                 <div>
                   <h2 className="text-2xl font-black text-gray-900 dark:text-white uppercase tracking-tighter">
-                    {availableSections.find(s => s.id === activeSection)?.title || 'Settings'}
+                    {t('settings.sections.' + activeSection + '.title', availableSections.find(s => s.id === activeSection)?.title || 'Settings')}
                   </h2>
                   <p className="text-[11px] font-bold text-gray-400 uppercase tracking-widest mt-1">
-                    {availableSections.find(s => s.id === activeSection)?.description || 'Configure your preferences'}
+                    {t('settings.sections.' + activeSection + '.description', availableSections.find(s => s.id === activeSection)?.description || 'Configure your preferences')}
                   </p>
                 </div>
               </div>
@@ -413,8 +433,8 @@ export default function SettingsPage() {
                       <FiCheck className="w-5 h-5" />
                     </div>
                     <div>
-                      <p className="text-[11px] font-black uppercase tracking-[0.2em] leading-none">Changes Saved</p>
-                      <p className="text-[9px] font-bold opacity-70 uppercase tracking-widest mt-1">Your settings have been successfully updated.</p>
+                      <p className="text-[11px] font-black uppercase tracking-[0.2em] leading-none">{t('settings.changes_saved')}</p>
+                      <p className="text-[9px] font-bold opacity-70 uppercase tracking-widest mt-1">{t('settings.changes_saved_desc')}</p>
                     </div>
                   </div>
                   <button onClick={() => setSuccess(false)} className="p-2 hover:bg-emerald-500/10 rounded-lg transition-colors">
@@ -430,7 +450,7 @@ export default function SettingsPage() {
                       <FiAlertCircle className="w-5 h-5" />
                     </div>
                     <div>
-                      <p className="text-[11px] font-black uppercase tracking-[0.2em] leading-none">Oops! Something went wrong</p>
+                      <p className="text-[11px] font-black uppercase tracking-[0.2em] leading-none">{t('settings.error_title')}</p>
                       <p className="text-[9px] font-bold opacity-70 uppercase tracking-widest mt-1">{error}</p>
                     </div>
                   </div>

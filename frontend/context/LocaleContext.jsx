@@ -1,9 +1,11 @@
 'use client'
 
 import { createContext, useContext, useEffect, useState } from 'react'
+import i18n from '@/lib/i18n'
+import { useAuth } from '@/context/AuthContext'
 
 const LocaleContext = createContext({
-  locale: 'en-US',
+  locale: 'en',
   timezone: 'UTC',
   country: null,
   countries: [],
@@ -13,11 +15,44 @@ const LocaleContext = createContext({
 })
 
 export const LocaleProvider = ({ children }) => {
-  const [locale, setLocale] = useState('en-US')
+  const [locale, setLocaleState] = useState('en')
   const [timezone, setTimezone] = useState('UTC')
   const [country, setCountry] = useState(null)
   const [countries, setCountries] = useState([])
   const [loading, setLoading] = useState(true)
+  const { user } = useAuth()
+
+  // Map settings language name to code
+  const getLangCode = (pref) => {
+    const langMap = {
+      'English': 'en',
+      'German': 'de',
+      'Hindi': 'hi',
+      'Tamil': 'ta',
+      'Spanish': 'en',
+      'French': 'en',
+      'Japanese': 'en',
+      'Mandarin': 'en'
+    }
+    return langMap[pref] || 'en'
+  }
+
+  // Handle manual/programmatic locale changes
+  const setLocale = (newLocale) => {
+    const cleanLocale = newLocale.split('-')[0].toLowerCase()
+    i18n.changeLanguage(cleanLocale)
+    setLocaleState(cleanLocale)
+  }
+
+  // Synchronize language when authenticated user's profile preferences load or change.
+  // This runs synchronously so it applies before the slow geo-IP fetch below can overwrite it.
+  useEffect(() => {
+    if (user?.languagePreference) {
+      const code = getLangCode(user.languagePreference)
+      i18n.changeLanguage(code)
+      setLocaleState(code)
+    }
+  }, [user?.languagePreference])
 
   useEffect(() => {
     const initLocale = async () => {
@@ -36,28 +71,46 @@ export const LocaleProvider = ({ children }) => {
 
         setCountries(processedCountries)
 
-        // 2. Detect User Location and timezone from IP
-        try {
-          const geoRes = await fetch('https://ipapi.co/json/')
-          const geoData = await geoRes.json()
+        // Only auto-detect if the user does NOT have a saved preference yet
+        if (!user?.languagePreference) {
+          // 2. Detect User Location and timezone from IP
+          try {
+            const geoRes = await fetch('https://ipapi.co/json/')
+            const geoData = await geoRes.json()
 
-          if (geoData && !geoData.error) {
-            if (geoData.timezone) setTimezone(geoData.timezone)
-            if (geoData.country_code) {
-              const detectedCountry = processedCountries.find(c => c.code === geoData.country_code)
-              if (detectedCountry) setCountry(detectedCountry)
+            if (geoData && !geoData.error) {
+              if (geoData.timezone) setTimezone(geoData.timezone)
+              if (geoData.country_code) {
+                const detectedCountry = processedCountries.find(c => c.code === geoData.country_code)
+                if (detectedCountry) setCountry(detectedCountry)
+              }
+              if (geoData.languages) {
+                const primaryLang = geoData.languages.split(',')[0].split('-')[0].toLowerCase()
+                setLocale(primaryLang)
+              }
             }
-            if (geoData.languages) {
-              const primaryLang = geoData.languages.split(',')[0]
-              setLocale(primaryLang)
-            }
+          } catch (e) {
+            console.warn("Geo detection failed, using browser defaults")
+            // Fallback to browser
+            setTimezone(Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC')
+            const browserLang = (navigator.language || 'en').split('-')[0].toLowerCase()
+            setLocale(browserLang)
           }
-        } catch (e) {
-          console.warn("Geo detection failed, using browser defaults")
-          // Fallback to browser
-          setTimezone(Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC')
-          const browserLang = navigator.language || 'en-US'
-          setLocale(browserLang)
+        } else {
+          // User preference exists, just fetch geo details for context (e.g. timezone) if not already set
+          try {
+            const geoRes = await fetch('https://ipapi.co/json/')
+            const geoData = await geoRes.json()
+            if (geoData && !geoData.error) {
+              if (geoData.timezone) setTimezone(geoData.timezone)
+              if (geoData.country_code) {
+                const detectedCountry = processedCountries.find(c => c.code === geoData.country_code)
+                if (detectedCountry) setCountry(detectedCountry)
+              }
+            }
+          } catch (e) {
+            setTimezone(Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC')
+          }
         }
 
       } catch (error) {
@@ -68,7 +121,7 @@ export const LocaleProvider = ({ children }) => {
     }
 
     initLocale()
-  }, [])
+  }, [user])
 
   const formatDate = (date, options = {}) => {
     return new Intl.DateTimeFormat(locale, {
@@ -85,3 +138,4 @@ export const LocaleProvider = ({ children }) => {
 }
 
 export const useLocale = () => useContext(LocaleContext)
+

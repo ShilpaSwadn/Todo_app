@@ -353,23 +353,33 @@ export default function AccessSection({ user, config, setError, setSuccess }) {
                                         const currentRoles = pendingRoles[member.user_id] || member.user_roles || ['GROUP_MEMBER'];
                                         const isSelected = currentRoles.includes(role.id);
                                         const isDefault = role.id === 'GROUP_MEMBER';
+                                        // Disable GROUP_ADMIN checkbox if this member already has GROUP_ADMIN saved
+                                        const isAlreadyAdmin = role.id === 'GROUP_ADMIN' && (member.user_roles || []).includes('GROUP_ADMIN');
+                                        const isDisabled = isDefault || isAlreadyAdmin;
                                         return (
-                                          <label key={role.id} className={`flex items-center gap-3 p-2.5 rounded-xl transition-colors cursor-pointer ${isDefault ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-50 dark:hover:bg-gray-800/50'}`}>
+                                          <label
+                                            key={role.id}
+                                            title={isAlreadyAdmin ? 'This user is already a Group Admin' : undefined}
+                                            className={`flex items-center gap-3 p-2.5 rounded-xl transition-colors ${isDisabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/50'}`}
+                                          >
                                             <input 
                                               type="checkbox"
-                                              disabled={isDefault}
+                                              disabled={isDisabled}
                                               checked={isSelected || isDefault}
                                               onChange={(e) => {
-                                                if (isDefault) return;
+                                                if (isDisabled) return;
                                                 const newRoles = e.target.checked 
                                                   ? [...currentRoles, role.id]
                                                   : currentRoles.filter(id => id !== role.id);
                                                 setPendingRoles(prev => ({ ...prev, [member.user_id]: newRoles }));
                                               }}
-                                              className="w-4 h-4 rounded-md border-gray-200 dark:border-gray-700 text-indigo-600 focus:ring-indigo-500 transition-all cursor-pointer"
+                                              className="w-4 h-4 rounded-md border-gray-200 dark:border-gray-700 text-indigo-600 focus:ring-indigo-500 transition-all cursor-pointer disabled:cursor-not-allowed"
                                             />
                                             <span className="text-[10px] font-black uppercase tracking-widest text-gray-700 dark:text-gray-300">
                                               {role.label}
+                                              {isAlreadyAdmin && (
+                                                <span className="ml-2 text-[8px] font-bold text-indigo-400 normal-case tracking-normal">(Admin)</span>
+                                              )}
                                             </span>
                                           </label>
                                         );

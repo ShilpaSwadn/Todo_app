@@ -8,11 +8,13 @@ import { useAuth } from '@/context/AuthContext'
 import { FiLogOut, FiActivity, FiUser, FiSettings, FiShoppingBag, FiCheck, FiX, FiSun, FiMoon } from 'react-icons/fi'
 import MealSelector from '@/components/MealSelector'
 import { useTheme } from '@/context/ThemeContext'
+import { useTranslation } from 'react-i18next'
 
 export default function Dashboard() {
   const router = useRouter()
   const { theme, toggleTheme } = useTheme()
   const { user: authUser, loading: authLoading } = useAuth()
+  const { t } = useTranslation()
   const [user, setUser] = useState(null)
   const [loading, setLoading] = useState(true)
   const [isProfileOpen, setIsProfileOpen] = useState(false)
@@ -23,6 +25,7 @@ export default function Dashboard() {
 
   const profileCompletion = user ? [
     user.firstName,
+
     user.lastName,
     user.mobileNumber,
     user.email
@@ -102,7 +105,7 @@ export default function Dashboard() {
       <main className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-10 w-10 border-2 border-indigo-600 border-t-transparent mx-auto"></div>
-          <p className="mt-4 text-sm text-gray-600 dark:text-gray-400">Loading your profile...</p>
+          <p className="mt-4 text-sm text-gray-600 dark:text-gray-400">{t('dashboard.loading_profile')}</p>
         </div>
       </main>
     )
@@ -118,15 +121,15 @@ export default function Dashboard() {
               <div className="w-16 h-16 bg-rose-50 dark:bg-rose-900/20 rounded-full flex items-center justify-center text-rose-600 mb-4">
                 <FiLogOut className="w-8 h-8" />
               </div>
-              <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">Sign Out</h3>
-              <p className="text-gray-500 text-sm mb-8 px-4">Are you sure you want to end your Swadn session?</p>
+              <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">{t('dashboard.sign_out_confirm.title')}</h3>
+              <p className="text-gray-500 text-sm mb-8 px-4">{t('dashboard.sign_out_confirm.text')}</p>
               <div className="flex w-full gap-3">
                 <button
                   onClick={() => setShowLogoutConfirm(false)}
                   disabled={isLoggingOut}
                   className="flex-1 py-3 px-4 rounded-xl border border-gray-200 dark:border-gray-700 font-bold text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors disabled:opacity-50"
                 >
-                  Cancel
+                  {t('dashboard.sign_out_confirm.cancel')}
                 </button>
                 <button
                   onClick={handleLogout}
@@ -136,10 +139,10 @@ export default function Dashboard() {
                   {isLoggingOut ? (
                     <>
                       <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
-                      <span>Logging out...</span>
+                      <span>{t('dashboard.sign_out_confirm.logging_out')}</span>
                     </>
                   ) : (
-                    'Confirm'
+                    t('dashboard.sign_out_confirm.confirm')
                   )}
                 </button>
               </div>
@@ -156,16 +159,16 @@ export default function Dashboard() {
               <div className="w-16 h-16 bg-indigo-50 dark:bg-indigo-900/20 rounded-full flex items-center justify-center text-indigo-600 mb-4">
                 <FiUser className="w-8 h-8" />
               </div>
-              <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">Complete Your Profile</h3>
+              <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">{t('dashboard.profile_incomplete.title')}</h3>
               <p className="text-gray-500 text-sm mb-8 px-4">
-                Some details are missing from your profile. Please complete them to enjoy a personalized experience.
+                {t('dashboard.profile_incomplete.text')}
               </p>
               <div className="flex w-full gap-3">
                 <button
                   onClick={() => setShowIncompleteModal(false)}
                   className="flex-1 py-3 px-4 rounded-xl border border-gray-200 dark:border-gray-700 font-bold text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
                 >
-                  Later
+                  {t('dashboard.profile_incomplete.later')}
                 </button>
                 <button
                   onClick={() => {
@@ -174,7 +177,7 @@ export default function Dashboard() {
                   }}
                   className="flex-1 py-3 px-4 rounded-xl bg-indigo-600 text-white font-bold hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-200 dark:shadow-none"
                 >
-                  Complete Now
+                  {t('dashboard.profile_incomplete.complete_now')}
                 </button>
               </div>
             </div>
@@ -193,7 +196,7 @@ export default function Dashboard() {
             </div>
             <div>
               <p className="text-xl font-black text-gray-900 dark:text-white uppercase tracking-tighter leading-none">Swadn</p>
-              <p className="text-[10px] text-gray-400 uppercase tracking-widest font-black">Pre-Flight Booking</p>
+              <p className="text-[10px] text-gray-400 uppercase tracking-widest font-black">{t('dashboard.pre_flight_booking', 'Pre-Flight Booking')}</p>
             </div>
           </div>
 
@@ -213,7 +216,7 @@ export default function Dashboard() {
               onClick={() => setShowLogoutConfirm(true)}
               className="hidden sm:block text-sm font-black uppercase tracking-widest text-gray-400 hover:text-rose-600 transition-colors"
             >
-              Sign Out
+              {t('dashboard.sign_out')}
             </button>
 
             {/* Profile Dropdown */}
@@ -254,7 +257,7 @@ export default function Dashboard() {
                     {/* Completion Progress */}
                     <div className="w-full mt-4">
                       <div className="flex justify-between items-center mb-1">
-                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Completion</span>
+                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{t('dashboard.completion', 'Completion')}</span>
                         <span className="text-[10px] font-black text-indigo-600">{completionPercentage}%</span>
                       </div>
                       <div className="h-1.5 w-full bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden">
@@ -276,7 +279,7 @@ export default function Dashboard() {
                       <div className="w-8 h-8 rounded-xl bg-gray-50 dark:bg-gray-700 flex items-center justify-center group-hover:bg-white dark:group-hover:bg-gray-600 transition-colors shadow-sm shrink-0">
                         <FiSettings className="w-4 h-4 opacity-70" />
                       </div>
-                      <span>Account Settings</span>
+                      <span>{t('dashboard.account_settings')}</span>
                     </button>
                     <button
                       onClick={() => {
@@ -288,7 +291,7 @@ export default function Dashboard() {
                       <div className="w-8 h-8 rounded-xl bg-rose-50 dark:bg-rose-900/10 flex items-center justify-center group-hover:bg-white dark:group-hover:bg-rose-900/30 transition-colors shadow-sm shrink-0">
                         <FiLogOut className="w-4 h-4 opacity-70" />
                       </div>
-                      <span>Log Out</span>
+                      <span>{t('dashboard.sign_out')}</span>
                     </button>
                   </div>
                 </div>
@@ -303,14 +306,14 @@ export default function Dashboard() {
         <div className="mb-12 flex flex-col md:flex-row md:items-end justify-between gap-6">
           <div>
             <h1 className="text-4xl font-black text-gray-900 dark:text-white tracking-tighter uppercase">
-              Welcome, {user?.firstName || 'Guest'}
+              {t('dashboard.welcome', { name: user?.firstName || 'Guest' })}
             </h1>
             <p className="text-gray-500 dark:text-gray-400 mt-2 text-lg">
-              Customize your in-flight culinary experience with absolute precision.
+              {t('dashboard.sub_welcome')}
             </p>
           </div>
           <div className="bg-white dark:bg-gray-800 px-6 py-4 rounded-[1.5rem] border border-gray-100 dark:border-gray-700 shadow-sm">
-            <p className="text-[10px] font-black text-indigo-500 uppercase tracking-[0.2em] mb-1">Flight Identity</p>
+            <p className="text-[10px] font-black text-indigo-500 uppercase tracking-[0.2em] mb-1">{t('dashboard.flight_identity')}</p>
             <p className="text-xl font-bold text-gray-900 dark:text-white tabular-nums uppercase">AI-902-SKY</p>
           </div>
         </div>

@@ -5,13 +5,14 @@ import {
     FiX, FiPlus, FiArrowRight, FiShield, FiSlash,
     FiShoppingBag, FiChevronLeft, FiAlertTriangle, FiSearch
 } from 'react-icons/fi'
+import { useTranslation } from 'react-i18next'
 
 const CORE_MEAL_TYPES = [
-    { id: 'REGULAR', label: 'Regular Meal', icon: '🍽️', forbidden: [] },
-    { id: 'JAIN', label: 'Jain Meal', icon: '🕍', forbidden: ['Onion', 'Garlic', 'Potato', 'Ginger', 'Root Vegetables'] },
-    { id: 'VEGAN', label: 'Vegan Meal', icon: '🌱', forbidden: ['Meat', 'Chicken', 'Seafood', 'Dairy', 'Eggs', 'Butter', 'Cream'] },
-    { id: 'DIABETIC', label: 'Diabetic Meal', icon: '📉', forbidden: ['Sugar', 'Honey', 'High Carb'] },
-    { id: 'BABY', label: 'Baby Food', icon: '👶', forbidden: ['Salt', 'Whole Nuts', 'Hard Textures'] }
+    { id: 'REGULAR', icon: '🍽️', forbidden: [] },
+    { id: 'JAIN', icon: '🕍', forbidden: ['Onion', 'Garlic', 'Potato', 'Ginger', 'Root Vegetables'] },
+    { id: 'VEGAN', icon: '🌱', forbidden: ['Meat', 'Chicken', 'Seafood', 'Dairy', 'Eggs', 'Butter', 'Cream'] },
+    { id: 'DIABETIC', icon: '📉', forbidden: ['Sugar', 'Honey', 'High Carb'] },
+    { id: 'BABY', icon: '👶', forbidden: ['Salt', 'Whole Nuts', 'Hard Textures'] }
 ]
 
 export const DISHES = [
@@ -133,6 +134,7 @@ export const DISHES = [
 
 
 export default function MealSelector() {
+    const { t } = useTranslation()
     const [step, setStep] = useState(1) // 1: Type, 2: Dish, 3: Customise
     const [selectedType, setSelectedType] = useState(null)
     const [selectedDish, setSelectedDish] = useState(null)
@@ -193,7 +195,7 @@ export default function MealSelector() {
                         </button>
                     )}
                     <h2 className="text-3xl font-black text-gray-900 dark:text-white uppercase tracking-tighter">
-                        Swadn Configurator
+                        {t('meal_selector.configurator')}
                     </h2>
                 </div>
                 <div className="flex gap-2">
@@ -207,8 +209,10 @@ export default function MealSelector() {
             {step === 1 && (
                 <div className="space-y-8 bg-white dark:bg-gray-800 p-8 rounded-[2.5rem] shadow-sm border border-gray-100 dark:border-gray-700">
                     <div className="text-center">
-                        <p className="text-xs font-black text-indigo-500 uppercase tracking-[0.2em] mb-2">Step 1 of 3</p>
-                        <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-8">Choose Your Dietary Blueprint</h3>
+                        <p className="text-xs font-black text-indigo-500 uppercase tracking-[0.2em] mb-2">
+                            {t('meal_selector.step_x_of_y', { step: 1, total: 3 })}
+                        </p>
+                        <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-8">{t('meal_selector.dietary_blueprint')}</h3>
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
                         {CORE_MEAL_TYPES.map(type => (
@@ -218,7 +222,9 @@ export default function MealSelector() {
                                 className="group relative flex flex-col items-center p-8 rounded-[2rem] border-2 border-gray-50 dark:border-gray-900 hover:border-indigo-600 hover:bg-indigo-50/10 transition-all duration-300"
                             >
                                 <span className="text-5xl mb-4 transform transition-transform group-hover:scale-110">{type.icon}</span>
-                                <span className="text-lg font-black text-gray-900 dark:text-white tracking-tight uppercase">{type.label}</span>
+                                <span className="text-lg font-black text-gray-900 dark:text-white tracking-tight uppercase">
+                                    {t(`meal_selector.${type.id}`)}
+                                </span>
                                 <div className="absolute top-4 right-4 text-gray-300 group-hover:text-indigo-600 transition-colors">
                                     <FiArrowRight className="w-6 h-6" />
                                 </div>
@@ -233,9 +239,9 @@ export default function MealSelector() {
                 <div className="space-y-8">
                     <div className="bg-indigo-600 p-6 rounded-[2rem] text-white shadow-xl flex items-center justify-between">
                         <div>
-                            <p className="text-[10px] font-black uppercase tracking-wider opacity-70 mb-1">Active Preference</p>
+                            <p className="text-[10px] font-black uppercase tracking-wider opacity-70 mb-1">{t('meal_selector.active_preference')}</p>
                             <h3 className="text-xl font-bold flex items-center gap-2">
-                                {CORE_MEAL_TYPES.find(t => t.id === selectedType).icon} {CORE_MEAL_TYPES.find(t => t.id === selectedType).label}
+                                {CORE_MEAL_TYPES.find(t => t.id === selectedType).icon} {t(`meal_selector.${selectedType}`)}
                             </h3>
                         </div>
                         <FiShield className="w-8 h-8 opacity-20" />
@@ -245,7 +251,7 @@ export default function MealSelector() {
                         <FiSearch className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
                         <input
                             type="text"
-                            placeholder="Search dish or ingredient..."
+                            placeholder={t('meal_selector.search_placeholder')}
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
                             className="w-full pl-12 pr-4 py-4 bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 focus:ring-2 focus:ring-indigo-500 outline-none transition-all shadow-sm"
@@ -272,14 +278,14 @@ export default function MealSelector() {
                                     </div>
                                 </div>
                                 <div className="flex items-center text-indigo-600 font-bold text-xs uppercase tracking-wider group-hover:translate-x-1 transition-transform">
-                                    Select & Customise <FiArrowRight className="ml-1" />
+                                    {t('meal_selector.select_customise')} <FiArrowRight className="ml-1" />
                                 </div>
                             </div>
                         ))}
                     </div>
                     {filteredDishes.length === 0 && (
                         <div className="text-center py-12 bg-gray-50 dark:bg-gray-900/50 rounded-3xl border-2 border-dashed border-gray-200 dark:border-gray-800">
-                            <p className="text-gray-500">No dishes found matching your search.</p>
+                            <p className="text-gray-500">{t('meal_selector.no_dishes')}</p>
                         </div>
                     )}
                 </div>
@@ -302,8 +308,8 @@ export default function MealSelector() {
                                     <FiSlash className="w-6 h-6" />
                                 </div>
                                 <div>
-                                    <h4 className="text-xl font-bold text-gray-900 dark:text-white">Avoid Specific Ingredients</h4>
-                                    <p className="text-xs text-gray-500">Tap to exclude items from this specific preparation.</p>
+                                    <h4 className="text-xl font-bold text-gray-900 dark:text-white">{t('meal_selector.avoid_title')}</h4>
+                                    <p className="text-xs text-gray-500">{t('meal_selector.avoid_subtitle')}</p>
                                 </div>
                             </div>
 
@@ -332,7 +338,7 @@ export default function MealSelector() {
                                                 <FiPlus className="shrink-0 opacity-20" />
                                             )}
                                             {status === 'FORBIDDEN' && (
-                                                <span className="absolute -top-3 left-1/2 -translate-x-1/2 bg-rose-600 text-[8px] text-white px-2 py-0.5 rounded-full uppercase">Forbidden</span>
+                                                <span className="absolute -top-3 left-1/2 -translate-x-1/2 bg-rose-600 text-[8px] text-white px-2 py-0.5 rounded-full uppercase">{t('meal_selector.forbidden')}</span>
                                             )}
                                         </button>
                                     )
@@ -348,21 +354,21 @@ export default function MealSelector() {
                                 👜
                             </div>
                             <div>
-                                <p className="text-[10px] font-black text-white/40 uppercase tracking-[0.3em] mb-1">Final Selection</p>
+                                <p className="text-[10px] font-black text-white/40 uppercase tracking-[0.3em] mb-1">{t('meal_selector.final_selection')}</p>
                                 <h4 className="text-white text-xl font-bold">{selectedDish.name}</h4>
                                 <p className="text-white/60 text-xs mt-1">
                                     {avoidedIngredients.length > 0
-                                        ? `Excluding: ${avoidedIngredients.join(', ')}`
-                                        : 'No custom exclusions added'}
+                                        ? t('meal_selector.excluding', { items: avoidedIngredients.join(', ') })
+                                        : t('meal_selector.no_exclusions')}
                                 </p>
                             </div>
                         </div>
                         <div className="flex gap-4">
                             <button onClick={reset} className="px-6 py-4 rounded-2xl font-bold text-sm text-white/60 hover:text-white transition-colors">
-                                Cancel
+                                {t('meal_selector.cancel')}
                             </button>
                             <button className="px-10 py-4 bg-indigo-600 text-white rounded-2xl font-black text-sm uppercase tracking-widest hover:bg-indigo-700 shadow-[0_10px_30px_rgba(79,70,229,0.3)] transition-all">
-                                Confirm & Book
+                                {t('meal_selector.confirm_book')}
                             </button>
                         </div>
                     </div>
