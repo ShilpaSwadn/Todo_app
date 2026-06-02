@@ -24,52 +24,157 @@ class AuthService {
   async register(userData) {
     const { email, password, firstName, lastName, mobileNumber } = userData;
 
-    // 1. Check uniqueness
-    await this.checkUniqueness(email, mobileNumber);
-
-    // 2. Create in Firebase Auth
-    // Note: We don't pass phoneNumber here because Firebase enforces global uniqueness on it.
-    // Our application allows multiple accounts per mobile number (each with a unique email).
+    const cleanEmail = email.toLowerCase().trim();
     const cleanedMobile = mobileNumber ? (mobileNumber.startsWith('+') ? mobileNumber : (mobileNumber.length === 10 ? `+91${mobileNumber}` : `+${mobileNumber}`)).replace(/\s/g, '') : null;
 
-    const firebaseUser = await adminAuth.createUser({
-      email,
-      password,
-      displayName: `${firstName} ${lastName || ''}`.trim(),
-      phoneNumber: cleanedMobile // Enforce uniqueness in Firebase Auth as well
-    });
-
-    // 3. Create in local database (PostgreSQL)
-    const user = await User.create({
-      email,
-      firstName,
-      lastName,
-      mobileNumber,
-      firebaseUid: firebaseUser.uid
-    });
-
-    // 4. Create Default Group
+    // 1. Check if email exists in Firebase
+    let existingUserByEmail = null;
     try {
-      await Group.create(user.id, {
-        name: 'default group',
-        description: 'default group details',
-        isDefault: true
-      });
-    } catch (groupError) {
-      console.warn('User created but default group creation failed:', groupError);
+      existingUserByEmail = await adminAuth.getUserByEmail(cleanEmail);
+    } catch (err) {
+      if (err.code !== 'auth/user-not-found') throw err;
     }
 
-    // 5. Send Verification Email (Magic Link)
+    // 2. Check if mobile number exists in Firebase
+    let existingUserByMobile = null;
+    if (cleanedMobile) {
+      try {
+        existingUserByMobile = await adminAuth.getUserByPhoneNumber(cleanedMobile);
+      } catch (err) {
+        if (err.code !== 'auth/user-not-found' && err.code !== 'auth/invalid-phone-number') throw err;
+      }
+    }
+
+    let firebaseUser = null;
+    let pgUser = null;
+
+    // SCENARIO A: Email exists
+    if (existingUserByEmail) {
+      if (existingUserByEmail.emailVerified) {
+        throw new Error('This email is already connected to an account.');
+      }
+
+      console.log(`Updating unverified user with email ${cleanEmail}...`);
+
+      // If they provided a mobile number, check if it's already used by another VERIFIED account
+      if (existingUserByMobile && existingUserByMobile.uid !== existingUserByEmail.uid) {
+        if (existingUserByMobile.emailVerified) {
+          throw new Error('This mobile number is already connected to another verified account.');
+        }
+        
+        // The mobile number is held by another UNVERIFIED user. 
+        // We will release/remove the mobile number from the other unverified user to prevent duplicate keys in Firebase.
+        try {
+          console.log(`Releasing mobile number from unverified user ${existingUserByMobile.uid}`);
+          await adminAuth.updateUser(existingUserByMobile.uid, { phoneNumber: null });
+          await User.update(existingUserByMobile.uid, { mobileNumber: null });
+        } catch (releaseErr) {
+          console.warn('Could not release mobile number from other unverified user:', releaseErr);
+        }
+      }
+
+      // Update Firebase Auth user
+      firebaseUser = await adminAuth.updateUser(existingUserByEmail.uid, {
+        password,
+        displayName: `${firstName} ${lastName || ''}`.trim(),
+        phoneNumber: cleanedMobile
+      });
+
+      // Update Postgres user
+      pgUser = await User.update(existingUserByEmail.uid, {
+        firstName,
+        lastName,
+        mobileNumber: cleanedMobile
+      });
+
+      if (!pgUser) {
+        // In case PostgreSQL record was somehow missing or deleted
+        pgUser = await User.create({
+          email: cleanEmail,
+          firstName,
+          lastName,
+          mobileNumber,
+          firebaseUid: existingUserByEmail.uid
+        });
+      }
+
+    // SCENARIO B: Mobile number exists (but email does not)
+    } else if (existingUserByMobile) {
+      if (existingUserByMobile.emailVerified) {
+        throw new Error('This mobile number is already connected to an account.');
+      }
+
+      console.log(`Updating unverified user with mobile ${cleanedMobile} (email correction from ${existingUserByMobile.email} to ${cleanEmail})...`);
+
+      // Update Firebase Auth user with the new email
+      firebaseUser = await adminAuth.updateUser(existingUserByMobile.uid, {
+        email: cleanEmail,
+        password,
+        displayName: `${firstName} ${lastName || ''}`.trim()
+      });
+
+      // Update Postgres user
+      pgUser = await User.update(existingUserByMobile.uid, {
+        firstName,
+        lastName,
+        email: cleanEmail
+      });
+
+      if (!pgUser) {
+        // In case PostgreSQL record was somehow missing or deleted
+        pgUser = await User.create({
+          email: cleanEmail,
+          firstName,
+          lastName,
+          mobileNumber,
+          firebaseUid: existingUserByMobile.uid
+        });
+      }
+
+    // SCENARIO C: Truly new user
+    } else {
+      // Create in Firebase Auth
+      firebaseUser = await adminAuth.createUser({
+        email: cleanEmail,
+        password,
+        displayName: `${firstName} ${lastName || ''}`.trim(),
+        phoneNumber: cleanedMobile
+      });
+
+      // Create in local database (PostgreSQL)
+      pgUser = await User.create({
+        email: cleanEmail,
+        firstName,
+        lastName,
+        mobileNumber,
+        firebaseUid: firebaseUser.uid
+      });
+    }
+
+    // Ensure Default Group exists
+    try {
+      const existingGroup = await Group.findByUserId(pgUser.id);
+      if (!existingGroup) {
+        await Group.create(pgUser.id, {
+          name: 'default group',
+          description: 'default group details',
+          isDefault: true
+        });
+      }
+    } catch (groupError) {
+      console.warn('Error ensuring default group:', groupError);
+    }
+
+    // Send Verification Email (Magic Link)
     try {
       const { sendVerificationEmail } = await import('../services/emailService.js');
-      const link = await adminAuth.generateEmailVerificationLink(email);
-      await sendVerificationEmail(email, link);
+      const link = await adminAuth.generateEmailVerificationLink(cleanEmail);
+      await sendVerificationEmail(cleanEmail, link);
     } catch (emailError) {
-      console.warn('User created but verification email failed to send:', emailError);
-      // We don't throw here so the user can see the "Success" screen and try the resend button
+      console.warn('Verification email failed to send:', emailError);
     }
 
-    return this.formatUser(user);
+    return this.formatUser(pgUser);
   }
 
   /**
