@@ -326,6 +326,17 @@ export default function Register() {
             >
               Go to Login
             </Link>
+
+            <button
+              type="button"
+              onClick={() => {
+                setSuccessMsg('');
+                setError('');
+              }}
+              className="w-full px-6 py-3 bg-transparent border-2 border-dashed border-gray-300 hover:border-indigo-500 dark:border-gray-600 dark:hover:border-indigo-400 text-gray-600 dark:text-gray-400 font-semibold rounded-lg transition-all text-sm"
+            >
+              Wrong email or mobile? Go back & edit
+            </button>
           </div>
 
           {error && (
