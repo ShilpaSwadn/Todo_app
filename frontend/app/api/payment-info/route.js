@@ -7,6 +7,8 @@ import authService from '@/lib/server/services/authService'
 import { getUidFromToken } from '@/lib/server/middleware/authMiddleware'
 import { validatePaymentSecurity } from '@/lib/server/services/securityValidator'
 
+export const dynamic = 'force-dynamic';
+
 export async function GET(request) {
   try {
     await ensureDbInitialized()

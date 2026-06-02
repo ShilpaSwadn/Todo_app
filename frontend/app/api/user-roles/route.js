@@ -5,6 +5,8 @@ import authService from '@/lib/server/services/authService.js'
 import UserRole from '@/lib/server/models/UserRole.js'
 import Group from '@/lib/server/models/Group.js'
 
+export const dynamic = 'force-dynamic';
+
 export async function GET(request) {
   try {
     await ensureDbInitialized()

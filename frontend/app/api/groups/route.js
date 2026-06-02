@@ -5,6 +5,8 @@ import { ensureDbInitialized } from '@/lib/server/middleware/dbInit.js'
 import { getUidFromToken } from '@/lib/server/middleware/authMiddleware.js'
 import authService from '@/lib/server/services/authService.js'
 
+export const dynamic = 'force-dynamic';
+
 export async function POST(request) {
   try {
     await ensureDbInitialized()
