@@ -1,22 +1,27 @@
-// Email service using Firebase Firestore collection trigger
-// This stores email requests in Firestore, and Firebase Extension sends them automatically
+// Email service using Firebase Firestore collection trigger with SMTP direct send fallback
+// This stores email requests in Firestore and attempts to send them directly via SMTP if configured,
+// updating the status in Firestore so that the client polling API still works correctly.
 
 import { adminDb } from '../config/firebase-admin.js';
+import nodemailer from 'nodemailer';
 
 export const sendOTPEmail = async (email, otp) => {
   try {
     // In development mode, always log to console for visibility
     if (process.env.NODE_ENV !== 'production') {
-      console.log('--- OTP EMAIL (Firebase) ---');
+      console.log('--- OTP EMAIL (Firebase/SMTP) ---');
       console.log(`To: ${email}`);
       console.log(`OTP: ${otp}`);
       console.log('----------------------------');
     }
 
-    if (process.env.NODE_ENV !== 'production' && process.env.FIREBASE_EMAIL_ENABLED !== 'true') {
-      console.log('Note: FIREBASE_EMAIL_ENABLED is not set to true. Skipping Firestore write.');
+    const hasSmtp = !!process.env.SMTP_HOST;
+
+    if (process.env.NODE_ENV !== 'production' && process.env.FIREBASE_EMAIL_ENABLED !== 'true' && !hasSmtp) {
+      console.log('Note: FIREBASE_EMAIL_ENABLED is not set to true and no SMTP_HOST is configured. Skipping Firestore write.');
       return { success: true, message: 'OTP logged to console (Dev Mode)', isLoggedOnly: true };
     }
+
     // Store email request in Firestore 'mail' collection
     // Firebase "Trigger Email" extension automatically sends emails from this collection
     const emailDoc = {
@@ -48,24 +53,73 @@ export const sendOTPEmail = async (email, otp) => {
     const emailRef = await adminDb.collection('mail').add(emailDoc);
 
     console.log('✅ Email queued in Firestore:', emailRef.id);
-    console.log('📧 Firebase Extension will send it automatically');
+
+    // Direct SMTP dispatch if configured
+    if (hasSmtp) {
+      try {
+        console.log('📧 Sending OTP email directly via SMTP...');
+        const transporter = nodemailer.createTransport({
+          host: process.env.SMTP_HOST,
+          port: parseInt(process.env.SMTP_PORT || '587', 10),
+          secure: process.env.SMTP_SECURE === 'true',
+          auth: {
+            user: process.env.SMTP_USER,
+            pass: process.env.SMTP_PASS,
+          },
+        });
+
+        const mailOptions = {
+          from: process.env.EMAIL_FROM || process.env.SMTP_USER,
+          to: email,
+          subject: emailDoc.message.subject,
+          html: emailDoc.message.html,
+          text: emailDoc.message.text,
+        };
+
+        const info = await transporter.sendMail(mailOptions);
+        console.log('✅ OTP email sent successfully via SMTP:', info.messageId);
+
+        // Update Firestore document delivery status to SUCCESS so polling API resolves immediately
+        await emailRef.update({
+          'delivery.state': 'SUCCESS',
+          'delivery.endTime': new Date(),
+          'delivery.info': {
+            messageId: info.messageId,
+            response: info.response
+          }
+        });
+      } catch (smtpError) {
+        console.error('❌ SMTP direct send failed, updating doc state to ERROR:', smtpError);
+        await emailRef.update({
+          'delivery.state': 'ERROR',
+          'delivery.endTime': new Date(),
+          'delivery.error': smtpError.message
+        });
+        throw smtpError;
+      }
+    } else {
+      console.log('📧 Firebase Extension will send it automatically');
+    }
 
     return { success: true, messageId: emailRef.id };
   } catch (error) {
-    console.error('❌ Error queuing OTP email in Firestore:', error);
+    console.error('❌ Error queuing or sending OTP email:', error);
     throw new Error('Failed to send OTP email. Please try again.');
   }
 };
+
 export const sendVerificationEmail = async (email, link) => {
   try {
     if (process.env.NODE_ENV !== 'production') {
-      console.log('--- VERIFICATION EMAIL (Firebase) ---');
+      console.log('--- VERIFICATION EMAIL (Firebase/SMTP) ---');
       console.log(`To: ${email}`);
       console.log(`Link: ${link}`);
       console.log('------------------------------------');
     }
 
-    if (process.env.NODE_ENV !== 'production' && process.env.FIREBASE_EMAIL_ENABLED !== 'true') {
+    const hasSmtp = !!process.env.SMTP_HOST;
+
+    if (process.env.NODE_ENV !== 'production' && process.env.FIREBASE_EMAIL_ENABLED !== 'true' && !hasSmtp) {
       return { success: true, message: 'Link logged to console (Dev Mode)', isLoggedOnly: true };
     }
 
@@ -95,9 +149,57 @@ export const sendVerificationEmail = async (email, link) => {
     };
 
     const emailRef = await adminDb.collection('mail').add(emailDoc);
+    console.log('✅ Verification email queued in Firestore:', emailRef.id);
+
+    // Direct SMTP dispatch if configured
+    if (hasSmtp) {
+      try {
+        console.log('📧 Sending verification email directly via SMTP...');
+        const transporter = nodemailer.createTransport({
+          host: process.env.SMTP_HOST,
+          port: parseInt(process.env.SMTP_PORT || '587', 10),
+          secure: process.env.SMTP_SECURE === 'true',
+          auth: {
+            user: process.env.SMTP_USER,
+            pass: process.env.SMTP_PASS,
+          },
+        });
+
+        const mailOptions = {
+          from: process.env.EMAIL_FROM || process.env.SMTP_USER,
+          to: email,
+          subject: emailDoc.message.subject,
+          html: emailDoc.message.html,
+          text: emailDoc.message.text,
+        };
+
+        const info = await transporter.sendMail(mailOptions);
+        console.log('✅ Verification email sent successfully via SMTP:', info.messageId);
+
+        await emailRef.update({
+          'delivery.state': 'SUCCESS',
+          'delivery.endTime': new Date(),
+          'delivery.info': {
+            messageId: info.messageId,
+            response: info.response
+          }
+        });
+      } catch (smtpError) {
+        console.error('❌ SMTP direct send failed for verification, updating doc state to ERROR:', smtpError);
+        await emailRef.update({
+          'delivery.state': 'ERROR',
+          'delivery.endTime': new Date(),
+          'delivery.error': smtpError.message
+        });
+        throw smtpError;
+      }
+    } else {
+      console.log('📧 Firebase Extension will send it automatically');
+    }
+
     return { success: true, messageId: emailRef.id };
   } catch (error) {
-    console.error('❌ Error queuing verification email:', error);
+    console.error('❌ Error queuing or sending verification email:', error);
     throw new Error('Failed to send verification email.');
   }
 };
