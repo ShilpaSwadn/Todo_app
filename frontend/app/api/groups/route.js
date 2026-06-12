@@ -10,7 +10,7 @@ export const dynamic = 'force-dynamic';
 export async function POST(request) {
   try {
     await ensureDbInitialized()
-    
+
     // Get current user
     const uid = await getUidFromToken(request)
     if (!uid) {
@@ -39,9 +39,9 @@ export async function POST(request) {
     // Verify all members are registered and verified
     const activeMembers = await User.findActiveByIds(memberIds)
     if (activeMembers.length !== memberIds.length) {
-      return NextResponse.json({ 
-        success: false, 
-        message: 'Some members are not valid or verified users' 
+      return NextResponse.json({
+        success: false,
+        message: 'Some members are not valid or verified users'
       }, { status: 400 })
     }
 
@@ -73,8 +73,8 @@ export async function POST(request) {
     })
   } catch (error) {
     console.error('Group creation error:', error)
-    return NextResponse.json({ 
-      success: false, 
+    return NextResponse.json({
+      success: false,
       message: 'Internal server error',
       error: process.env.NODE_ENV === 'development' ? error.message : undefined
     }, { status: 500 })
@@ -84,14 +84,14 @@ export async function POST(request) {
 export async function GET(request) {
   try {
     await ensureDbInitialized()
-    
+
     const uid = await getUidFromToken(request)
     if (!uid) {
       return NextResponse.json({ success: false, message: 'Unauthorized' }, { status: 401 })
     }
 
     const currentUser = await authService.getUserByUid(uid)
-    
+
     // Find groups where user is owner or member
     const sqlQuery = `
       SELECT 
@@ -118,7 +118,7 @@ export async function GET(request) {
       // Ensure owner is included in the details fetch
       const allMemberIds = [...new Set([...(group.memberIds || []), group.ownerId])]
       const memberDetails = await User.findActiveByIds(allMemberIds)
-      
+
       const rolesResult = await query('SELECT user_id, user_roles FROM public.user_roles WHERE group_id = $1', [group.id])
       const rolesMap = {}
       rolesResult.rows.forEach(r => { rolesMap[r.user_id] = r.user_roles })

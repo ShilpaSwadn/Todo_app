@@ -428,25 +428,27 @@ export default function GroupsSection({ user, config, setError, setSuccess }) {
                           </div>
                         ) : (
                           <div className="flex items-center gap-2">
-                            <button
-                              onClick={() => {
-                                setEditingGroupId(group.id);
-                                setEditGroupName(group.name);
-                                setEditGroupDesc(group.description || '');
-                              }}
-                              className="p-3 bg-indigo-50 dark:bg-indigo-900/10 text-indigo-600 rounded-xl hover:bg-indigo-600 hover:text-white transition-all transform active:scale-95"
-                              title="Edit Group"
-                            >
-                              <FiEdit2 className="w-4 h-4" />
-                            </button>
                             {!group.is_default ? (
-                              <button
-                                onClick={() => deleteGroup(group.id)}
-                                className="p-3 bg-rose-50 dark:bg-rose-900/10 text-rose-600 rounded-xl hover:bg-rose-600 hover:text-white transition-all transform active:scale-95"
-                                title="Delete Group"
-                              >
-                                <FiTrash2 className="w-4 h-4" />
-                              </button>
+                              <>
+                                <button
+                                  onClick={() => {
+                                    setEditingGroupId(group.id);
+                                    setEditGroupName(group.name);
+                                    setEditGroupDesc(group.description || '');
+                                  }}
+                                  className="p-3 bg-indigo-50 dark:bg-indigo-900/10 text-indigo-600 rounded-xl hover:bg-indigo-600 hover:text-white transition-all transform active:scale-95"
+                                  title="Edit Group"
+                                >
+                                  <FiEdit2 className="w-4 h-4" />
+                                </button>
+                                <button
+                                  onClick={() => deleteGroup(group.id)}
+                                  className="p-3 bg-rose-50 dark:bg-rose-900/10 text-rose-600 rounded-xl hover:bg-rose-600 hover:text-white transition-all transform active:scale-95"
+                                  title="Delete Group"
+                                >
+                                  <FiTrash2 className="w-4 h-4" />
+                                </button>
+                              </>
                             ) : (
                               <div className="px-4 py-2 bg-gray-50 dark:bg-gray-800/50 rounded-xl">
                                 <span className="text-[8px] font-black text-gray-400 uppercase tracking-[0.2em]">Default</span>

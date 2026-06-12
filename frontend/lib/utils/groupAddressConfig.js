@@ -1,6 +1,6 @@
 export const groupAddressConfig = {
   id: 'group_address',
-  title: 'Group Address',
+  title: 'Addresses',
   description: 'Manage addresses for your groups',
   categories: [
     {

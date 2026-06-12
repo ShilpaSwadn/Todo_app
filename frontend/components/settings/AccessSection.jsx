@@ -190,44 +190,46 @@ export default function AccessSection({ user, config, setError, setSuccess }) {
   return (
     <div className="space-y-8">
       {/* Top Controls: Group Selector & Search */}
-      <div className="flex flex-col lg:flex-row gap-6 items-start lg:items-center justify-between">
-        <div className="w-full lg:w-[400px]">
-          <label className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-[0.4em] ml-2 mb-3 block">
-            Managing Group
-          </label>
-          <div className="relative group">
-            <select
-              value={selectedGroupId}
-              onChange={(e) => setSelectedGroupId(e.target.value)}
-              className="w-full bg-white dark:bg-gray-900 border-2 border-gray-100 dark:border-gray-800 focus:border-indigo-500 rounded-[1.5rem] p-5 text-[11px] font-black uppercase tracking-widest text-gray-900 dark:text-white appearance-none cursor-pointer outline-none transition-all shadow-sm"
-            >
-              <option value="">Select a group...</option>
-              {adminGroups.map(g => (
-                <option key={g.id} value={g.id}>{g.name}</option>
-              ))}
-            </select>
-            <FiUsers className="absolute right-6 top-1/2 -translate-y-1/2 text-gray-400 group-hover:text-indigo-500 pointer-events-none transition-colors" />
-          </div>
-        </div>
-
-        {selectedGroupId && (
-          <div className="w-full lg:w-[400px] animate-in fade-in slide-in-from-right-4 duration-500">
+      {adminGroups.length > 0 && (
+        <div className="flex flex-col lg:flex-row gap-6 items-start lg:items-center justify-between">
+          <div className="w-full lg:w-[400px]">
             <label className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-[0.4em] ml-2 mb-3 block">
-              Search Members
+              Managing Group
             </label>
-            <div className="relative">
-              <input
-                type="text"
-                placeholder="NAME, EMAIL..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full bg-white dark:bg-gray-900 border-2 border-gray-100 dark:border-gray-800 focus:border-indigo-500 rounded-[1.5rem] p-5 pl-14 text-[11px] font-black uppercase tracking-widest text-gray-900 dark:text-white outline-none transition-all shadow-sm"
-              />
-              <FiSearch className="absolute left-6 top-1/2 -translate-y-1/2 text-gray-400" />
+            <div className="relative group">
+              <select
+                value={selectedGroupId}
+                onChange={(e) => setSelectedGroupId(e.target.value)}
+                className="w-full bg-white dark:bg-gray-900 border-2 border-gray-100 dark:border-gray-800 focus:border-indigo-500 rounded-[1.5rem] p-5 text-[11px] font-black uppercase tracking-widest text-gray-900 dark:text-white appearance-none cursor-pointer outline-none transition-all shadow-sm"
+              >
+                <option value="">Select a group...</option>
+                {adminGroups.map(g => (
+                  <option key={g.id} value={g.id}>{g.name}</option>
+                ))}
+              </select>
+              <FiUsers className="absolute right-6 top-1/2 -translate-y-1/2 text-gray-400 group-hover:text-indigo-500 pointer-events-none transition-colors" />
             </div>
           </div>
-        )}
-      </div>
+
+          {selectedGroupId && (
+            <div className="w-full lg:w-[400px] animate-in fade-in slide-in-from-right-4 duration-500">
+              <label className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-[0.4em] ml-2 mb-3 block">
+                Search Members
+              </label>
+              <div className="relative">
+                <input
+                  type="text"
+                  placeholder="NAME, EMAIL..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full bg-white dark:bg-gray-900 border-2 border-gray-100 dark:border-gray-800 focus:border-indigo-500 rounded-[1.5rem] p-5 pl-14 text-[11px] font-black uppercase tracking-widest text-gray-900 dark:text-white outline-none transition-all shadow-sm"
+                />
+                <FiSearch className="absolute left-6 top-1/2 -translate-y-1/2 text-gray-400" />
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {adminGroups.length === 0 && !selectedGroupId ? (
         <div className="bg-white dark:bg-gray-900/40 border border-dashed border-gray-200 dark:border-gray-800 rounded-[3rem] p-20 flex flex-col items-center justify-center text-center">

@@ -57,9 +57,13 @@ const initDatabase = async () => {
         group_description TEXT,
         group_members UUID[] DEFAULT '{}',
         is_active BOOLEAN DEFAULT true,
+        is_default BOOLEAN DEFAULT false,
         created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
       );
     `);
+
+    // 3a. Add missing columns to groups table (idempotent migrations)
+    await query(`ALTER TABLE public.groups ADD COLUMN IF NOT EXISTS is_default BOOLEAN DEFAULT false;`);
 
     // 4. Ensure payment_info table exists
     console.log('Database: Synchronizing payment_info table...');
@@ -121,9 +125,13 @@ const initDatabase = async () => {
       CREATE TABLE IF NOT EXISTS public.group_addresses (
         group_id UUID NOT NULL REFERENCES public.groups(group_id) ON DELETE CASCADE,
         address_id UUID NOT NULL REFERENCES public.addresses(address_id) ON DELETE CASCADE,
+        is_default BOOLEAN DEFAULT false,
         PRIMARY KEY (group_id, address_id)
       );
     `);
+
+    // 7a. Add missing is_default column to group_addresses (idempotent migration)
+    await query(`ALTER TABLE public.group_addresses ADD COLUMN IF NOT EXISTS is_default BOOLEAN DEFAULT false;`);
 
     console.log('Database: Schema initialization completed successfully.');
   } catch (error) {

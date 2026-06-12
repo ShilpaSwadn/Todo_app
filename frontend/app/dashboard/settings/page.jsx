@@ -257,7 +257,7 @@ export default function SettingsPage() {
 
   return (
     <main className="min-h-screen bg-[#FDFDFD] dark:bg-[#020617] flex flex-col relative">
-      
+
       {/* Top Header */}
       <nav className="sticky top-0 z-[500] bg-white/95 dark:bg-[#0F172A]/95 backdrop-blur-md border-b border-gray-100 dark:border-gray-800/50 px-6 sm:px-12 py-5 flex items-center justify-between">
         <div className="flex items-center gap-6">
@@ -316,68 +316,68 @@ export default function SettingsPage() {
                 const isPersonal = section.id === 'personal';
                 const isExpanded = expandedSections[section.id];
                 return (
-                <div key={section.id} className="space-y-2">
-                  <button
-                    onClick={() => {
-                      setActiveSection(section.id);
-                      if (isPersonal) {
-                        setExpandedSections(prev => ({ ...prev, [section.id]: !prev[section.id] }));
-                      }
-                      window.scrollTo({ top: 0, behavior: 'smooth' });
-                    }}
-                    className={`w-full group text-left p-6 rounded-[2.5rem] transition-all duration-500 relative overflow-hidden ${activeSection === section.id
-                      ? 'bg-indigo-600 text-white shadow-2xl shadow-indigo-200 dark:shadow-none'
-                      : 'hover:bg-gray-50 dark:hover:bg-gray-800 border border-transparent hover:border-gray-100'
-                      }`}
-                  >
-                    <div className="flex items-center gap-5 relative z-10">
-                      <div className={`p-3 rounded-2xl transition-colors ${activeSection === section.id
-                        ? 'bg-white/20'
-                        : 'bg-gray-50 dark:bg-gray-700'
-                        }`}>
-                        <span className={`text-xl ${activeSection === section.id ? 'text-white' : 'text-indigo-600'}`}>
-                          {section.icon}
-                        </span>
-                      </div>
-                      <div className="flex-1">
-                        <p className={`text-[11px] font-black uppercase tracking-widest ${activeSection === section.id ? 'text-white' : 'text-gray-900 dark:text-white'
+                  <div key={section.id} className="space-y-2">
+                    <button
+                      onClick={() => {
+                        setActiveSection(section.id);
+                        if (isPersonal) {
+                          setExpandedSections(prev => ({ ...prev, [section.id]: !prev[section.id] }));
+                        }
+                        window.scrollTo({ top: 0, behavior: 'smooth' });
+                      }}
+                      className={`w-full group text-left p-6 rounded-[2.5rem] transition-all duration-500 relative overflow-hidden ${activeSection === section.id
+                        ? 'bg-indigo-600 text-white shadow-2xl shadow-indigo-200 dark:shadow-none'
+                        : 'hover:bg-gray-50 dark:hover:bg-gray-800 border border-transparent hover:border-gray-100'
+                        }`}
+                    >
+                      <div className="flex items-center gap-5 relative z-10">
+                        <div className={`p-3 rounded-2xl transition-colors ${activeSection === section.id
+                          ? 'bg-white/20'
+                          : 'bg-gray-50 dark:bg-gray-700'
                           }`}>
-                          {t('settings.sections.' + section.id + '.title', section.title)}
-                        </p>
-                        <p className={`text-[9px] font-bold mt-1 uppercase ${activeSection === section.id ? 'text-white/60' : 'text-gray-400 dark:text-gray-600'
-                          }`}>
-                          {t('settings.sections.' + section.id + '.description', section.description)}
-                        </p>
+                          <span className={`text-xl ${activeSection === section.id ? 'text-white' : 'text-indigo-600'}`}>
+                            {section.icon}
+                          </span>
+                        </div>
+                        <div className="flex-1">
+                          <p className={`text-[11px] font-black uppercase tracking-widest ${activeSection === section.id ? 'text-white' : 'text-gray-900 dark:text-white'
+                            }`}>
+                            {t('settings.sections.' + section.id + '.title', section.title)}
+                          </p>
+                          <p className={`text-[9px] font-bold mt-1 uppercase ${activeSection === section.id ? 'text-white/60' : 'text-gray-400 dark:text-gray-600'
+                            }`}>
+                            {t('settings.sections.' + section.id + '.description', section.description)}
+                          </p>
+                        </div>
+                        {isPersonal && (
+                          <FiChevronDown
+                            className={`w-4 h-4 transition-transform duration-300 shrink-0 ${activeSection === section.id ? 'text-white/70' : 'text-gray-400'} ${isExpanded ? 'rotate-180' : ''}`}
+                          />
+                        )}
                       </div>
-                      {isPersonal && (
-                        <FiChevronDown
-                          className={`w-4 h-4 transition-transform duration-300 shrink-0 ${activeSection === section.id ? 'text-white/70' : 'text-gray-400'} ${isExpanded ? 'rotate-180' : ''}`}
-                        />
-                      )}
-                    </div>
-                  </button>
+                    </button>
 
-                  {/* Nested Subnav for Personal Information */}
-                  {isPersonal && isExpanded && (
-                    <div className="pl-6 pr-2 py-2 space-y-1 border-l-2 border-indigo-100 dark:border-indigo-900/50 ml-8 animate-in slide-in-from-top-2 duration-300">
-                      {personalConfig.categories.map(cat => (
-                        <button
-                          key={cat.id}
-                          onClick={() => {
-                            const el = document.getElementById(cat.id);
-                            if (el) {
-                              const y = el.getBoundingClientRect().top + window.scrollY - 100;
-                              window.scrollTo({ top: y, behavior: 'smooth' });
-                            }
-                          }}
-                          className="block w-full text-left px-4 py-2.5 text-[10px] font-black uppercase tracking-widest text-gray-500 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 rounded-xl transition-all"
-                        >
-                          {t('settings.categories.' + cat.id, cat.title)}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
+                    {/* Nested Subnav for Personal Information */}
+                    {isPersonal && isExpanded && (
+                      <div className="pl-6 pr-2 py-2 space-y-1 border-l-2 border-indigo-100 dark:border-indigo-900/50 ml-8 animate-in slide-in-from-top-2 duration-300">
+                        {personalConfig.categories.map(cat => (
+                          <button
+                            key={cat.id}
+                            onClick={() => {
+                              const el = document.getElementById(cat.id);
+                              if (el) {
+                                const y = el.getBoundingClientRect().top + window.scrollY - 100;
+                                window.scrollTo({ top: y, behavior: 'smooth' });
+                              }
+                            }}
+                            className="block w-full text-left px-4 py-2.5 text-[10px] font-black uppercase tracking-widest text-gray-500 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 rounded-xl transition-all"
+                          >
+                            {t('settings.categories.' + cat.id, cat.title)}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 );
               })}
             </div>
@@ -403,14 +403,13 @@ export default function SettingsPage() {
             {/* Header for Active Section */}
             <div className="flex items-center justify-between mb-12">
               <div className="flex items-center gap-6">
-                <div className={`w-16 h-16 rounded-[1.5rem] flex items-center justify-center shadow-sm ${
-                  activeSection === 'personal' ? 'bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600' :
-                  activeSection === 'language' ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600' :
-                  activeSection === 'groups' ? 'bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600' :
-                  activeSection === 'group_address' ? 'bg-amber-50 dark:bg-amber-900/20 text-amber-600' :
-                  activeSection === 'access' ? 'bg-rose-50 dark:bg-rose-900/20 text-rose-600' :
-                  'bg-purple-50 dark:bg-purple-900/20 text-purple-600'
-                }`}>
+                <div className={`w-16 h-16 rounded-[1.5rem] flex items-center justify-center shadow-sm ${activeSection === 'personal' ? 'bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600' :
+                    activeSection === 'language' ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600' :
+                      activeSection === 'groups' ? 'bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600' :
+                        activeSection === 'group_address' ? 'bg-amber-50 dark:bg-amber-900/20 text-amber-600' :
+                          activeSection === 'access' ? 'bg-rose-50 dark:bg-rose-900/20 text-rose-600' :
+                            'bg-purple-50 dark:bg-purple-900/20 text-purple-600'
+                  }`}>
                   {availableSections.find(s => s.id === activeSection)?.icon || <FiShield />}
                 </div>
                 <div>
@@ -464,54 +463,54 @@ export default function SettingsPage() {
             {/* Section Content Rendering */}
             <div className="animate-in fade-in slide-in-from-right-4 duration-500">
               {activeSection === 'personal' && (
-                <PersonalSection 
-                  config={personalConfig} 
-                  data={{ ...formData, ...profileData }} 
-                  onChange={handlePersonalChange} 
+                <PersonalSection
+                  config={personalConfig}
+                  data={{ ...formData, ...profileData }}
+                  onChange={handlePersonalChange}
                 />
               )}
 
               {activeSection === 'language' && (
-                <LanguageSection 
-                  config={languageConfig} 
-                  data={formData} 
-                  onChange={handlePersonalChange} 
+                <LanguageSection
+                  config={languageConfig}
+                  data={formData}
+                  onChange={handlePersonalChange}
                 />
               )}
 
               {activeSection === 'groups' && (
-                <GroupsSection 
-                  user={user} 
-                  config={groupsConfig} 
-                  setError={setError} 
-                  setSuccess={setSuccess} 
+                <GroupsSection
+                  user={user}
+                  config={groupsConfig}
+                  setError={setError}
+                  setSuccess={setSuccess}
                 />
               )}
 
               {activeSection === 'group_address' && (
-                <GroupAddressSection 
-                  user={user} 
-                  config={groupAddressConfig} 
-                  setError={setError} 
-                  setSuccess={setSuccess} 
+                <GroupAddressSection
+                  user={user}
+                  config={groupAddressConfig}
+                  setError={setError}
+                  setSuccess={setSuccess}
                 />
               )}
 
               {activeSection === 'payment' && (
-                <PaymentSection 
+                <PaymentSection
                   user={user}
-                  config={paymentConfig} 
-                  setError={setError} 
-                  setSuccess={setSuccess} 
+                  config={paymentConfig}
+                  setError={setError}
+                  setSuccess={setSuccess}
                 />
               )}
 
               {activeSection === 'access' && (
-                <AccessSection 
+                <AccessSection
                   user={user}
-                  config={accessConfig} 
-                  setError={setError} 
-                  setSuccess={setSuccess} 
+                  config={accessConfig}
+                  setError={setError}
+                  setSuccess={setSuccess}
                 />
               )}
             </div>

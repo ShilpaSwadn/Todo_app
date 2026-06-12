@@ -95,7 +95,7 @@ const resources = {
             description: "Configure roles and permissions"
           },
           group_address: {
-            title: "Group Address",
+            title: "Addresses",
             description: "Manage group delivery addresses"
           },
           payment: {
