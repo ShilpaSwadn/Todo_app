@@ -90,7 +90,15 @@ export async function GET(request) {
       return NextResponse.json({ success: false, message: 'Unauthorized' }, { status: 401 })
     }
 
-    const currentUser = await authService.getUserByUid(uid)
+    let currentUser;
+    try {
+      currentUser = await authService.getUserByUid(uid)
+    } catch (err) {
+      if (err.message === 'User not found') {
+        return NextResponse.json({ success: true, groups: [] })
+      }
+      throw err;
+    }
 
     // Find groups where user is owner or member
     const sqlQuery = `
